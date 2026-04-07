@@ -277,6 +277,21 @@ em {
 /* ── Responsive ─────────────────────────────────────── */
 
 @media (max-width: 520px) {
+  .site-nav {
+    padding: 1rem 1.25rem;
+  }
+
+  .site-nav-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+
+  .nav-links {
+    flex-wrap: wrap;
+    gap: 0.1rem;
+  }
+
   main {
     padding: 2.5rem 1.25rem 4rem;
   }

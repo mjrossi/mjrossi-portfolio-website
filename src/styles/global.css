@@ -1,10 +1,11 @@
 :root {
-  --bg: #0f0f0f;
-  --border: #252525;
-  --text: #e2e2e2;
-  --muted: #7a7a7a;
-  --accent: #5b9bd5;
+  --bg: #161310;
+  --border: #2a2420;
+  --text: #ebe5db;
+  --muted: #8a8278;
+  --accent: #d48857;
   --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Fraunces', Georgia, serif;
 }
 
 *, *::before, *::after {
@@ -146,9 +147,10 @@ main {
 }
 
 .page-header h1 {
-  font-size: 1.4rem;
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   color: var(--text);
   margin-bottom: 0.3rem;
 }
@@ -167,16 +169,24 @@ main {
 
 .home-header-name {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
   margin-bottom: 0.4rem;
 }
 
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
 .home-header h1 {
-  font-size: 1.8rem;
+  font-family: var(--font-serif);
+  font-size: 2rem;
   font-weight: 600;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.015em;
   color: var(--text);
 }
 
@@ -206,7 +216,7 @@ section + section {
 h2 {
   font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 1.1rem;
@@ -290,6 +300,16 @@ em {
   margin-bottom: 0;
 }
 
+.campuses {
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: 0.5rem 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
 /* ── Responsive ─────────────────────────────────────── */
 
 @media (max-width: 520px) {
@@ -318,7 +338,8 @@ em {
 
   .home-header-name {
     flex-direction: column;
-    gap: 0.2rem;
+    align-items: flex-start;
+    gap: 0.6rem;
   }
 
   .entry-header {

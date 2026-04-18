@@ -11,9 +11,31 @@ import ContactLinks from '../components/ContactLinks.astro';
       <h1>Matthew Rossi</h1>
       <span class="location">Brooklyn, New York</span>
     </div>
-    <p class="tagline">Software engineer turning toward sustainable urban mobility.</p>
+    <ol class="tagline-variants">
+      <li>Urbanist and software engineer.</li>
+      <li>Urbanist with thirteen years in software engineering.</li>
+      <li>Urbanist. Heading to Lisbon for a master's in sustainable urban mobility.</li>
+      <li>Urbanist. Software engineer for thirteen years.</li>
+      <li>Urbanist. Software engineer for thirteen years, now turning toward sustainable urban mobility.</li>
+    </ol>
     <ContactLinks />
   </div>
+
+  <style>
+    .tagline-variants {
+      max-width: 560px;
+      margin: 0 0 1.4rem;
+      padding-left: 1.5rem;
+      font-size: 1rem;
+      color: var(--text);
+    }
+    .tagline-variants li {
+      margin-bottom: 0.5rem;
+    }
+    .tagline-variants li::marker {
+      color: var(--muted);
+    }
+  </style>
 
   <section id="about" aria-labelledby="about-heading">
     <h2 id="about-heading">About</h2>

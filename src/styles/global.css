@@ -161,6 +161,14 @@ main {
   margin-bottom: 0;
 }
 
+.page-header p + p {
+  margin-top: 0.75rem;
+}
+
+.page-header .resume-link {
+  font-size: 0.875rem;
+}
+
 /* ── Home header ────────────────────────────────────── */
 
 .home-header {

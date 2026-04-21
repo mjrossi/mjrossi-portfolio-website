@@ -241,7 +241,9 @@ p:last-child {
 
 a {
   color: var(--accent);
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
   transition: color 0.15s ease;
 }
 

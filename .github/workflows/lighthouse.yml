@@ -1,11 +1,13 @@
 name: Lighthouse
 
 on:
-  # Cloudflare Workers Builds posts a commit status (not a Deployment API
-  # entry) when a build/deploy finishes. The status payload's target_url is
-  # the preview/production URL, which is exactly what we want to audit.
-  status:
-  # Manual escape hatch for auditing an arbitrary URL on demand.
+  # Cloudflare Workers Builds reports deploys via check runs, not commit
+  # statuses or the Deployments API. So we listen for the CF app's
+  # check_suite completing on main and audit production.
+  check_suite:
+    types: [completed]
+  # Manual escape hatch for auditing an arbitrary URL (e.g. a PR's
+  # Workers preview URL) on demand.
   workflow_dispatch:
     inputs:
       url:
@@ -20,9 +22,9 @@ jobs:
   lighthouse:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.state == 'success' &&
-       github.event.target_url != '' &&
-       contains(github.event.context, 'loudflare'))
+      (github.event.check_suite.conclusion == 'success' &&
+       github.event.check_suite.head_branch == 'main' &&
+       contains(github.event.check_suite.app.slug, 'cloudflare'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -30,13 +32,12 @@ jobs:
         id: url
         env:
           EVENT_NAME: ${{ github.event_name }}
-          STATUS_URL: ${{ github.event.target_url }}
           DISPATCH_URL: ${{ inputs.url }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             URL="$DISPATCH_URL"
           else
-            URL="$STATUS_URL"
+            URL="https://mjrossi.com"
           fi
           URL="${URL%/}"
           echo "base=$URL" >> "$GITHUB_OUTPUT"
@@ -53,3 +54,27 @@ jobs:
           configPath: ./.github/lighthouserc.json
           uploadArtifacts: true
           temporaryPublicStorage: true
+      - name: Summarize scores
+        if: always()
+        run: |
+          shopt -s nullglob
+          reports=(.lighthouseci/lhr-*.json)
+          if [ ${#reports[@]} -eq 0 ]; then
+            echo "No Lighthouse reports found to summarize."
+            exit 0
+          fi
+          {
+            echo "## Lighthouse scores"
+            echo ""
+            echo "| URL | Perf | A11y | BP | SEO |"
+            echo "| --- | ---: | ---: | ---: | ---: |"
+            for f in "${reports[@]}"; do
+              url=$(jq -r '.finalDisplayedUrl // .finalUrl' "$f")
+              perf=$(jq -r '(.categories.performance.score * 100) | floor' "$f")
+              a11y=$(jq -r '(.categories.accessibility.score * 100) | floor' "$f")
+              bp=$(jq -r '(.categories["best-practices"].score * 100) | floor' "$f")
+              seo=$(jq -r '(.categories.seo.score * 100) | floor' "$f")
+              echo "| $url | $perf | $a11y | $bp | $seo |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"

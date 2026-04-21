@@ -1,13 +1,26 @@
 ---
+import { Image } from 'astro:assets';
 import Base from '../layouts/Base.astro';
 import ContactLinks from '../components/ContactLinks.astro';
+import profileImage from '../assets/profile.jpg';
 ---
 
 <Base title="Matthew Rossi">
 
   <div class="home-header">
     <div class="home-header-name">
-      <img src="/profile.jpg" alt="Matthew Rossi" class="avatar" width="72" height="72">
+      <Image
+        src={profileImage}
+        alt="Matthew Rossi"
+        class="avatar"
+        width={72}
+        height={72}
+        densities={[1, 2]}
+        format="webp"
+        quality={70}
+        loading="eager"
+        fetchpriority="high"
+      />
       <h1>Matthew Rossi</h1>
       <span class="location">Brooklyn, New York</span>
     </div>

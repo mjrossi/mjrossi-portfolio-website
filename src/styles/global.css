@@ -4,8 +4,8 @@
   --text: #ebe5db;
   --muted: #8a8278;
   --accent: #d48857;
-  --font: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-serif: 'Fraunces', Georgia, serif;
+  --font: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-fraunces), Georgia, serif;
 }
 
 *, *::before, *::after {

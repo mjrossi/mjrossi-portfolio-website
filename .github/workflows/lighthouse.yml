@@ -1,26 +1,47 @@
 name: Lighthouse
 
 on:
-  deployment_status:
+  # Cloudflare Workers Builds posts a commit status (not a Deployment API
+  # entry) when a build/deploy finishes. The status payload's target_url is
+  # the preview/production URL, which is exactly what we want to audit.
+  status:
+  # Manual escape hatch for auditing an arbitrary URL on demand.
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL to audit (e.g. a Workers preview URL)"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   lighthouse:
-    # Fires whenever any deployment reports success (Cloudflare Workers Builds
-    # creates GitHub Deployments for each PR/push preview). The target_url is
-    # the preview URL to audit.
-    if: github.event.deployment_status.state == 'success' && github.event.deployment_status.target_url != ''
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.state == 'success' &&
+       github.event.target_url != '' &&
+       contains(github.event.context, 'loudflare'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Normalize preview URL
+      - name: Resolve target URL
         id: url
         env:
-          TARGET_URL: ${{ github.event.deployment_status.target_url }}
-        run: echo "base=${TARGET_URL%/}" >> "$GITHUB_OUTPUT"
-      - name: Audit preview with Lighthouse
+          EVENT_NAME: ${{ github.event_name }}
+          STATUS_URL: ${{ github.event.target_url }}
+          DISPATCH_URL: ${{ inputs.url }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            URL="$DISPATCH_URL"
+          else
+            URL="$STATUS_URL"
+          fi
+          URL="${URL%/}"
+          echo "base=$URL" >> "$GITHUB_OUTPUT"
+          echo "Auditing base URL: $URL"
+      - name: Audit with Lighthouse
         uses: treosh/lighthouse-ci-action@v12
         with:
           urls: |

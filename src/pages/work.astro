@@ -8,8 +8,15 @@ import Base from '../layouts/Base.astro';
   <div class="page-header">
     <h1>Work</h1>
     <p>Thirteen years across payments, financial services, and cloud infrastructure — building large-scale, high-reliability systems in regulated, multi-stakeholder environments.</p>
-    <p class="page-meta"><span class="page-meta-label">Tools</span> Go · Ruby · Java · Python · C# · SQL</p>
-    <p class="resume-link"><a href="/resume.pdf" download>Download resume (PDF)</a></p>
+    <p class="page-meta">
+      <span><span class="page-meta-label">Tools</span> Go · Ruby · Java · Python · C# · SQL</span>
+      <a class="page-meta-action" href="/resume.pdf" download aria-label="Download resume (PDF)">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16"/>
+        </svg>
+        Resume
+      </a>
+    </p>
   </div>
 
   <section aria-label="Work history">

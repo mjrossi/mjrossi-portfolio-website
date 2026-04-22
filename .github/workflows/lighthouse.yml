@@ -1,9 +1,9 @@
 name: Lighthouse
 
 on:
-  # Cloudflare Workers Builds reports deploys via check runs, not commit
-  # statuses or the Deployments API. So we listen for the CF app's
-  # check_suite completing on main and audit production.
+  # Cloudflare Workers Builds reports deploys via check runs. When the CF
+  # app's check_suite completes we audit whichever URL got deployed:
+  # mjrossi.com for main, or the per-branch preview alias for PR branches.
   check_suite:
     types: [completed]
   # Manual escape hatch for auditing an arbitrary URL (e.g. a PR's
@@ -23,7 +23,6 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.check_suite.conclusion == 'success' &&
-       github.event.check_suite.head_branch == 'main' &&
        contains(github.event.check_suite.app.slug, 'cloudflare'))
     runs-on: ubuntu-latest
     steps:
@@ -33,11 +32,20 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           DISPATCH_URL: ${{ inputs.url }}
+          HEAD_BRANCH: ${{ github.event.check_suite.head_branch }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             URL="$DISPATCH_URL"
-          else
+          elif [ "$HEAD_BRANCH" = "main" ]; then
             URL="https://mjrossi.com"
+          else
+            # Cloudflare Workers per-branch preview alias:
+            # <branch-alias>-<worker-name>.<subdomain>.workers.dev
+            # Alias = lowercase, non-alphanumerics collapsed to dashes, trimmed.
+            ALIAS=$(printf '%s' "$HEAD_BRANCH" \
+              | tr '[:upper:]' '[:lower:]' \
+              | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+            URL="https://${ALIAS}-mjrossi-portfolio-website.link00seven.workers.dev"
           fi
           URL="${URL%/}"
           echo "base=$URL" >> "$GITHUB_OUTPUT"

@@ -60,9 +60,11 @@ jobs:
           fi
           URL="${URL%/}"
           PR_NUMBER=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
-          # main enforces all four categories (incl. SEO); PR previews use
-          # the lenient config since CF preview URLs ship `x-robots-tag:
-          # noindex` and will always fail the SEO audit there.
+          # main enforces all four categories strictly. PR previews relax
+          # SEO (CF preview URLs ship `x-robots-tag: noindex`) and perf
+          # (simulate throttling on shared CI runners produces high TBT
+          # variance — real regressions still show up in the posted
+          # scores, just without blocking the check).
           if [ "$BRANCH" = "main" ]; then
             CONFIG=".github/lighthouserc.main.json"
           else

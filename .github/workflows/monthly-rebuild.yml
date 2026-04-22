@@ -1,0 +1,26 @@
+name: Monthly rebuild
+
+# Re-triggers a Cloudflare Pages production build on the 1st of each month so
+# the build-time "current month/year" string in the masthead stays fresh.
+#
+# Setup: create a Deploy Hook in the Cloudflare Pages project settings and add
+# the URL as a repo secret named CF_PAGES_DEPLOY_HOOK.
+
+on:
+  schedule:
+    - cron: '0 6 1 * *'
+  workflow_dispatch:
+
+jobs:
+  trigger-rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Cloudflare Pages deploy hook
+        env:
+          CF_PAGES_DEPLOY_HOOK: ${{ secrets.CF_PAGES_DEPLOY_HOOK }}
+        run: |
+          if [ -z "${CF_PAGES_DEPLOY_HOOK}" ]; then
+            echo "CF_PAGES_DEPLOY_HOOK secret is not set" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error -X POST "${CF_PAGES_DEPLOY_HOOK}"

@@ -31,6 +31,10 @@ html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
+  /* Reserve a stable scrollbar gutter so pages that scroll and pages that
+     don't have the same content width — otherwise Work (the only page tall
+     enough to scroll) shifts ~15px left relative to everything else. */
+  scrollbar-gutter: stable;
 }
 
 :focus-visible {

@@ -6,7 +6,13 @@ import cloudflare from "@astrojs/cloudflare";
 export default defineConfig({
   site: 'https://mjrossi.com',
   output: 'static',
-  integrations: [sitemap()],
+  integrations: [
+    sitemap({
+      // /projects is a reachable placeholder with noindex — keep it out of
+      // the sitemap so search engines don't surface it until it has content.
+      filter: (page) => !/\/projects\/?$/.test(page),
+    }),
+  ],
   adapter: cloudflare({ imageService: 'compile' }),
   fonts: [
     {

@@ -385,6 +385,22 @@ main {
   font-family: var(--font-ui);
 }
 
+/* Dateline-style meta row inside page-header (e.g. "TOOLS  Go · Ruby · ...") */
+.page-header .page-meta {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+.page-header .page-meta-label {
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-tagline);
+  margin-right: 0.75em;
+}
+
 /* ── Sections (inner pages) ─────────────────────────── */
 
 section {

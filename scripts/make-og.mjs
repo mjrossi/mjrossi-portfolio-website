@@ -32,16 +32,10 @@ const BORDER = '#dbd0c2';
 const PAD = 72;
 const BAND_H = 340;
 
-const now = new Date();
-const month = now.toLocaleString('en-US', { month: 'long' });
-const year = now.getFullYear();
-const toRoman = (n) => {
-  const map = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
-  let out = ''; let rem = n;
-  for (const [v, s] of map) while (rem >= v) { out += s; rem -= v; }
-  return out;
-};
-const editionLine = `Vol. ${toRoman(year - 2024)} · No. ${toRoman(now.getMonth() + 1)} · ${month} ${year}`;
+// Intentionally no edition line on the OG card — the site's masthead
+// carries the monthly Vol./No./date signal. Keeping the card timeless
+// means it doesn't drift out of sync with the live site between
+// regenerations.
 
 // Avatar as a circle at the top-left of the band.
 const AVATAR_SIZE = 112;
@@ -65,8 +59,7 @@ const noiseBuf = readFileSync(resolve('public/noise.png'));
 // Layout constants — all measured from the band top, then body region below.
 const NAME_X = PAD + AVATAR_SIZE + 32;
 const NAME_Y_BASELINE = 168;              // baseline of "Matthew Rossi"
-const META_LOC_Y = 100;                   // top-right: BROOKLYN, NEW YORK
-const META_ED_Y = 126;                    // top-right: Vol. / No. / Month YYYY
+const META_LOC_Y = 118;                   // top-right: BROOKLYN, NEW YORK
 const RULE_Y = 250;                       // the rule under the name
 const TAGLINE_Y = 282;                    // italic tagline below the rule
 const QUOTE_Y = 462;                      // pull-quote line 1 baseline
@@ -79,7 +72,6 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
     <style>
       .name      { font: 600 86px/1 'Fraunces', Georgia, serif; letter-spacing: -0.04em; }
       .meta-loc  { font: 600 18px/1 'Inter', system-ui, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; }
-      .meta-ed   { font: 400 18px/1 'Inter', system-ui, sans-serif; letter-spacing: 0.05em; }
       .tagline   { font: italic 400 26px/1 'Fraunces', Georgia, serif; letter-spacing: 0.01em; }
       .quote     { font: italic 400 42px/1.25 'Fraunces', Georgia, serif; letter-spacing: -0.005em; }
       .footer-l  { font: italic 400 22px/1 'Fraunces', Georgia, serif; }
@@ -98,9 +90,8 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <rect x="0" y="${BAND_H}"     width="${W}" height="1" fill="${BAND_BORDER}"/>
   <rect x="0" y="${BAND_H + 3}" width="${W}" height="2" fill="${BAND_BORDER}"/>
 
-  <!-- meta (top right): location + edition line -->
+  <!-- meta (top right): location only; edition line is timeless on the card -->
   <text x="${W - PAD}" y="${META_LOC_Y}" text-anchor="end" class="meta-loc" fill="${TAGLINE}">Brooklyn, New York</text>
-  <text x="${W - PAD}" y="${META_ED_Y}"  text-anchor="end" class="meta-ed"  fill="${MUTED}">${editionLine}</text>
 
   <!-- name: Matthew + accent Rossi -->
   <text x="${NAME_X}" y="${NAME_Y_BASELINE}" class="name" fill="${TEXT}">Matthew <tspan fill="${ACCENT_SURNAME}">Rossi</tspan></text>

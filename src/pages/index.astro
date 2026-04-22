@@ -1,43 +1,35 @@
 ---
 import { Image } from 'astro:assets';
 import Base from '../layouts/Base.astro';
-import ContactLinks from '../components/ContactLinks.astro';
 import profileImage from '../assets/profile.jpg';
 ---
 
-<Base title="Matthew Rossi">
+<Base title="Matthew Rossi" section="home">
 
-  <div class="home-header">
-    <div class="home-header-name">
+  <section class="broadsheet-body">
+    <div class="col col-about">
+      <span class="section-label">About</span>
+      <p class="dropcap">I grew up outside Detroit — a place built almost entirely around the car. The near-total absence of alternatives made the connection between transportation and daily life hard to ignore. That stuck with me, and eventually became a serious interest in how cities move people and what happens when they can't.</p>
+      <p>I spent thirteen years in software engineering, working across payments, financial services, and cloud infrastructure. Now I'm shifting focus to urban mobility through graduate study at the <a href="https://www.eiturbanmobility.eu/what-we-offer/education-and-training/masters-programmes/sustainable-urban-mobility-transitions/" target="_blank" rel="noopener noreferrer">EIT Urban Mobility Master School</a>, starting autumn 2026.</p>
+    </div>
+    <div class="broadsheet-gutter" aria-hidden="true"></div>
+    <div class="col col-now">
+      <span class="section-label">Now</span>
       <Image
         src={profileImage}
         alt="Matthew Rossi"
         class="avatar"
-        width={72}
-        height={72}
+        width={64}
+        height={64}
         densities={[1, 2]}
         format="webp"
         quality={70}
         loading="eager"
         fetchpriority="high"
       />
-      <h1>Matthew Rossi</h1>
-      <span class="location">Brooklyn, New York</span>
+      <p>Senior Software Engineer at <a href="https://www.heroku.com" target="_blank" rel="noopener noreferrer">Heroku (Salesforce)</a> in New York through May 2026.</p>
+      <p>Starting autumn 2026, I'll be in the <strong>EIT Urban Mobility Master's Program (SUMT)</strong> — a two-year double degree, first at Técnico Lisboa in Lisbon, then at UPC BarcelonaTech in Barcelona.</p>
     </div>
-    <p class="tagline">Software engineer turning toward sustainable urban mobility.</p>
-    <ContactLinks />
-  </div>
-
-  <section id="about" aria-labelledby="about-heading">
-    <h2 id="about-heading">About</h2>
-    <p>I grew up outside Detroit — a place built almost entirely around the car. The near-total absence of alternatives made the connection between transportation and daily life hard to ignore. That stuck with me, and eventually became a serious interest in how cities move people and what happens when they can't.</p>
-    <p>I spent thirteen years in software engineering, working across payments, financial services, and cloud infrastructure. Now I'm shifting focus to urban mobility through graduate study at the EIT Urban Mobility Master School, starting autumn 2026.</p>
-  </section>
-
-  <section id="now" aria-labelledby="now-heading">
-    <h2 id="now-heading">Now</h2>
-    <p>Senior Software Engineer at <a href="https://www.heroku.com" target="_blank" rel="noopener noreferrer">Heroku (Salesforce)</a> in New York through May 2026.</p>
-    <p>Starting autumn 2026, I'll be in the <strong>EIT Urban Mobility Master's Program (SUMT)</strong> — a two-year double degree, first at Técnico Lisboa in Lisbon, then at UPC BarcelonaTech in Barcelona.</p>
   </section>
 
 </Base>

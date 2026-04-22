@@ -249,13 +249,15 @@ body {
 .contact-links {
   display: flex;
   align-items: center;
-  gap: 1.1rem;
+  gap: 1rem;
 }
 
 .contact-links a {
-  font-family: var(--font-ui);
-  font-size: 0.75rem;
-  font-weight: 400;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   color: var(--accent);
   text-decoration: none;
   transition: color 0.15s ease;
@@ -263,6 +265,10 @@ body {
 
 .contact-links a:hover {
   color: var(--accent-hover);
+}
+
+.contact-links svg {
+  display: block;
 }
 
 /* ── Main ───────────────────────────────────────────── */
@@ -552,9 +558,8 @@ em {
   letter-spacing: 0.03em;
 }
 
-/* Footer contact cluster gets a dot dimmer; inherits .contact-links sizing */
 .footer-contact .contact-links {
-  gap: 1.4rem;
+  gap: 1.2rem;
 }
 
 /* ── Motion: staggered page-load reveal ─────────────── */

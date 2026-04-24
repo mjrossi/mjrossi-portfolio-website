@@ -91,6 +91,16 @@ check('sitemap: references /blog/',
   sitemap0.includes('https://mjrossi.com/blog'),
 );
 
+// Draft exclusion. `smoke-draft.mdx` is a permanent fixture with `draft: true`
+// and a unique tag (`smoke-fixture`). None of its traces may appear in the
+// prod build. If any of these fail, the draft filter has regressed.
+const blogIndexHtml = readIfExists('blog/index.html') ?? '';
+check('draft: no route generated',           !existsSync(resolve(DIST, 'blog/smoke-draft/index.html')));
+check('draft: not listed on /blog',          !blogIndexHtml.includes('/blog/smoke-draft/') && !blogIndexHtml.toLowerCase().includes('smoke draft'));
+check('draft: no tag page generated',        !existsSync(resolve(DIST, 'blog/tag/smoke-fixture/index.html')));
+check('draft: absent from RSS',              !rss.includes('smoke-draft') && !rss.toLowerCase().includes('smoke draft'));
+check('draft: absent from sitemap',          !sitemap0.includes('smoke-draft') && !sitemap0.includes('smoke-fixture'));
+
 // Static assets
 for (const asset of ['noise.png', 'favicon.svg', 'sitemap-index.xml', 'resume.pdf', 'og.png', '404.html']) {
   check(`asset: ${asset}`, existsSync(resolve(DIST, asset)));

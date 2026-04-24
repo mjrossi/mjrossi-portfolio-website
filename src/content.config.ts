@@ -7,7 +7,17 @@ const blog = defineCollection({
     base: './src/content/blog',
     // Colocated posts live at <slug>/index.mdx so images can sit next to the
     // post. Strip `/index` so the id (and therefore the URL) is just <slug>.
-    generateId: ({ entry }) => entry.replace(/(?:\/index)?\.mdx?$/, ''),
+    // A bare `index.mdx` at the root would collapse to an empty id and
+    // collide with the listing page — fail loudly instead.
+    generateId: ({ entry }) => {
+      const id = entry.replace(/(?:\/index)?\.mdx?$/, '');
+      if (id === '' || id === 'index') {
+        throw new Error(
+          `src/content/blog/${entry}: a post file named "index" at the root is not allowed — it would collide with /blog/. Rename the file or move it into a <slug>/ directory.`,
+        );
+      }
+      return id;
+    },
   }),
   schema: ({ image }) =>
     z.object({

@@ -1,7 +1,7 @@
 ---
 import { Image } from 'astro:assets';
 import Base from './Base.astro';
-import type { Post } from '../lib/blog.ts';
+import { dateFormatter, isoDate, type Post } from '../lib/blog.ts';
 
 interface Props {
   post: Post;
@@ -9,15 +9,6 @@ interface Props {
 
 const { post } = Astro.props;
 const { title, description, pubDate, updatedDate, tags, cover, draft } = post.data;
-
-const dateFormatter = new Intl.DateTimeFormat('en-US', {
-  year: 'numeric',
-  month: 'long',
-  day: 'numeric',
-  timeZone: 'UTC',
-});
-
-const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 ---
 
 <Base

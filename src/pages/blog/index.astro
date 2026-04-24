@@ -1,17 +1,8 @@
 ---
 import Base from '../../layouts/Base.astro';
-import { getPublishedPosts } from '../../lib/blog.ts';
+import { getPublishedPosts, dateFormatter, isoDate } from '../../lib/blog.ts';
 
 const posts = await getPublishedPosts();
-
-const dateFormatter = new Intl.DateTimeFormat('en-US', {
-  year: 'numeric',
-  month: 'long',
-  day: 'numeric',
-  timeZone: 'UTC',
-});
-
-const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 ---
 
 <Base

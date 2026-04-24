@@ -1,6 +1,6 @@
 ---
 import Base from '../../../layouts/Base.astro';
-import { getAllTags, getPostsByTag } from '../../../lib/blog.ts';
+import { getAllTags, getPostsByTag, dateFormatter, isoDate } from '../../../lib/blog.ts';
 
 export async function getStaticPaths() {
   const tags = await getAllTags();
@@ -13,15 +13,6 @@ export async function getStaticPaths() {
 }
 
 const { tag, posts } = Astro.props;
-
-const dateFormatter = new Intl.DateTimeFormat('en-US', {
-  year: 'numeric',
-  month: 'long',
-  day: 'numeric',
-  timeZone: 'UTC',
-});
-
-const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 ---
 
 <Base

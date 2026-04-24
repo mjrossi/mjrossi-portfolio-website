@@ -711,3 +711,334 @@ em {
     white-space: normal;
   }
 }
+
+/* ── Blog: index + tag listings ─────────────────────── */
+
+.post-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.post-entry {
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.post-entry:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.post-entry:last-child {
+  padding-bottom: 0;
+}
+
+.post-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.post-entry-title {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin: 0;
+}
+
+.post-entry-title a {
+  color: inherit;
+  text-decoration: none;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0 1px;
+  transition: background-size 0.2s ease, color 0.15s ease;
+}
+
+.post-entry-title a:hover {
+  color: var(--accent);
+  background-size: 100% 1px;
+}
+
+.post-draft-inline {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-tagline);
+}
+
+.post-entry-date {
+  font-family: var(--font-ui);
+  color: var(--muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.post-entry-description {
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.post-entry-tags,
+.post-tags {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  margin: 0.6rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.post-tag {
+  color: var(--accent-tagline);
+  text-decoration: none;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.post-tag::before {
+  content: '#';
+  opacity: 0.6;
+  margin-right: 0.05em;
+}
+
+.post-tag:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── Blog: single post ──────────────────────────────── */
+
+.post-header {
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.post-draft {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-tagline);
+  margin-bottom: 0.75rem;
+}
+
+.post-title {
+  font-family: var(--font-serif);
+  font-size: clamp(1.75rem, 4vw, 2.4rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1.15;
+  margin-bottom: 0.75rem;
+  font-optical-sizing: auto;
+  font-variation-settings: 'opsz' 72;
+}
+
+.post-meta {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+.post-updated {
+  font-style: italic;
+}
+
+.post-header .post-tags {
+  margin-top: 1rem;
+}
+
+.post-cover {
+  margin: 1.75rem 0 0;
+}
+
+.post-cover img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid var(--border);
+}
+
+.post-body {
+  font-family: var(--font);
+  font-size: 1.05rem;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+.post-body > * + * {
+  margin-top: 1.15rem;
+}
+
+.post-body h2 {
+  font-family: var(--font-serif);
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin-top: 2.5rem;
+  line-height: 1.25;
+}
+
+.post-body h3 {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin-top: 2rem;
+  line-height: 1.3;
+}
+
+.post-body h4 {
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-tagline);
+  margin-top: 1.75rem;
+}
+
+.post-body p:first-of-type::first-letter {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  float: left;
+  font-size: 3.1rem;
+  line-height: 0.9;
+  padding: 0.35rem 0.45rem 0 0;
+  color: var(--accent);
+}
+
+.post-body a {
+  color: var(--accent);
+}
+
+.post-body blockquote {
+  border-left: 2px solid var(--accent-rule);
+  padding: 0.15rem 0 0.15rem 1.25rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.post-body ul,
+.post-body ol {
+  padding-left: 1.5rem;
+}
+
+.post-body li + li {
+  margin-top: 0.35rem;
+}
+
+.post-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  background: var(--bg2);
+  padding: 0.08em 0.35em;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
+.post-body pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+}
+
+.post-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+.post-body img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid var(--border);
+}
+
+.post-body hr {
+  border: none;
+  border-top: 1px solid var(--accent-rule);
+  margin: 2.25rem auto;
+  width: 4rem;
+}
+
+.post-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.post-body th,
+.post-body td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.post-body th {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-tagline);
+}
+
+.post-footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.post-back {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.post-back:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+@media (max-width: 520px) {
+  .post-entry-header {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .post-entry-date {
+    white-space: normal;
+  }
+
+  .post-body p:first-of-type::first-letter {
+    font-size: 2.6rem;
+  }
+}

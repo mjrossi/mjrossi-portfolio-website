@@ -41,6 +41,41 @@ Section headers: `text-transform: uppercase` + `letter-spacing`. Experience and 
 
 ## Content
 
-All copy lives in the page files under `src/pages/`. Pages in order: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/projects`.
+Static page copy lives in the page files under `src/pages/`. Pages in order: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/blog`, `/projects`.
 
-To add a project page later, add a file under `src/pages/projects/` or enable Astro Content Collections with `src/content/projects/` for Markdown-driven content.
+## Blog
+
+Driven by Astro Content Collections + MDX. Posts are markdown, published via `git push` — no database, no runtime.
+
+- `src/content.config.ts` — Zod schema for post frontmatter (single source of truth)
+- `src/content/blog/<slug>.mdx` — one file per post (or `<slug>/index.mdx` when colocating images)
+- `src/lib/blog.ts` — `getPublishedPosts`, `getAllTags`, `getPostsByTag` — the single boundary between content source and rendering (a future D1 migration swaps only this module)
+- `src/layouts/BlogPost.astro` — post chrome (title, byline, tags, optional cover, back link)
+- `src/pages/blog/index.astro` — list of posts
+- `src/pages/blog/[...slug].astro` — individual posts (slug = filename)
+- `src/pages/blog/tag/[tag].astro` — per-tag listings at `/blog/tag/<tag>`
+- `src/pages/blog/rss.xml.ts` — RSS feed at `/blog/rss.xml`
+
+### Frontmatter
+
+```yaml
+---
+title: "Post title"
+description: "One-line summary — used on list, OG, RSS"
+pubDate: 2026-05-10
+updatedDate: 2026-05-12   # optional
+tags: ["urban-mobility", "transit"]  # optional
+cover:                     # optional
+  src: "./cover.jpg"
+  alt: "Alt text"
+draft: false               # optional; true hides from prod build + sitemap + RSS
+---
+```
+
+Invalid frontmatter fails the build. Drafts render in `npm run dev` (with a "Draft" badge) and are filtered out of the prod build by `getPublishedPosts()` via `import.meta.env.PROD`.
+
+### Publishing
+
+1. Create `src/content/blog/my-post.mdx` with frontmatter + body.
+2. `npm run dev` — preview at `/blog/my-post`.
+3. Commit + push. Cloudflare Pages rebuilds. `smoke.mjs` asserts the blog routes, RSS, and at least one tag page exist.

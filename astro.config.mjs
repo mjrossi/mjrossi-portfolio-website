@@ -1,5 +1,6 @@
 import { defineConfig, fontProviders } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
+import mdx from '@astrojs/mdx';
 
 import cloudflare from "@astrojs/cloudflare";
 
@@ -7,6 +8,7 @@ export default defineConfig({
   site: 'https://mjrossi.com',
   output: 'static',
   integrations: [
+    mdx(),
     sitemap({
       // /projects is a reachable placeholder with noindex — keep it out of
       // the sitemap so search engines don't surface it until it has content.

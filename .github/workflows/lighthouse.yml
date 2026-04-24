@@ -86,6 +86,7 @@ jobs:
             ${{ steps.ctx.outputs.base }}/work
             ${{ steps.ctx.outputs.base }}/education
             ${{ steps.ctx.outputs.base }}/urban-mobility
+            ${{ steps.ctx.outputs.base }}/blog
           configPath: ./${{ steps.ctx.outputs.config }}
           uploadArtifacts: true
           temporaryPublicStorage: true

@@ -1,0 +1,64 @@
+---
+import { Image } from 'astro:assets';
+import Base from './Base.astro';
+import type { Post } from '../lib/blog.ts';
+
+interface Props {
+  post: Post;
+}
+
+const { post } = Astro.props;
+const { title, description, pubDate, updatedDate, tags, cover, draft } = post.data;
+
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+---
+
+<Base
+  title={title}
+  description={description}
+  section="none"
+  pageLabel="Blog"
+  noindex={draft}
+>
+  <article class="page post">
+    <header class="post-header">
+      {draft && <p class="post-draft">Draft</p>}
+      <h1 class="post-title">{title}</h1>
+      <p class="post-meta">
+        <time datetime={pubDate.toISOString()}>{dateFormatter.format(pubDate)}</time>
+        {updatedDate && (
+          <>
+            <span aria-hidden="true"> · </span>
+            <span class="post-updated">
+              Updated <time datetime={updatedDate.toISOString()}>{dateFormatter.format(updatedDate)}</time>
+            </span>
+          </>
+        )}
+      </p>
+      {tags.length > 0 && (
+        <p class="post-tags">
+          {tags.map((tag) => (
+            <a href={`/blog/tag/${tag}`} class="post-tag">{tag}</a>
+          ))}
+        </p>
+      )}
+      {cover && (
+        <figure class="post-cover">
+          <Image src={cover.src} alt={cover.alt} loading="eager" />
+        </figure>
+      )}
+    </header>
+
+    <div class="post-body">
+      <slot />
+    </div>
+
+    <footer class="post-footer">
+      <a href="/blog" class="post-back">← All posts</a>
+    </footer>
+  </article>
+</Base>

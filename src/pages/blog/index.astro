@@ -1,0 +1,57 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getPublishedPosts } from '../../lib/blog.ts';
+
+const posts = await getPublishedPosts();
+
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+---
+
+<Base
+  title="Blog"
+  description="Writing on software, urban mobility, and getting around cities without a car."
+  section="none"
+  pageLabel="Blog"
+>
+  <div class="page">
+    <div class="page-header">
+      <h1>Blog</h1>
+      <p>Occasional notes on software engineering, urban mobility, and the places where the two meet.</p>
+      <p class="page-meta">
+        <span><span class="page-meta-label">Feed</span> Subscribe via <a href="/blog/rss.xml">RSS</a></span>
+      </p>
+    </div>
+
+    {posts.length === 0 ? (
+      <p class="post-empty">No posts yet. Check back soon.</p>
+    ) : (
+      <section aria-label="Blog posts">
+        {posts.map((post) => (
+          <article class="post-entry">
+            <div class="post-entry-header">
+              <h2 class="post-entry-title">
+                <a href={`/blog/${post.id}`}>{post.data.title}</a>
+                {post.data.draft && <span class="post-draft-inline"> · Draft</span>}
+              </h2>
+              <time class="post-entry-date" datetime={post.data.pubDate.toISOString()}>
+                {dateFormatter.format(post.data.pubDate)}
+              </time>
+            </div>
+            <p class="post-entry-description">{post.data.description}</p>
+            {post.data.tags.length > 0 && (
+              <p class="post-entry-tags">
+                {post.data.tags.map((tag) => (
+                  <a href={`/blog/tag/${tag}`} class="post-tag">{tag}</a>
+                ))}
+              </p>
+            )}
+          </article>
+        ))}
+      </section>
+    )}
+  </div>
+</Base>

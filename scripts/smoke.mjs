@@ -44,11 +44,43 @@ const routes = {
   education: 'education/index.html',
   urbanMobility: 'urban-mobility/index.html',
   projects: 'projects/index.html',
+  blog: 'blog/index.html',
 };
 
 for (const [label, path] of Object.entries(routes)) {
   check(`route: ${label} renders`, existsSync(resolve(DIST, path)), path);
 }
+
+// Blog: at least one post, RSS feed, at least one tag index
+const blogDir = resolve(DIST, 'blog');
+const blogEntries = existsSync(blogDir) ? readdirSync(blogDir) : [];
+const postSlugs = blogEntries.filter(
+  (name) =>
+    !['index.html', 'rss.xml', 'tag'].includes(name) &&
+    existsSync(resolve(blogDir, name, 'index.html')),
+);
+check('blog: at least one post rendered', postSlugs.length > 0, `found ${postSlugs.length}`);
+
+const rssPath = resolve(DIST, 'blog/rss.xml');
+const rss = existsSync(rssPath) ? readFileSync(rssPath, 'utf8') : '';
+check('blog: rss.xml exists',         existsSync(rssPath));
+check('blog: rss.xml has <rss>',      rss.includes('<rss'));
+check('blog: rss.xml has <channel>',  rss.includes('<channel>'));
+check('blog: rss.xml has >=1 <item>', (rss.match(/<item>/g) || []).length >= 1);
+
+const tagDir = resolve(DIST, 'blog/tag');
+const tagEntries = existsSync(tagDir)
+  ? readdirSync(tagDir).filter((name) => existsSync(resolve(tagDir, name, 'index.html')))
+  : [];
+check('blog: at least one tag page', tagEntries.length > 0, `found ${tagEntries.length}`);
+
+// Sitemap references /blog (sitemap-0.xml is where individual URLs live;
+// sitemap-index.xml just points at it)
+const sitemap0 = readIfExists('sitemap-0.xml') ?? '';
+check('sitemap: references /blog/',
+  sitemap0.includes('https://mjrossi.com/blog/') ||
+  sitemap0.includes('https://mjrossi.com/blog'),
+);
 
 // Static assets
 for (const asset of ['noise.png', 'favicon.svg', 'sitemap-index.xml', 'resume.pdf', 'og.png', '404.html']) {
@@ -83,7 +115,7 @@ check(
 );
 
 // Interior pages
-for (const label of ['work', 'education', 'urbanMobility', 'projects']) {
+for (const label of ['work', 'education', 'urbanMobility', 'projects', 'blog']) {
   const html = readIfExists(routes[label]) ?? '';
   check(`${label}: condensed masthead`,    html.includes('class="masthead condensed"'));
   check(`${label}: no full masthead`,      !html.includes('class="masthead full"'));
@@ -96,6 +128,23 @@ for (const label of ['work', 'education', 'urbanMobility', 'projects']) {
     occurrences(html, 'aria-label="Contact"') === 2,
     `found ${occurrences(html, 'aria-label="Contact"')}`,
   );
+}
+
+// Blog post page markup (using the first post found)
+if (postSlugs.length > 0) {
+  const postHtml = readIfExists(`blog/${postSlugs[0]}/index.html`) ?? '';
+  check('blog post: article.post wrapper',   /<article[^>]*class="[^"]*\bpost\b/.test(postHtml));
+  check('blog post: post-title rendered',    postHtml.includes('class="post-title"'));
+  check('blog post: post-meta rendered',     postHtml.includes('class="post-meta"'));
+  check('blog post: back link to /blog',     /href="\/blog"/.test(postHtml));
+  check('blog post: condensed masthead',     postHtml.includes('class="masthead condensed"'));
+  check('blog post: no full masthead',       !postHtml.includes('class="masthead full"'));
+}
+
+// Nav includes Blog link on every rendered page
+for (const label of Object.keys(routes)) {
+  const html = readIfExists(routes[label]) ?? '';
+  check(`${label}: nav has Blog link`, /href="\/blog"[^>]*>\s*Blog\s*</.test(html));
 }
 
 // CSS bundle — pick the Base.*.css asset

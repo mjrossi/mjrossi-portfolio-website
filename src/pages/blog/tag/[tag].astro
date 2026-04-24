@@ -1,0 +1,55 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { getAllTags, getPostsByTag } from '../../../lib/blog.ts';
+
+export async function getStaticPaths() {
+  const tags = await getAllTags();
+  return Promise.all(
+    tags.map(async (tag) => ({
+      params: { tag },
+      props: { tag, posts: await getPostsByTag(tag) },
+    })),
+  );
+}
+
+const { tag, posts } = Astro.props;
+
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+---
+
+<Base
+  title={`Tag: ${tag}`}
+  description={`Posts tagged "${tag}" on mjrossi.com.`}
+  section="none"
+  pageLabel="Blog"
+>
+  <div class="page">
+    <div class="page-header">
+      <h1>Tag: {tag}</h1>
+      <p>{posts.length} {posts.length === 1 ? 'post' : 'posts'} tagged <em>{tag}</em>.</p>
+      <p class="page-meta">
+        <span><span class="page-meta-label">Back</span> <a href="/blog">All posts</a></span>
+      </p>
+    </div>
+
+    <section aria-label={`Posts tagged ${tag}`}>
+      {posts.map((post) => (
+        <article class="post-entry">
+          <div class="post-entry-header">
+            <h2 class="post-entry-title">
+              <a href={`/blog/${post.id}`}>{post.data.title}</a>
+            </h2>
+            <time class="post-entry-date" datetime={post.data.pubDate.toISOString()}>
+              {dateFormatter.format(post.data.pubDate)}
+            </time>
+          </div>
+          <p class="post-entry-description">{post.data.description}</p>
+        </article>
+      ))}
+    </section>
+  </div>
+</Base>

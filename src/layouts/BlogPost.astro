@@ -14,7 +14,10 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
   month: 'long',
   day: 'numeric',
+  timeZone: 'UTC',
 });
+
+const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 ---
 
 <Base
@@ -29,12 +32,12 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
       {draft && <p class="post-draft">Draft</p>}
       <h1 class="post-title">{title}</h1>
       <p class="post-meta">
-        <time datetime={pubDate.toISOString()}>{dateFormatter.format(pubDate)}</time>
+        <time datetime={isoDate(pubDate)}>{dateFormatter.format(pubDate)}</time>
         {updatedDate && (
           <>
             <span aria-hidden="true"> · </span>
             <span class="post-updated">
-              Updated <time datetime={updatedDate.toISOString()}>{dateFormatter.format(updatedDate)}</time>
+              Updated <time datetime={isoDate(updatedDate)}>{dateFormatter.format(updatedDate)}</time>
             </span>
           </>
         )}

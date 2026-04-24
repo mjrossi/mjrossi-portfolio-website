@@ -15,7 +15,19 @@ const blog = defineCollection({
       description: z.string(),
       pubDate: z.coerce.date(),
       updatedDate: z.coerce.date().optional(),
-      tags: z.array(z.string()).default([]),
+      // Tags are used verbatim as URL path segments (`/blog/tag/<tag>`), so
+      // restrict them to lowercase kebab-case. Authors get a build error
+      // instead of a broken route.
+      tags: z
+        .array(
+          z
+            .string()
+            .regex(
+              /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+              'tags must be lowercase kebab-case (letters, digits, and internal hyphens only)',
+            ),
+        )
+        .default([]),
       cover: z
         .object({
           src: image(),

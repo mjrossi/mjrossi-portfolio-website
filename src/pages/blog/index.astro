@@ -8,7 +8,10 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
   month: 'long',
   day: 'numeric',
+  timeZone: 'UTC',
 });
+
+const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 ---
 
 <Base
@@ -34,10 +37,10 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
           <article class="post-entry">
             <div class="post-entry-header">
               <h2 class="post-entry-title">
-                <a href={`/blog/${post.id}`}>{post.data.title}</a>
+                <a href={`/blog/${post.id}/`}>{post.data.title}</a>
                 {post.data.draft && <span class="post-draft-inline"> · Draft</span>}
               </h2>
-              <time class="post-entry-date" datetime={post.data.pubDate.toISOString()}>
+              <time class="post-entry-date" datetime={isoDate(post.data.pubDate)}>
                 {dateFormatter.format(post.data.pubDate)}
               </time>
             </div>

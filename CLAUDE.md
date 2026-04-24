@@ -78,4 +78,4 @@ Invalid frontmatter fails the build. Drafts render in `npm run dev` (with a "Dra
 
 1. Create `src/content/blog/my-post.mdx` with frontmatter + body.
 2. `npm run dev` — preview at `/blog/my-post`.
-3. Commit + push. Cloudflare Pages rebuilds. `smoke.mjs` asserts the blog routes, RSS, and at least one tag page exist.
+3. Commit + push. Cloudflare Workers rebuilds. `smoke.mjs` asserts the blog routes, RSS, and per-tag pages exist and list the expected posts.

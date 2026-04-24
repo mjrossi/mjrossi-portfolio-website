@@ -79,8 +79,6 @@ jobs:
       - name: Audit with Lighthouse
         uses: treosh/lighthouse-ci-action@v12
         with:
-          # /projects is a noindex placeholder and is excluded from the
-          # sitemap — auditing it on main fails SEO by design.
           urls: |
             ${{ steps.ctx.outputs.base }}/
             ${{ steps.ctx.outputs.base }}/work

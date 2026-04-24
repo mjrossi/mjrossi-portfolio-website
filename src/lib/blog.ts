@@ -12,9 +12,7 @@ export const dateFormatter = new Intl.DateTimeFormat('en-US', {
 export const isoDate = (d: Date): string => d.toISOString().slice(0, 10);
 
 export async function getPublishedPosts(): Promise<Post[]> {
-  const posts = await getCollection('blog', ({ data }) => {
-    return import.meta.env.PROD ? data.draft !== true : true;
-  });
+  const posts = await getCollection('blog');
   return posts.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 }
 

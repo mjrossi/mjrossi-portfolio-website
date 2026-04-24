@@ -29,7 +29,6 @@ const posts = await getPublishedPosts();
             <div class="post-entry-header">
               <h2 class="post-entry-title">
                 <a href={`/blog/${post.id}/`}>{post.data.title}</a>
-                {post.data.draft && <span class="post-draft-inline"> · Draft</span>}
               </h2>
               <time class="post-entry-date" datetime={isoDate(post.data.pubDate)}>
                 {dateFormatter.format(post.data.pubDate)}

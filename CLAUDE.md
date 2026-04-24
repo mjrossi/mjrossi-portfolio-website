@@ -41,7 +41,7 @@ Section headers: `text-transform: uppercase` + `letter-spacing`. Experience and 
 
 ## Content
 
-Static page copy lives in the page files under `src/pages/`. Pages in order: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/blog`, `/projects`.
+Static page copy lives in the page files under `src/pages/`. Pages in order: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/blog`.
 
 ## Blog
 
@@ -64,15 +64,14 @@ title: "Post title"
 description: "One-line summary — used on list, OG, RSS"
 pubDate: 2026-05-10
 updatedDate: 2026-05-12   # optional
-tags: ["urban-mobility", "transit"]  # optional
+tags: ["urban-mobility", "transit"]  # optional, must be kebab-case
 cover:                     # optional
   src: "./cover.jpg"
   alt: "Alt text"
-draft: false               # optional; true hides from prod build + sitemap + RSS
 ---
 ```
 
-Invalid frontmatter fails the build. Drafts render in `npm run dev` (with a "Draft" badge) and are filtered out of the prod build by `getPublishedPosts()` via `import.meta.env.PROD`.
+Invalid frontmatter fails the build. Committing a post publishes it — there is no draft flag or scheduled-publish mechanism. Use a git branch if a post isn't ready to ship.
 
 ### Publishing
 

@@ -8,7 +8,7 @@ interface Props {
 }
 
 const { post } = Astro.props;
-const { title, description, pubDate, updatedDate, tags, cover, draft } = post.data;
+const { title, description, pubDate, updatedDate, tags, cover } = post.data;
 ---
 
 <Base
@@ -16,11 +16,9 @@ const { title, description, pubDate, updatedDate, tags, cover, draft } = post.da
   description={description}
   section="none"
   pageLabel="Blog"
-  noindex={draft}
 >
   <article class="page post">
     <header class="post-header">
-      {draft && <p class="post-draft">Draft</p>}
       <h1 class="post-title">{title}</h1>
       <p class="post-meta">
         <time datetime={isoDate(pubDate)}>{dateFormatter.format(pubDate)}</time>

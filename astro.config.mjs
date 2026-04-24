@@ -9,11 +9,7 @@ export default defineConfig({
   output: 'static',
   integrations: [
     mdx(),
-    sitemap({
-      // /projects is a reachable placeholder with noindex — keep it out of
-      // the sitemap so search engines don't surface it until it has content.
-      filter: (page) => !/\/projects\/?$/.test(page),
-    }),
+    sitemap(),
   ],
   adapter: cloudflare({ imageService: 'compile' }),
   fonts: [

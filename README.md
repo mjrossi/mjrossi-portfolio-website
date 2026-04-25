@@ -1,35 +1,40 @@
 # mjrossi.com
 
-Personal portfolio site built with [Astro](https://astro.build). Outputs static HTML — no client-side JavaScript.
+Personal portfolio site. [Astro](https://astro.build) build, deployed to Cloudflare Workers with Static Assets. The site is prerendered HTML except for one on-demand route (`/contact`) that 302s to a `mailto:` so the address never appears in static output.
+
+For the rendering model, deployment pipeline, CI, and quality gates, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Prerequisites
 
-- [mise](https://mise.jdx.dev/) for Node.js version management
+- [mise](https://mise.jdx.dev/) — Node version pinned in `mise.toml`
 
 ```bash
-mise install   # installs Node 22 per mise.toml
+mise install   # installs Node 22
+npm install
 ```
 
 ## Local development
 
 ```bash
-npm install
-npm run dev    # http://localhost:4321
+npm run dev        # astro dev on http://localhost:4321
 ```
 
-## Build
+`astro dev` does not run the Cloudflare worker, so the `/contact` redirect is only exercised under `npm run preview` (below).
+
+## Build and verify
 
 ```bash
-npm run build       # outputs static files to dist/
-npm run preview     # serve dist/ locally to verify before deploying
+npm run build      # outputs dist/client/ and dist/_worker.js
+npm run smoke      # post-build assertions over dist/client/
 ```
 
-## Docker
+The smoke test (`scripts/smoke.mjs`) checks that every route rendered, key assets exist, and the CSS bundle still carries the expected design tokens. Run it after any structural or design-token change.
+
+## Preview and deploy
 
 ```bash
-docker build -t mjrossi-site .
-docker run -p 8080:80 mjrossi-site
-# http://localhost:8080
+npm run preview    # build + wrangler dev (exercises /contact route)
+npm run deploy     # build + wrangler deploy
 ```
 
-The Dockerfile uses a multi-stage build: Node 22 compiles the Astro project, then the output is served by `nginx:alpine`.
+In normal operation production deploys run automatically via Cloudflare Workers Builds on push to `main`; `npm run deploy` is for manual deploys.

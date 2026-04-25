@@ -9,7 +9,7 @@ Astro (static output) + plain CSS. No client-side JavaScript.
 - `src/layouts/Base.astro` — shared shell: `<html>`, nav, footer, Google Fonts
 - `src/pages/*.astro` — one file per route; each uses `Base` layout
 - `src/styles/global.css` — all styles; imported in `Base.astro`; uses CSS custom properties
-- `functions/contact.ts` — Cloudflare Pages Function; only server-side surface. `GET /contact` returns a 302 to `mailto:hello@mjrossi.com` so the address never appears in the static HTML. Does not run under Docker/nginx — only on Cloudflare Pages.
+- `public/_redirects` — Cloudflare Workers Static Assets redirect rules. `/contact` → `mailto:hello@mjrossi.com` (302) so the address never appears in the static HTML; the contact-link icon points to `/contact`. Not honored by the Docker/nginx image.
 - `Dockerfile` — multi-stage: Node 22 builds Astro → `nginx:alpine` serves `dist/`
 - `mise.toml` — pins Node 22
 

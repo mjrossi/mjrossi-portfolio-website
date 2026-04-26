@@ -1,43 +1,47 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code working in this repository. For the full architecture, deployment, and CI rundown, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Stack
 
-Astro (static output) + plain CSS. No client-side JavaScript.
+Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, no client-side JavaScript. `output: 'static'` — every route prerenders except `src/pages/contact.ts`, which is on-demand and runs in the Cloudflare worker. Build output: `dist/client/` (assets, served via the `ASSETS` binding in `wrangler.jsonc`) plus `dist/_worker.js` (the on-demand route). Node 22 (pinned in `mise.toml`).
 
-- `src/layouts/Base.astro` — shared shell: `<html>`, nav, footer, Google Fonts
-- `src/pages/*.astro` — one file per route; each uses `Base` layout
-- `src/styles/global.css` — all styles; imported in `Base.astro`; uses CSS custom properties
-- `Dockerfile` — multi-stage: Node 22 builds Astro → `nginx:alpine` serves `dist/`
-- `mise.toml` — pins Node 22
+## File map
 
-## Local development
-
-```bash
-mise install      # Node 22
-npm install
-npm run dev       # http://localhost:4321
-npm run build     # outputs to dist/
-npm run preview   # serve dist/ locally
-```
-
-## Docker
-
-```bash
-docker build -t mjrossi-site .
-docker run -p 8080:80 mjrossi-site
-```
+- `src/layouts/Base.astro` — shared shell. Renders the full Broadsheet masthead on `/` (`section="home"`) and a condensed masthead elsewhere. Builds the edition line (`Vol. <yearOffset> · No. <monthRoman> · <Month YYYY>`) at request/build time — this is what the monthly rebuild cron exists to refresh.
+- `src/components/ContactLinks.astro` — inline-SVG icon row (GitHub, LinkedIn, `/contact` email, Bluesky). Rendered twice per page (nav + footer); the smoke test asserts both occurrences.
+- `src/pages/*.astro` — one file per route. Pages: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/blog`, `/404`.
+- `src/pages/contact.ts` — on-demand endpoint (`export const prerender = false`). `GET /contact` returns 302 to `mailto:hello@mjrossi.com` so the address never appears in static HTML. Cloudflare's `_redirects` rejects `mailto:` destinations and the deploy is a Worker with Static Assets (not classic Pages), so `functions/` is unavailable; this route is the smallest dynamic surface that works.
+- `src/content.config.ts` — Zod schema for blog post frontmatter (single source of truth for required/optional fields and tag validation).
+- `src/content/blog/<slug>.mdx` — one file per post (or `<slug>/index.mdx` when colocating images).
+- `src/lib/blog.ts` — `getPublishedPosts`, `getAllTags`, `getPostsByTag`. The single boundary between content source and rendering — a future D1 migration swaps only this module.
+- `src/layouts/BlogPost.astro` — post chrome (title, byline, tags, optional cover, back link).
+- `src/pages/blog/index.astro`, `src/pages/blog/[...slug].astro`, `src/pages/blog/tag/[tag].astro`, `src/pages/blog/rss.xml.ts` — list, post, per-tag, and RSS routes.
+- `src/styles/global.css` — all styles, imported once via `Base.astro`. Uses CSS custom properties.
+- `astro.config.mjs` — Cloudflare adapter, MDX integration (for the blog), sitemap integration, Astro `Font` integration for Inter / Fraunces / Source Serif 4.
+- `wrangler.jsonc` — Worker config; `ASSETS` binding points at `dist/client`.
+- `public/_headers` — CSP and security headers (HSTS, COOP, X-Frame-Options, Referrer-Policy, Permissions-Policy).
+- `public/.assetsignore` — keeps `_worker.js` and `_routes.json` out of the static asset binding.
+- `scripts/smoke.mjs` — post-build assertions. Run via `npm run smoke`.
+- `scripts/make-noise.mjs`, `scripts/make-og.mjs` — one-off regenerators for `public/noise.png` and `public/og.png`.
+- `.github/workflows/` — `build.yml` (build + smoke), `lighthouse.yml` (audits CF deploys, sticky PR comment), `monthly-rebuild.yml` (1st-of-month deploy hook to refresh the edition line).
 
 ## Design system
 
-CSS custom properties at `:root` in `src/styles/global.css`:
+CSS custom properties at `:root` in `src/styles/global.css` (warm-amber Broadsheet palette, light cream background):
 
-- `--bg` / `--border` — dark background and dividers
-- `--text` / `--muted` — primary and secondary text
-- `--accent` — link color (muted blue `#5b9bd5`)
+- `--bg`, `--bg2` — cream page background and slightly darker secondary surface (oklch).
+- `--border` — hairline rules and dividers.
+- `--text`, `--muted` — primary and secondary text.
+- `--accent` `#8f5520`, `--accent-hover` `#7a4a1a` — link color (AA against `--bg`).
+- `--accent-surname` `#c97d3e` — the "Rossi" highlight in the masthead name.
+- `--accent-band`, `--accent-band-border`, `--accent-rule`, `--accent-tagline` — masthead band, double-rule borders, hairlines, and the italic tagline color.
+- `--font` (Source Serif 4) — body. `--font-serif` (Fraunces) — display. `--font-ui` (Inter) — nav and meta. All loaded via Astro's `Font` integration (`astro.config.mjs`) and exposed as CSS variables.
+- `--max: 1100px`, `--pad: clamp(1.25rem, 4vw, 2.5rem)` — page width and gutter.
 
-Section headers: `text-transform: uppercase` + `letter-spacing`. Experience and education entries use `.entry` / `.entry-header` / `.entry-meta` / `.company` / `.role` / `.date`.
+Section labels: `font-variant-caps: all-small-caps` with letter-spacing. Experience and education entries use `.entry` / `.entry-header` / `.entry-meta` / `.company` / `.role` / `.date`. Interior pages use `.page` / `.page-header` / `.page-meta`.
+
+Smoke test asserts these tokens on the built CSS bundle (`--max: 1100px`, `--accent: #8f5520`, `noise.png` referenced, no inline SVG data URIs, no sub-12px font sizes). Update `scripts/smoke.mjs` alongside any change to the tokens it pins. Blog routes, RSS feed, and per-tag pages are also asserted (the seed post's tags drive the per-tag fixtures).
 
 ## Content
 

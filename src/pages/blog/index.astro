@@ -38,7 +38,7 @@ const posts = await getPublishedPosts();
             {post.data.tags.length > 0 && (
               <p class="post-entry-tags">
                 {post.data.tags.map((tag) => (
-                  <a href={`/blog/tag/${tag}`} class="post-tag">{tag}</a>
+                  <a href={`/blog/tag/${tag}/`} class="post-tag">{tag}</a>
                 ))}
               </p>
             )}

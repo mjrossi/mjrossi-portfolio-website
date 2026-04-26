@@ -25,9 +25,10 @@ const blog = defineCollection({
       description: z.string(),
       pubDate: z.coerce.date(),
       updatedDate: z.coerce.date().optional(),
-      // Tags are used verbatim as URL path segments (`/blog/tag/<tag>`), so
-      // restrict them to lowercase kebab-case. Authors get a build error
-      // instead of a broken route.
+      // Tags are interpolated unescaped into URL paths and HTML attributes
+      // (see src/pages/blog/tag/[tag].astro and the post-list pages). This
+      // regex is the security invariant that makes that safe — relaxing it
+      // requires auditing every interpolation site for escaping.
       tags: z
         .array(
           z

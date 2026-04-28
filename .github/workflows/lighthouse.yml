@@ -85,6 +85,7 @@ jobs:
             ${{ steps.ctx.outputs.base }}/education
             ${{ steps.ctx.outputs.base }}/urban-mobility
             ${{ steps.ctx.outputs.base }}/blog
+            ${{ steps.ctx.outputs.base }}/blog/why-im-pivoting
           configPath: ./${{ steps.ctx.outputs.config }}
           uploadArtifacts: true
           temporaryPublicStorage: true

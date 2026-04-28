@@ -73,13 +73,14 @@ const tagEntries = existsSync(tagDir)
   : [];
 check('blog: at least one tag page', tagEntries.length > 0, `found ${tagEntries.length}`);
 
-// Seed post (`hello-world.mdx`) is tagged `meta` and `urban-mobility` — both
-// must produce tag pages that actually list that post. Guards the tag pipeline
-// end-to-end (getStaticPaths, getPostsByTag, render), not just existence.
-for (const tag of ['meta', 'urban-mobility']) {
+// Each rendered tag page must actually list at least one post that links to
+// a real post slug. Guards the tag pipeline end-to-end (getStaticPaths,
+// getPostsByTag, render), not just existence.
+for (const tag of tagEntries) {
   const html = readIfExists(`blog/tag/${tag}/index.html`) ?? '';
   check(`blog tag ${tag}: page rendered`, html.length > 0);
-  check(`blog tag ${tag}: lists hello-world`, html.includes('/blog/hello-world/'));
+  const linksToPost = postSlugs.some((slug) => html.includes(`/blog/${slug}/`));
+  check(`blog tag ${tag}: lists at least one post`, linksToPost);
 }
 
 // Sitemap references /blog (sitemap-0.xml is where individual URLs live;

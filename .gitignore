@@ -8,3 +8,6 @@ dist/
 !.dev.vars.example
 .env*
 !.env.example
+
+# vscode
+.vscode/

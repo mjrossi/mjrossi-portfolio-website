@@ -1,6 +1,9 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
+import { readingTime } from './readingTime.ts';
 
 export type Post = CollectionEntry<'blog'>;
+
+export const postReadingTime = (post: Post): string => readingTime(post.body ?? '').label;
 
 export const dateFormatter = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',

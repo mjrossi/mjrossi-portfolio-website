@@ -130,7 +130,7 @@ for (const label of ['work', 'education', 'urbanMobility', 'blog']) {
   check(`${label}: no full masthead`,      !html.includes('class="masthead full"'));
   check(`${label}: masthead-home-link`,    html.includes('masthead-home-link'));
   check(`${label}: masthead-page-label`,   html.includes('masthead-page-label'));
-  check(`${label}: .page wrapper`,         /class="page"/.test(html));
+  check(`${label}: .page wrapper`,         /class="[^"]*\bpage\b[^"]*"/.test(html));
   check(`${label}: .page-header`,          html.includes('page-header'));
   check(
     `${label}: ContactLinks rendered twice`,
@@ -146,9 +146,22 @@ if (postSlugs.length > 0) {
   check('blog post: post-title rendered',    postHtml.includes('class="post-title"'));
   check('blog post: post-meta rendered',     postHtml.includes('class="post-meta"'));
   check('blog post: back link to /blog',     /href="\/blog"/.test(postHtml));
+  check('blog post: top back link "← Blog"', /class="[^"]*post-back-top[^"]*"[^>]*>[^<]*←\s*Blog/.test(postHtml));
+  check('blog post: reading time label',     /\d+\s*min\s*read/.test(postHtml));
+  check('blog post: tag-chip class',         postHtml.includes('class="tag-chip"'));
   check('blog post: condensed masthead',     postHtml.includes('class="masthead condensed"'));
   check('blog post: no full masthead',       !postHtml.includes('class="masthead full"'));
 }
+
+// Blog index markup
+const blogIndex = readIfExists('blog/index.html') ?? '';
+check('blog index: rss-link rendered',       blogIndex.includes('class="rss-link"'));
+check('blog index: rss-link points to feed', /class="rss-link"[^>]*href="\/blog\/rss\.xml"/.test(blogIndex)
+  || /href="\/blog\/rss\.xml"[^>]*class="rss-link"/.test(blogIndex));
+check('blog index: reading time label',      /\d+\s*min\s*read/.test(blogIndex));
+check('blog index: post-count rendered',     blogIndex.includes('class="post-count"'));
+check('blog index: tag-chip class',          blogIndex.includes('class="tag-chip"'));
+check('blog index: legacy post-tag class gone', !/class="post-tag"/.test(blogIndex));
 
 // Nav includes Blog link on every rendered page
 for (const label of Object.keys(routes)) {

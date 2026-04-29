@@ -1,7 +1,7 @@
 ---
 import { Image } from 'astro:assets';
 import Base from './Base.astro';
-import { dateFormatter, isoDate, type Post } from '../lib/blog.ts';
+import { dateFormatter, isoDate, postReadingTime, type Post } from '../lib/blog.ts';
 
 interface Props {
   post: Post;
@@ -9,6 +9,7 @@ interface Props {
 
 const { post } = Astro.props;
 const { title, description, pubDate, updatedDate, tags, cover } = post.data;
+const readLabel = postReadingTime(post);
 ---
 
 <Base
@@ -18,13 +19,17 @@ const { title, description, pubDate, updatedDate, tags, cover } = post.data;
   pageLabel="Blog"
 >
   <article class="page post">
+    <a href="/blog" class="post-back post-back-top">← Blog</a>
+
     <header class="post-header">
       <h1 class="post-title">{title}</h1>
       <p class="post-meta">
         <time datetime={isoDate(pubDate)}>{dateFormatter.format(pubDate)}</time>
+        <span class="meta-sep" aria-hidden="true">·</span>
+        <span>{readLabel}</span>
         {updatedDate && (
           <>
-            <span aria-hidden="true"> · </span>
+            <span class="meta-sep" aria-hidden="true">·</span>
             <span class="post-updated">
               Updated <time datetime={isoDate(updatedDate)}>{dateFormatter.format(updatedDate)}</time>
             </span>
@@ -34,7 +39,7 @@ const { title, description, pubDate, updatedDate, tags, cover } = post.data;
       {tags.length > 0 && (
         <p class="post-tags">
           {tags.map((tag) => (
-            <a href={`/blog/tag/${tag}/`} class="post-tag">{tag}</a>
+            <a href={`/blog/tag/${tag}/`} class="tag-chip">{tag}</a>
           ))}
         </p>
       )}
@@ -50,7 +55,14 @@ const { title, description, pubDate, updatedDate, tags, cover } = post.data;
     </div>
 
     <footer class="post-footer">
-      <a href="/blog" class="post-back">← All posts</a>
+      {tags.length > 0 ? (
+        <p class="post-tags">
+          {tags.map((tag) => (
+            <a href={`/blog/tag/${tag}/`} class="tag-chip">{tag}</a>
+          ))}
+        </p>
+      ) : <span></span>}
+      <a href="/blog" class="post-back post-back-bottom">← All posts</a>
     </footer>
   </article>
 </Base>

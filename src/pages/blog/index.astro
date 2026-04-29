@@ -1,8 +1,9 @@
 ---
 import Base from '../../layouts/Base.astro';
-import { getPublishedPosts, dateFormatter, isoDate } from '../../lib/blog.ts';
+import { getPublishedPosts, dateFormatter, isoDate, postReadingTime } from '../../lib/blog.ts';
 
 const posts = await getPublishedPosts();
+const postCountLabel = `${posts.length} post${posts.length === 1 ? '' : 's'}`;
 ---
 
 <Base
@@ -11,40 +12,50 @@ const posts = await getPublishedPosts();
   section="none"
   pageLabel="Blog"
 >
-  <div class="page">
+  <div class="page blog-page">
     <div class="page-header">
-      <h1>Blog</h1>
+      <div class="blog-header">
+        <h1>Blog</h1>
+        <a class="rss-link" href="/blog/rss.xml" aria-label="Subscribe via RSS">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19.01 7.38 20 6.18 20C4.98 20 4 19.01 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1z" />
+          </svg>
+          <span>RSS</span>
+        </a>
+      </div>
       <p>Occasional notes on software engineering, urban mobility, and the places where the two meet.</p>
-      <p class="page-meta">
-        <span><span class="page-meta-label">Feed</span> Subscribe via <a href="/blog/rss.xml">RSS</a></span>
-      </p>
     </div>
 
     {posts.length === 0 ? (
       <p class="post-empty">No posts yet. Check back soon.</p>
     ) : (
-      <section aria-label="Blog posts">
-        {posts.map((post) => (
-          <article class="post-entry">
-            <div class="post-entry-header">
+      <>
+        <section aria-label="Blog posts">
+          {posts.map((post) => (
+            <article class="post-entry">
+              <div class="post-entry-meta">
+                <time datetime={isoDate(post.data.pubDate)}>
+                  {dateFormatter.format(post.data.pubDate)}
+                </time>
+                <span class="meta-sep" aria-hidden="true">·</span>
+                <span>{postReadingTime(post)}</span>
+              </div>
               <h2 class="post-entry-title">
                 <a href={`/blog/${post.id}/`}>{post.data.title}</a>
               </h2>
-              <time class="post-entry-date" datetime={isoDate(post.data.pubDate)}>
-                {dateFormatter.format(post.data.pubDate)}
-              </time>
-            </div>
-            <p class="post-entry-description">{post.data.description}</p>
-            {post.data.tags.length > 0 && (
-              <p class="post-entry-tags">
-                {post.data.tags.map((tag) => (
-                  <a href={`/blog/tag/${tag}/`} class="post-tag">{tag}</a>
-                ))}
-              </p>
-            )}
-          </article>
-        ))}
-      </section>
+              <p class="post-entry-description">{post.data.description}</p>
+              {post.data.tags.length > 0 && (
+                <p class="post-entry-tags">
+                  {post.data.tags.map((tag) => (
+                    <a href={`/blog/tag/${tag}/`} class="tag-chip">{tag}</a>
+                  ))}
+                </p>
+              )}
+            </article>
+          ))}
+        </section>
+        <p class="post-count">{postCountLabel}</p>
+      </>
     )}
   </div>
 </Base>

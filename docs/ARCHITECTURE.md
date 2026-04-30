@@ -24,13 +24,13 @@ The build emits two things:
 - `section="home"` → full Broadsheet masthead (name, location/edition meta, italic tagline framed by rules).
 - anything else → condensed masthead (italic home link, optional `pageLabel`).
 
-The edition line on `/` is computed at build time:
+The edition line on `/` is computed per request:
 
 ```
 Vol. <yearOffset since 2024 in roman> · No. <month in roman> · <Month YYYY>
 ```
 
-Because it's baked into the static HTML, it only updates when the site rebuilds. The monthly rebuild GitHub Action (below) exists to keep it fresh.
+`src/pages/index.astro` sets `export const prerender = false` so it renders in the Cloudflare worker and the edition line is always current. The response carries `Cache-Control: public, max-age=3600`, so in steady state each POP serves the cached HTML and only refreshes once an hour.
 
 `src/components/ContactLinks.astro` renders the four contact icons (GitHub, LinkedIn, `/contact` for email, Bluesky) as inline SVGs that inherit `currentColor`. It's rendered twice per page (in nav and footer) — the smoke test asserts both occurrences and that they share the `aria-label="Contact"` wrapper.
 
@@ -51,35 +51,31 @@ Production deploys run automatically via Cloudflare Workers Builds connected to 
 https://<branch-alias>-mjrossi-portfolio-website.link00seven.workers.dev
 ```
 
-where `<branch-alias>` is the lowercased branch name with non-alphanumerics collapsed to dashes (the alias-construction logic in `.github/workflows/lighthouse.yml` mirrors Cloudflare's). Manual deploys: `npm run deploy` (`astro build && wrangler deploy`). Local preview against the worker: `npm run preview` (`astro build && wrangler dev`) — this is the only way to exercise `/contact` locally; `astro dev` doesn't run the worker.
-
-### Monthly rebuild
-
-`.github/workflows/monthly-rebuild.yml` runs at `0 6 1 * *` (06:00 UTC on the 1st of each month) and POSTs to a Cloudflare deploy hook stored in `secrets.CF_PAGES_DEPLOY_HOOK` to retrigger a production build. This refreshes the build-time edition line in the masthead.
-
-The secret name (`CF_PAGES_DEPLOY_HOOK`) is historical — the project moved to Workers from Pages but the secret kept its name. Cloudflare deploy hooks work the same way regardless. If you rotate the hook, you can rename the secret too; just keep the workflow's env var in sync.
+where `<branch-alias>` is the lowercased branch name with non-alphanumerics collapsed to dashes (the alias-construction logic in `.github/workflows/lighthouse.yml` mirrors Cloudflare's). Manual deploys: `npm run deploy` (`astro build && wrangler deploy`). Local preview against the worker: `npm run preview` (`astro build && wrangler dev`) — this is the only way to exercise `/` or `/contact` locally; `astro dev` doesn't run the worker.
 
 ## CI workflows
 
-- `build.yml` — runs on PRs and pushes to `main`. `npm ci`, `npm run build`, `npm run smoke`.
+- `build.yml` — runs on PRs and pushes to `main`. `npm ci`, `npm run build`, `npm run smoke`, `npm run worker-smoke`.
 - `lighthouse.yml` — fires on `check_suite` completion when the Cloudflare Workers Builds check finishes (and on `workflow_dispatch` for ad-hoc audits of any URL). Audits four routes (`/`, `/work`, `/education`, `/urban-mobility`). `/projects` is excluded because it's `noindex` and would fail SEO by design.
   - `main` uses `.github/lighthouserc.main.json` — all four categories enforce as `error` (perf/SEO at minScore 0.9, a11y/best-practices at 1.0).
   - PR previews use `.github/lighthouserc.json` — perf and SEO drop to `warn` because Cloudflare preview URLs ship `x-robots-tag: noindex` (kills SEO score) and shared CI runners produce high TBT variance under simulated throttling. A11y and best-practices stay strict.
   - Posts a sticky PR comment via `marocchino/sticky-pull-request-comment` (header `lighthouse`) with per-URL scores and averages, then publishes a check run on the head SHA with the four-category averages in the title.
-- `monthly-rebuild.yml` — see above.
 - `dependabot.yml` — weekly npm and github-actions updates, minor and patch grouped (`npm-minor-patch`, `actions-minor-patch`).
 
-## Smoke test
+## Smoke tests
 
-`scripts/smoke.mjs` is the post-build acceptance check. No test framework — every assertion in there maps to a regression that has actually shipped at some point. Run via `npm run smoke` after `npm run build`. It reads `dist/client/` and asserts:
+Two post-build acceptance checks. No test framework — every assertion maps to a regression that has actually shipped at some point.
 
-- Every route renders as HTML at the expected path (`index.html`, `work/index.html`, etc.) and the static assets (`noise.png`, `favicon.svg`, `sitemap-index.xml`, `resume.pdf`, `og.png`, `404.html`) are present.
-- The home page has the full masthead structure (`masthead full`, `masthead-inner`, `masthead-meta-loc`, `masthead-meta-edition`), the edition line matches the `Vol. X · No. Y · Month YYYY` shape, the two-column body (`col-about` / `col-now`) is wired up with the dropcap and avatar, and the footer has `broadsheet-footer` / `broadsheet-colophon` / `footer-contact` / `nav-contact`.
+`scripts/smoke.mjs` (`npm run smoke`) reads `dist/client/` and asserts:
+
+- Every prerendered route (`work`, `education`, `urban-mobility`, `blog`, blog posts, tag pages, RSS, 404) exists at the expected path, and static assets (`noise.png`, `favicon.svg`, `sitemap-index.xml`, `resume.pdf`, `og.png`, `404.html`) are present.
 - Interior pages use the condensed masthead (no `masthead full`), have a `.page` wrapper with `.page-header`, and both interior masthead anchors (`masthead-home-link`, `masthead-page-label`) are present.
-- `ContactLinks` is rendered exactly twice on every page (asserted by counting `aria-label="Contact"`).
+- `ContactLinks` is rendered exactly twice on every prerendered page (asserted by counting `aria-label="Contact"`).
 - The CSS bundle keeps the design tokens it pins: `--max: 1100px`, `--pad`, `--accent: #8f5520` (and the previous `#b86e2a` is gone), `noise.png` is referenced, no inline `data:image/svg+xml` URIs, the responsive contact-bar rules (`.nav-contact{display:none}` at mobile, `.footer-contact{order:-1}`), no font sizes below 12px, and the responsive breakpoints at 699px and 639px are present.
 
-If you change a CSS token, a structural class, or a layout shape, expect to update the corresponding assertion in `smoke.mjs` in the same change.
+`scripts/worker-smoke.mjs` (`npm run worker-smoke`) covers `/`, which is on-demand and therefore has no static HTML. It spins up `wrangler dev`, fetches `/`, and asserts the full masthead structure, the `Vol. X · No. Y · Month YYYY` edition-line format, the two-column body (`col-about` / `col-now`) with dropcap and avatar, the footer (`broadsheet-footer` / `broadsheet-colophon` / `footer-contact` / `nav-contact`), `ContactLinks` rendered twice, the Blog nav link, and that the response carries `Cache-Control: public, max-age=3600`.
+
+If you change a CSS token, a structural class, or a layout shape, expect to update the corresponding assertion in one of the two smoke scripts.
 
 ## One-off generators
 
@@ -89,6 +85,6 @@ If you change a CSS token, a structural class, or a layout shape, expect to upda
 ## Things to know when changing the design
 
 - The design tokens live in one place (`:root` in `src/styles/global.css`). Touch them and the smoke test will likely complain — update `scripts/smoke.mjs` in the same change.
-- The masthead has two variants and the smoke test enforces which one each route uses. New top-level pages need to pass `pageLabel` to `Base.astro` so the condensed masthead has its label.
-- `/contact` is the only on-demand surface. If you add another, set `prerender = false` and remember it'll be served from `_worker.js`, not from static assets.
-- The edition line uses build time. If you need a new "now"-flavored detail to stay current, either rebuild on a schedule (extend `monthly-rebuild.yml`) or move it to the on-demand worker.
+- The masthead has two variants and the smoke tests enforce which one each route uses. New top-level pages need to pass `pageLabel` to `Base.astro` so the condensed masthead has its label.
+- `/` and `/contact` are the on-demand surfaces. If you add another, set `prerender = false` and remember it'll be served through the worker, not from static assets — and worth asserting in `worker-smoke.mjs`.
+- Anything that needs to stay current without a rebuild belongs on an on-demand route (with a sensible `Cache-Control`).

@@ -4,27 +4,30 @@ Guidance for Claude Code working in this repository. For the full architecture, 
 
 ## Stack
 
-Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, no client-side JavaScript. `output: 'static'` — every route prerenders except `src/pages/contact.ts`, which is on-demand and runs in the Cloudflare worker. Build output: `dist/client/` (assets, served via the `ASSETS` binding in `wrangler.jsonc`) plus `dist/_worker.js` (the on-demand route). Node 22 (pinned in `mise.toml`).
+Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, no client-side JavaScript. Most routes prerender; `src/pages/index.astro` and `src/pages/contact.ts` are on-demand and run in the Cloudflare worker. Build output: `dist/client/` (assets, served via the `ASSETS` binding in `wrangler.jsonc`) plus the server bundle in `dist/server/` that Wrangler deploys as the worker. Node 22 (pinned in `mise.toml`).
 
 ## File map
 
-- `src/layouts/Base.astro` — shared shell. Renders the full Broadsheet masthead on `/` (`section="home"`) and a condensed masthead elsewhere. Builds the edition line (`Vol. <yearOffset> · No. <monthRoman> · <Month YYYY>`) at request/build time — this is what the monthly rebuild cron exists to refresh.
-- `src/components/ContactLinks.astro` — inline-SVG icon row (GitHub, LinkedIn, `/contact` email, Bluesky). Rendered twice per page (nav + footer); the smoke test asserts both occurrences.
-- `src/pages/*.astro` — one file per route. Pages: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/blog`, `/404`.
-- `src/pages/contact.ts` — on-demand endpoint (`export const prerender = false`). `GET /contact` returns 302 to `mailto:hello@mjrossi.com` so the address never appears in static HTML. Cloudflare's `_redirects` rejects `mailto:` destinations and the deploy is a Worker with Static Assets (not classic Pages), so `functions/` is unavailable; this route is the smallest dynamic surface that works.
+- `src/layouts/Base.astro` — shared shell. Renders the full Broadsheet masthead on `/` (`section="home"`) and a condensed masthead elsewhere. Builds the edition line (`Vol. <yearOffset> · No. <monthRoman> · <Month YYYY>`) at request time on `/` (on-demand render) so it stays current without a scheduled rebuild.
+- `src/components/ContactLinks.astro` — inline-SVG icon row (GitHub, LinkedIn, `/contact` email, Bluesky). Rendered twice per page (nav + footer); the smoke tests assert both occurrences.
+- `src/components/BlogPostEntry.astro` — shared `<article class="post-entry">` card used by `blog/index.astro` and `blog/tag/[tag].astro`.
+- `src/pages/*.astro` — one file per route. Pages: `/` (About + Now, on-demand), `/work`, `/education`, `/urban-mobility`, `/blog`, `/404`.
+- `src/pages/index.astro` — on-demand (`export const prerender = false`) with `Cache-Control: public, max-age=3600`. Keeps the edition line current; edge cache absorbs traffic.
+- `src/pages/contact.ts` — on-demand endpoint. `GET /contact` returns 302 to `mailto:hello@mjrossi.com` so the address never appears in static HTML. Cloudflare's `_redirects` rejects `mailto:` destinations and the deploy is a Worker with Static Assets (not classic Pages), so `functions/` is unavailable.
 - `src/content.config.ts` — Zod schema for blog post frontmatter (single source of truth for required/optional fields and tag validation).
 - `src/content/blog/<slug>.mdx` — one file per post (or `<slug>/index.mdx` when colocating images).
-- `src/lib/blog.ts` — `getPublishedPosts`, `getAllTags`, `getPostsByTag`. The single boundary between content source and rendering — a future D1 migration swaps only this module.
+- `src/lib/blog.ts` — `getPublishedPosts`, `getAllTags`, `getPostsByTag`, plus the `dateFormatter` / `isoDate` / `postReadingTime` helpers used by `BlogPostEntry.astro`. The single boundary between content source and rendering — a future D1 migration swaps only this module.
 - `src/layouts/BlogPost.astro` — post chrome (title, byline, tags, optional cover, back link).
 - `src/pages/blog/index.astro`, `src/pages/blog/[...slug].astro`, `src/pages/blog/tag/[tag].astro`, `src/pages/blog/rss.xml.ts` — list, post, per-tag, and RSS routes.
 - `src/styles/global.css` — all styles, imported once via `Base.astro`. Uses CSS custom properties.
 - `astro.config.mjs` — Cloudflare adapter, MDX integration (for the blog), sitemap integration, Astro `Font` integration for Inter / Fraunces / Source Serif 4.
 - `wrangler.jsonc` — Worker config; `ASSETS` binding points at `dist/client`.
 - `public/_headers` — CSP and security headers (HSTS, COOP, X-Frame-Options, Referrer-Policy, Permissions-Policy).
-- `public/.assetsignore` — keeps `_worker.js` and `_routes.json` out of the static asset binding.
-- `scripts/smoke.mjs` — post-build assertions. Run via `npm run smoke`.
+- `public/.assetsignore` — keeps worker artifacts out of the static asset binding.
+- `scripts/smoke.mjs` — post-build assertions over `dist/client/` (prerendered routes + CSS tokens). Run via `npm run smoke`.
+- `scripts/worker-smoke.mjs` — spins up `wrangler dev` and asserts the on-demand `/` renders correctly with the right `Cache-Control`. Run via `npm run worker-smoke`.
 - `scripts/make-noise.mjs`, `scripts/make-og.mjs` — one-off regenerators for `public/noise.png` and `public/og.png`.
-- `.github/workflows/` — `build.yml` (build + smoke), `lighthouse.yml` (audits CF deploys, sticky PR comment), `monthly-rebuild.yml` (1st-of-month deploy hook to refresh the edition line).
+- `.github/workflows/` — `build.yml` (build + both smoke tests), `lighthouse.yml` (audits CF deploys, sticky PR comment).
 
 ## Design system
 

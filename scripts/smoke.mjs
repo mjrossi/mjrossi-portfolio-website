@@ -37,9 +37,10 @@ if (!existsSync(DIST)) {
   process.exit(1);
 }
 
-// Routes that must render
+// Routes that must render. `/` is excluded — it's on-demand (rendered in
+// the Cloudflare worker, not prerendered to dist/client), so its
+// assertions live in scripts/worker-smoke.mjs.
 const routes = {
-  home: 'index.html',
   work: 'work/index.html',
   education: 'education/index.html',
   urbanMobility: 'urban-mobility/index.html',
@@ -96,32 +97,9 @@ for (const asset of ['noise.png', 'favicon.svg', 'sitemap-index.xml', 'resume.pd
   check(`asset: ${asset}`, existsSync(resolve(DIST, asset)));
 }
 
-// Home page markup
-const home = readIfExists('index.html') ?? '';
-check('home: full masthead',          home.includes('class="masthead full"'));
-check('home: masthead-inner wrapper', home.includes('class="masthead-inner"'));
-check('home: masthead-meta-loc',      home.includes('masthead-meta-loc'));
-check('home: masthead-meta-edition',  home.includes('masthead-meta-edition'));
-check(
-  'home: edition line format (Vol. X · No. Y · Month YYYY)',
-  /Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+ · \w+ \d{4}/.test(home),
-);
-check('home: broadsheet-body',        home.includes('class="broadsheet-body"'));
-check('home: col-about',              home.includes('col-about'));
-check('home: col-now',                home.includes('col-now'));
-check('home: drop cap',               home.includes('class="dropcap"'));
-check('home: avatar img',             /<img[^>]*class="[^"]*avatar/.test(home));
-check('home: footer structure',
-  home.includes('broadsheet-footer') &&
-  home.includes('broadsheet-colophon') &&
-  home.includes('footer-contact') &&
-  home.includes('nav-contact'),
-);
-check(
-  'home: ContactLinks rendered twice (nav + footer)',
-  occurrences(home, 'aria-label="Contact"') === 2,
-  `found ${occurrences(home, 'aria-label="Contact"')}`,
-);
+// Home page markup is asserted against a live wrangler dev in
+// scripts/worker-smoke.mjs — it's on-demand so there's no static HTML
+// to read here.
 
 // Interior pages
 for (const label of ['work', 'education', 'urbanMobility', 'blog']) {

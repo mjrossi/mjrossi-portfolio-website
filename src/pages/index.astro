@@ -2,6 +2,12 @@
 import { Image } from 'astro:assets';
 import Base from '../layouts/Base.astro';
 import profileImage from '../assets/profile.jpg';
+
+// Rendered on demand so the masthead edition line ("Vol. X · No. Y ·
+// Month YYYY") stays current without a scheduled rebuild. Cached at the
+// edge for an hour so most hits don't reach origin.
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
 ---
 
 <Base title="Matthew Rossi" section="home">

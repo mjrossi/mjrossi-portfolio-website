@@ -1,6 +1,7 @@
 ---
 import Base from '../../../layouts/Base.astro';
-import { getAllTags, getPostsByTag, dateFormatter, isoDate, postReadingTime } from '../../../lib/blog.ts';
+import BlogPostEntry from '../../../components/BlogPostEntry.astro';
+import { getAllTags, getPostsByTag } from '../../../lib/blog.ts';
 
 export async function getStaticPaths() {
   const tags = await getAllTags();
@@ -31,28 +32,7 @@ const { tag, posts } = Astro.props;
     </div>
 
     <section aria-label={`Posts tagged ${tag}`}>
-      {posts.map((post) => (
-        <article class="post-entry">
-          <div class="post-entry-meta">
-            <time datetime={isoDate(post.data.pubDate)}>
-              {dateFormatter.format(post.data.pubDate)}
-            </time>
-            <span class="meta-sep" aria-hidden="true">·</span>
-            <span>{postReadingTime(post)}</span>
-          </div>
-          <h2 class="post-entry-title">
-            <a href={`/blog/${post.id}/`}>{post.data.title}</a>
-          </h2>
-          <p class="post-entry-description">{post.data.description}</p>
-          {post.data.tags.length > 0 && (
-            <p class="post-entry-tags">
-              {post.data.tags.map((t) => (
-                <a href={`/blog/tag/${t}/`} class="tag-chip">{t}</a>
-              ))}
-            </p>
-          )}
-        </article>
-      ))}
+      {posts.map((post) => <BlogPostEntry post={post} />)}
     </section>
   </div>
 </Base>

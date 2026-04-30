@@ -1,6 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
-import { getPublishedPosts, dateFormatter, isoDate, postReadingTime } from '../../lib/blog.ts';
+import BlogPostEntry from '../../components/BlogPostEntry.astro';
+import { getPublishedPosts } from '../../lib/blog.ts';
 
 const posts = await getPublishedPosts();
 const postCountLabel = `${posts.length} post${posts.length === 1 ? '' : 's'}`;
@@ -31,28 +32,7 @@ const postCountLabel = `${posts.length} post${posts.length === 1 ? '' : 's'}`;
     ) : (
       <>
         <section aria-label="Blog posts">
-          {posts.map((post) => (
-            <article class="post-entry">
-              <div class="post-entry-meta">
-                <time datetime={isoDate(post.data.pubDate)}>
-                  {dateFormatter.format(post.data.pubDate)}
-                </time>
-                <span class="meta-sep" aria-hidden="true">·</span>
-                <span>{postReadingTime(post)}</span>
-              </div>
-              <h2 class="post-entry-title">
-                <a href={`/blog/${post.id}/`}>{post.data.title}</a>
-              </h2>
-              <p class="post-entry-description">{post.data.description}</p>
-              {post.data.tags.length > 0 && (
-                <p class="post-entry-tags">
-                  {post.data.tags.map((tag) => (
-                    <a href={`/blog/tag/${tag}/`} class="tag-chip">{tag}</a>
-                  ))}
-                </p>
-              )}
-            </article>
-          ))}
+          {posts.map((post) => <BlogPostEntry post={post} />)}
         </section>
         <p class="post-count">{postCountLabel}</p>
       </>

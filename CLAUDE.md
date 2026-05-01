@@ -8,11 +8,10 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, no client-side JavaSc
 
 ## File map
 
-- `src/layouts/Base.astro` — shared shell. Renders the full Broadsheet masthead on `/` (`section="home"`) and a condensed masthead elsewhere. Builds the edition line (`Vol. <yearOffset> · No. <monthRoman> · <Month YYYY>`) at request time on `/` (on-demand render) so it stays current without a scheduled rebuild.
+- `src/layouts/Base.astro` — shared shell. Renders the full Broadsheet masthead on every page, with the name as an `<h1>` on `/` and as a link back to `/` on subpages. Builds the edition line (`Vol. <yearOffset> · No. <monthRoman> · <Month YYYY>`) at request time so it stays current without a scheduled rebuild.
 - `src/components/ContactLinks.astro` — inline-SVG icon row (GitHub, LinkedIn, `/contact` email, Bluesky). Rendered twice per page (nav + footer); the smoke tests assert both occurrences.
 - `src/components/BlogPostEntry.astro` — shared `<article class="post-entry">` card used by `blog/index.astro` and `blog/tag/[tag].astro`.
-- `src/pages/*.astro` — one file per route. Pages: `/` (About + Now, on-demand), `/work`, `/education`, `/urban-mobility`, `/blog`, `/404`.
-- `src/pages/index.astro` — on-demand (`export const prerender = false`) with `Cache-Control: public, max-age=3600`. Keeps the edition line current; edge cache absorbs traffic.
+- `src/pages/*.astro` — one file per route. Pages: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/blog`, `/404`. Everything except `/404` is on-demand (`export const prerender = false`) with `Cache-Control: public, max-age=3600`, so the edition line stays current and the edge cache absorbs traffic.
 - `src/pages/contact.ts` — on-demand endpoint. `GET /contact` returns 302 to `mailto:hello@mjrossi.com` so the address never appears in static HTML. Cloudflare's `_redirects` rejects `mailto:` destinations and the deploy is a Worker with Static Assets (not classic Pages), so `functions/` is unavailable.
 - `src/content.config.ts` — Zod schema for blog post frontmatter (single source of truth for required/optional fields and tag validation).
 - `src/content/blog/<slug>.mdx` — one file per post (or `<slug>/index.mdx` when colocating images).
@@ -24,10 +23,9 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, no client-side JavaSc
 - `wrangler.jsonc` — Worker config; `ASSETS` binding points at `dist/client`.
 - `public/_headers` — CSP and security headers (HSTS, COOP, X-Frame-Options, Referrer-Policy, Permissions-Policy).
 - `public/.assetsignore` — keeps worker artifacts out of the static asset binding.
-- `scripts/smoke.mjs` — post-build assertions over `dist/client/` (prerendered routes + CSS tokens). Run via `npm run smoke`.
-- `scripts/worker-smoke.mjs` — spins up `wrangler dev` and asserts the on-demand `/` renders correctly with the right `Cache-Control`. Run via `npm run worker-smoke`.
+- `scripts/smoke.mjs` — post-build smoke test. Checks static artifacts in `dist/client/` (CSS tokens, assets) and then spins up `wrangler dev` to hit every on-demand route. Run via `npm run smoke`.
 - `scripts/make-noise.mjs`, `scripts/make-og.mjs` — one-off regenerators for `public/noise.png` and `public/og.png`.
-- `.github/workflows/` — `build.yml` (build + both smoke tests), `lighthouse.yml` (audits CF deploys, sticky PR comment).
+- `.github/workflows/` — `build.yml` (build + smoke), `lighthouse.yml` (audits CF deploys, sticky PR comment).
 
 ## Design system
 
@@ -44,7 +42,7 @@ CSS custom properties at `:root` in `src/styles/global.css` (warm-amber Broadshe
 
 Section labels: `font-variant-caps: all-small-caps` with letter-spacing. Experience and education entries use `.entry` / `.entry-header` / `.entry-meta` / `.company` / `.role` / `.date`. Interior pages use `.page` / `.page-header` / `.page-meta`.
 
-Smoke test asserts these tokens on the built CSS bundle (`--max: 1100px`, `--accent: #8f5520`, `noise.png` referenced, no inline SVG data URIs, no sub-12px font sizes). Update `scripts/smoke.mjs` alongside any change to the tokens it pins. Blog routes, RSS feed, and per-tag pages are also asserted (the seed post's tags drive the per-tag fixtures).
+Smoke test asserts a handful of tokens on the built CSS bundle (`--max: 1100px`, `--accent: #8f5520`, no inline SVG data URIs) and then exercises every on-demand route through `wrangler dev`. Update `scripts/smoke.mjs` alongside any change to the tokens or chrome it pins.
 
 ## Content
 

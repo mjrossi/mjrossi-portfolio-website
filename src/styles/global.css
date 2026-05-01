@@ -96,8 +96,7 @@ body {
   pointer-events: none;
 }
 
-.masthead.full,
-.masthead.condensed {
+.masthead.full {
   margin-bottom: 4px;
 }
 
@@ -110,10 +109,6 @@ body {
 
 .masthead.full .masthead-inner {
   padding: 1.4rem var(--pad) 1.2rem;
-}
-
-.masthead.condensed .masthead-inner {
-  padding: 1rem var(--pad);
 }
 
 .masthead-name-row {
@@ -184,32 +179,13 @@ body {
   white-space: nowrap;
 }
 
-.masthead.condensed .masthead-name-row {
-  align-items: center;
-}
-
-.masthead-home-link {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 1.6rem;
-  font-weight: 400;
-  color: var(--text);
+a.masthead-name-link {
   text-decoration: none;
-  letter-spacing: -0.01em;
   transition: color 0.15s ease;
 }
 
-.masthead-home-link:hover {
+a.masthead-name-link:hover .surname {
   color: var(--accent);
-}
-
-.masthead-page-label {
-  font-family: var(--font-ui);
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--accent-tagline);
 }
 
 /* ── Broadsheet nav (page + contact links) ──────────── */
@@ -242,12 +218,19 @@ body {
   letter-spacing: 0.03em;
   color: var(--muted);
   text-decoration: none;
-  transition: color 0.15s ease;
+  padding: 0.25rem 0.6rem;
+  border-radius: 2px;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
-.broadsheet-nav-inner .page-links a:hover,
+.broadsheet-nav-inner .page-links a:hover {
+  color: var(--accent);
+}
+
 .broadsheet-nav-inner .page-links a.active {
   color: var(--accent);
+  background: var(--bg2);
+  font-weight: 700;
 }
 
 .contact-links {
@@ -654,12 +637,6 @@ em {
   .masthead-meta {
     text-align: left;
     padding-bottom: 0;
-  }
-
-  .masthead.condensed .masthead-name-row {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
   }
 
   .masthead-tagline {

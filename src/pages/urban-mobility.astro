@@ -1,8 +1,11 @@
 ---
 import Base from '../layouts/Base.astro';
+
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
 ---
 
-<Base title="Urban Mobility" description="Matthew Rossi's engagement with urban mobility, transit advocacy, and civic technology." section="urban-mobility" pageLabel="Urban Mobility">
+<Base title="Urban Mobility" description="Matthew Rossi's engagement with urban mobility, transit advocacy, and civic technology.">
 
   <div class="page">
   <div class="page-header">

@@ -1,33 +1,34 @@
 ---
-import { Image } from 'astro:assets';
 import Base from '../layouts/Base.astro';
-import profileImage from '../assets/profile.jpg';
+
+// Rendered on demand so the masthead edition line ("Vol. X · No. Y ·
+// Month YYYY") stays current without a scheduled rebuild. Cached at the
+// edge for an hour so most hits don't reach origin.
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
 ---
 
-<Base title="Matthew Rossi" section="home">
+<Base title="Matthew Rossi">
 
   <section class="broadsheet-body">
     <div class="col-about">
       <span class="section-label">About</span>
       <p class="dropcap">I grew up outside Detroit — a place built almost entirely around the car. The near-total absence of alternatives made the connection between transportation and daily life hard to ignore. That stuck with me, and eventually became a serious interest in how cities move people and what happens when they can't.</p>
-      <p>I spent thirteen years in software engineering, working across payments, financial services, and cloud infrastructure. Now I'm shifting focus to urban mobility through graduate study at the <a href="https://www.eiturbanmobility.eu/what-we-offer/education-and-training/masters-programmes/sustainable-urban-mobility-transitions/" target="_blank" rel="noopener noreferrer">EIT Urban Mobility Master School</a>, starting autumn 2026.</p>
+      <p>I spent thirteen years in software engineering, working across payments, financial services, and cloud infrastructure, and am now shifting focus to urban mobility.</p>
     </div>
     <div class="broadsheet-gutter" aria-hidden="true"></div>
     <div class="col-now">
       <span class="section-label">Now</span>
-      <Image
-        src={profileImage}
+      <img
+        src="/profile-avatar.webp"
         alt="Matthew Rossi"
         class="avatar"
-        width={64}
-        height={64}
-        densities={[1, 2]}
-        format="webp"
-        quality={70}
-        loading="eager"
-        fetchpriority="high"
+        width="64"
+        height="64"
+        loading="lazy"
+        decoding="async"
       />
-      <p>Senior Software Engineer at <a href="https://www.heroku.com" target="_blank" rel="noopener noreferrer">Heroku (Salesforce)</a> in New York through May 2026.</p>
+      <p>As of May 2026, I'll have wrapped up 5 years as a Senior Software Engineer at <a href="https://www.heroku.com" target="_blank" rel="noopener noreferrer">Heroku (Salesforce)</a> in New York.</p>
       <p>Starting autumn 2026, I'll be in the <strong>EIT Urban Mobility Master's Program (SUMT)</strong> — a two-year double degree, first at Técnico Lisboa in Lisbon, then at UPC BarcelonaTech in Barcelona.</p>
     </div>
   </section>

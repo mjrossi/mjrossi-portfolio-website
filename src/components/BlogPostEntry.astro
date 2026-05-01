@@ -1,0 +1,29 @@
+---
+import { dateFormatter, isoDate, postReadingTime, type Post } from '../lib/blog.ts';
+
+interface Props {
+  post: Post;
+}
+
+const { post } = Astro.props;
+---
+<article class="post-entry">
+  <div class="post-entry-meta">
+    <time datetime={isoDate(post.data.pubDate)}>
+      {dateFormatter.format(post.data.pubDate)}
+    </time>
+    <span class="meta-sep" aria-hidden="true">·</span>
+    <span>{postReadingTime(post)}</span>
+  </div>
+  <h2 class="post-entry-title">
+    <a href={`/blog/${post.id}/`}>{post.data.title}</a>
+  </h2>
+  <p class="post-entry-description">{post.data.description}</p>
+  {post.data.tags.length > 0 && (
+    <p class="post-entry-tags">
+      {post.data.tags.map((tag) => (
+        <a href={`/blog/tag/${tag}/`} class="tag-chip">{tag}</a>
+      ))}
+    </p>
+  )}
+</article>

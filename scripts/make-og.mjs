@@ -53,8 +53,8 @@ const avatarBuf = await sharp(resolve('src/assets/profile.jpg'))
   .png()
   .toBuffer();
 
-// Noise overlay — reuse the same PNG the masthead uses at runtime.
-const noiseBuf = readFileSync(resolve('public/noise.png'));
+// Noise overlay — reuse the same texture the masthead uses at runtime.
+const noiseBuf = readFileSync(resolve('public/noise.webp'));
 
 // Layout constants — all measured from the band top, then body region below.
 const NAME_X = PAD + AVATAR_SIZE + 32;

@@ -3,22 +3,16 @@ import { Font } from 'astro:assets';
 import '../styles/global.css';
 import ContactLinks from '../components/ContactLinks.astro';
 
-type Section = 'home' | 'work' | 'education' | 'urban-mobility' | 'projects' | 'none';
-
 interface Props {
   title: string;
   description?: string;
   noindex?: boolean;
-  section?: Section;
-  pageLabel?: string;
 }
 
 const {
   title,
   description = 'Matthew Rossi — software engineer turning toward sustainable urban mobility.',
   noindex = false,
-  section = 'none',
-  pageLabel,
 } = Astro.props;
 
 const pathname = Astro.url.pathname;
@@ -49,9 +43,10 @@ const navLinks = [
   { href: '/work', label: 'Work' },
   { href: '/education', label: 'Education' },
   { href: '/urban-mobility', label: 'Urban Mobility' },
+  { href: '/blog', label: 'Blog' },
 ];
 
-const showFullMasthead = section === 'home';
+const isHome = pathname === '/';
 ---
 
 <!DOCTYPE html>
@@ -87,33 +82,26 @@ const showFullMasthead = section === 'home';
 </head>
 <body>
 
-  {showFullMasthead ? (
-    <header class="masthead full">
-      <div class="masthead-inner">
-        <div class="masthead-name-row">
+  <header class="masthead full">
+    <div class="masthead-inner">
+      <div class="masthead-name-row">
+        {isHome ? (
           <h1 class="masthead-name">Matthew <span class="surname">Rossi</span></h1>
-          <div class="masthead-meta">
-            <span class="masthead-meta-loc">Brooklyn, New York</span>
-            <span class="masthead-meta-edition">{editionLine}</span>
-          </div>
-        </div>
-        <div class="masthead-tagline-row">
-          <span class="masthead-rule" aria-hidden="true"></span>
-          <span class="masthead-tagline">Software engineer turning toward sustainable urban mobility</span>
-          <span class="masthead-rule" aria-hidden="true"></span>
+        ) : (
+          <a href="/" class="masthead-name masthead-name-link">Matthew <span class="surname">Rossi</span></a>
+        )}
+        <div class="masthead-meta">
+          <span class="masthead-meta-loc">Brooklyn, New York</span>
+          <span class="masthead-meta-edition">{editionLine}</span>
         </div>
       </div>
-    </header>
-  ) : (
-    <header class="masthead condensed">
-      <div class="masthead-inner">
-        <div class="masthead-name-row">
-          <a href="/" class="masthead-home-link">Matthew Rossi</a>
-          {pageLabel && <span class="masthead-page-label">{pageLabel}</span>}
-        </div>
+      <div class="masthead-tagline-row">
+        <span class="masthead-rule" aria-hidden="true"></span>
+        <span class="masthead-tagline">Software engineer turning toward sustainable urban mobility</span>
+        <span class="masthead-rule" aria-hidden="true"></span>
       </div>
-    </header>
-  )}
+    </div>
+  </header>
 
   <nav class="broadsheet-nav" aria-label="Primary">
     <div class="broadsheet-nav-inner">

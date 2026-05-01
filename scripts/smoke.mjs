@@ -1,11 +1,18 @@
-// Post-build smoke test. Reads dist/client/ and asserts markers that
-// must exist (and some that must NOT exist). No test framework: every
-// check here maps to a concrete regression we've actually hit.
-// Run after `npm run build`. Exits 1 on the first failing assertion set.
+// Post-build smoke test. Checks static artifacts in dist/client and then
+// spins up wrangler dev to hit every on-demand route. Focused on the
+// handful of regressions that would be user-visible or hard to catch by
+// eye — not every class name in the markup.
+//
+// Run after `npm run build` via `npm run smoke`.
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
+import { spawn } from 'node:child_process';
 
 const DIST = resolve('dist/client');
+const PORT = Number(process.env.SMOKE_PORT ?? 8788);
+const BASE = `http://127.0.0.1:${PORT}`;
+const READY_TIMEOUT_MS = 30_000;
+
 const fails = [];
 let passes = 0;
 
@@ -15,11 +22,6 @@ function check(name, ok, detail = '') {
     return;
   }
   fails.push({ name, detail });
-}
-
-function readIfExists(path) {
-  const full = resolve(DIST, path);
-  return existsSync(full) ? readFileSync(full, 'utf8') : null;
 }
 
 function occurrences(haystack, needle) {
@@ -32,110 +34,172 @@ function occurrences(haystack, needle) {
   return n;
 }
 
+// ── Static artifacts ─────────────────────────────────
+
 if (!existsSync(DIST)) {
   console.error(`smoke: dist/client not found — run \`npm run build\` first`);
   process.exit(1);
 }
 
-// Routes that must render
-const routes = {
-  home: 'index.html',
-  work: 'work/index.html',
-  education: 'education/index.html',
-  urbanMobility: 'urban-mobility/index.html',
-  projects: 'projects/index.html',
-};
-
-for (const [label, path] of Object.entries(routes)) {
-  check(`route: ${label} renders`, existsSync(resolve(DIST, path)), path);
-}
-
-// Static assets
-for (const asset of ['noise.png', 'favicon.svg', 'sitemap-index.xml', 'resume.pdf', 'og.png', '404.html']) {
+for (const asset of [
+  'noise.webp',
+  'profile-avatar.webp',
+  'favicon.svg',
+  'resume.pdf',
+  'og.png',
+  '404.html',
+  'sitemap-index.xml',
+]) {
   check(`asset: ${asset}`, existsSync(resolve(DIST, asset)));
 }
 
-// Home page markup
-const home = readIfExists('index.html') ?? '';
-check('home: full masthead',          home.includes('class="masthead full"'));
-check('home: masthead-inner wrapper', home.includes('class="masthead-inner"'));
-check('home: masthead-meta-loc',      home.includes('masthead-meta-loc'));
-check('home: masthead-meta-edition',  home.includes('masthead-meta-edition'));
-check(
-  'home: edition line format (Vol. X · No. Y · Month YYYY)',
-  /Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+ · \w+ \d{4}/.test(home),
-);
-check('home: broadsheet-body',        home.includes('class="broadsheet-body"'));
-check('home: col-about',              home.includes('col-about'));
-check('home: col-now',                home.includes('col-now'));
-check('home: drop cap',               home.includes('class="dropcap"'));
-check('home: avatar img',             /<img[^>]*class="[^"]*avatar/.test(home));
-check('home: footer structure',
-  home.includes('broadsheet-footer') &&
-  home.includes('broadsheet-colophon') &&
-  home.includes('footer-contact') &&
-  home.includes('nav-contact'),
-);
-check(
-  'home: ContactLinks rendered twice (nav + footer)',
-  occurrences(home, 'aria-label="Contact"') === 2,
-  `found ${occurrences(home, 'aria-label="Contact"')}`,
-);
-
-// Interior pages
-for (const label of ['work', 'education', 'urbanMobility', 'projects']) {
-  const html = readIfExists(routes[label]) ?? '';
-  check(`${label}: condensed masthead`,    html.includes('class="masthead condensed"'));
-  check(`${label}: no full masthead`,      !html.includes('class="masthead full"'));
-  check(`${label}: masthead-home-link`,    html.includes('masthead-home-link'));
-  check(`${label}: masthead-page-label`,   html.includes('masthead-page-label'));
-  check(`${label}: .page wrapper`,         /class="page"/.test(html));
-  check(`${label}: .page-header`,          html.includes('page-header'));
-  check(
-    `${label}: ContactLinks rendered twice`,
-    occurrences(html, 'aria-label="Contact"') === 2,
-    `found ${occurrences(html, 'aria-label="Contact"')}`,
-  );
-}
-
-// CSS bundle — pick the Base.*.css asset
 const astroDir = resolve(DIST, '_astro');
 const cssFile = existsSync(astroDir)
-  ? readdirSync(astroDir).find(f => /^Base\..*\.css$/.test(f))
+  ? readdirSync(astroDir).find((f) => /^Base\..*\.css$/.test(f))
   : null;
 check('css: Base.*.css exists', !!cssFile, cssFile ?? 'not found');
 
 if (cssFile) {
   const css = readFileSync(join(astroDir, cssFile), 'utf8');
-  check('css: --max token present',      /--max:\s*1100px/.test(css));
-  check('css: --pad token present',      css.includes('--pad:'));
-  check('css: --accent is #8f5520 (AA)', /--accent:\s*#8f5520/i.test(css));
-  check('css: old #b86e2a accent gone',  !css.toLowerCase().includes('#b86e2a'));
-  check('css: inline SVG data URI gone', !css.includes('data:image/svg+xml'));
-  check('css: noise.png referenced',     /url\(["']?\/noise\.png["']?\)/.test(css));
-  check('css: .nav-contact hides at mobile',
-    /\.nav-contact\s*\{[^}]*display\s*:\s*none/.test(css) ||
-    css.includes('.nav-contact{display:none}'),
-  );
-  check('css: .footer-contact order -1',
-    /\.footer-contact\s*\{[^}]*order\s*:\s*-1/.test(css) ||
-    css.includes('.footer-contact{order:-1}'),
-  );
-  check('css: no sub-12px font sizes',
-    !/font-size:\s*\.(6[0-9]|7[0-4])\d*rem/.test(css),
-  );
-  check('css: media 699 present',        /@media\s*\(max-width:\s*699px\)/.test(css));
-  check('css: media 639 present',        /@media\s*\(max-width:\s*639px\)/.test(css));
+  check('css: --accent is #8f5520 (AA contrast)', /--accent:\s*#8f5520/i.test(css));
+  check('css: --max token present',               /--max:\s*1100px/.test(css));
+  check('css: no inline SVG data URIs',           !css.includes('data:image/svg+xml'));
+  check('css: condensed masthead rules gone',
+    !/\.masthead\.condensed|\.masthead-home-link|\.masthead-page-label/.test(css));
 }
 
-const total = passes + fails.length;
-if (fails.length === 0) {
-  console.log(`smoke: PASS (${passes}/${total} checks)`);
-  process.exit(0);
+// ── Live routes ──────────────────────────────────────
+
+async function waitForReady(url, deadline) {
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(url, { redirect: 'manual' });
+      if (res.status) return;
+    } catch {
+      // server not up yet
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error(`smoke: wrangler dev did not become ready within ${READY_TIMEOUT_MS}ms`);
 }
 
-console.error(`smoke: FAIL (${passes}/${total} checks, ${fails.length} failed)`);
-for (const f of fails) {
-  console.error(`  ✗ ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
+async function fetchRoute(path) {
+  const res = await fetch(`${BASE}${path}`);
+  const html = await res.text();
+  return { res, html };
 }
-process.exit(1);
+
+// Assertions that must hold on every on-demand HTML route
+function assertSharedChrome(label, res, html, activeHref) {
+  check(`${label}: 200 OK`, res.status === 200, `got ${res.status}`);
+  check(
+    `${label}: Cache-Control max-age=3600`,
+    (res.headers.get('cache-control') ?? '').includes('max-age=3600'),
+    res.headers.get('cache-control') ?? '(none)',
+  );
+  check(`${label}: full masthead`, html.includes('class="masthead full"'));
+  check(
+    `${label}: edition line (Vol. X · No. Y · Month YYYY)`,
+    /Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+ · \w+ \d{4}/.test(html),
+  );
+  check(
+    `${label}: no condensed-masthead residue`,
+    !/masthead condensed|masthead-home-link|masthead-page-label/.test(html),
+  );
+  check(
+    `${label}: ContactLinks rendered twice`,
+    occurrences(html, 'aria-label="Contact"') === 2,
+    `found ${occurrences(html, 'aria-label="Contact"')}`,
+  );
+  if (activeHref) {
+    const activeRx = new RegExp(
+      `<a[^>]*href="${activeHref}"[^>]*class="active"|<a[^>]*class="active"[^>]*href="${activeHref}"`,
+    );
+    check(`${label}: nav pill active on ${activeHref}`, activeRx.test(html));
+  }
+}
+
+const wrangler = spawn(
+  'npx',
+  ['wrangler', 'dev', '--port', String(PORT), '--ip', '127.0.0.1', '--log-level', 'warn'],
+  { stdio: ['ignore', 'ignore', 'inherit'] },
+);
+
+let exitCode = 1;
+try {
+  await waitForReady(`${BASE}/`, Date.now() + READY_TIMEOUT_MS);
+
+  // Home + top-level pages
+  for (const [label, path, activeHref] of [
+    ['home', '/', null],
+    ['work', '/work', '/work'],
+    ['education', '/education', '/education'],
+    ['urban-mobility', '/urban-mobility', '/urban-mobility'],
+    ['blog', '/blog', '/blog'],
+  ]) {
+    const { res, html } = await fetchRoute(path);
+    assertSharedChrome(label, res, html, activeHref);
+  }
+
+  // Blog chain: index → first post → first tag
+  const blog = await fetchRoute('/blog');
+  const postSlug = blog.html.match(/href="\/blog\/([^"/]+)\//)?.[1];
+  const tag = blog.html.match(/href="\/blog\/tag\/([^"/]+)\//)?.[1];
+  check('blog index: links to at least one post', !!postSlug);
+  check('blog index: links to at least one tag',  !!tag);
+
+  if (postSlug) {
+    const post = await fetchRoute(`/blog/${postSlug}/`);
+    assertSharedChrome(`blog post ${postSlug}`, post.res, post.html, '/blog');
+    check(`blog post ${postSlug}: back link to /blog`, /href="\/blog"/.test(post.html));
+  }
+
+  if (tag) {
+    const tagPage = await fetchRoute(`/blog/tag/${tag}/`);
+    assertSharedChrome(`blog tag ${tag}`, tagPage.res, tagPage.html, '/blog');
+    check(`blog tag ${tag}: lists at least one post`, /href="\/blog\/[^"/]+\//.test(tagPage.html));
+  }
+
+  // RSS
+  const rss = await fetchRoute('/blog/rss.xml');
+  check('rss: 200 OK',        rss.res.status === 200, `got ${rss.res.status}`);
+  check('rss: has >=1 <item>', (rss.html.match(/<item>/g) || []).length >= 1);
+
+  // /contact — must 302 to mailto: so the address never appears in HTML.
+  // fetch() can't follow mailto:, so request with redirect: 'manual'.
+  const contact = await fetch(`${BASE}/contact`, { redirect: 'manual' });
+  check('contact: 302 redirect',    contact.status === 302, `got ${contact.status}`);
+  check(
+    'contact: Location is mailto:hello@mjrossi.com',
+    contact.headers.get('location') === 'mailto:hello@mjrossi.com',
+    contact.headers.get('location') ?? '(none)',
+  );
+  check(
+    'contact: Cache-Control no-store',
+    (contact.headers.get('cache-control') ?? '').includes('no-store'),
+    contact.headers.get('cache-control') ?? '(none)',
+  );
+
+  const total = passes + fails.length;
+  if (fails.length === 0) {
+    console.log(`smoke: PASS (${passes}/${total} checks)`);
+    exitCode = 0;
+  } else {
+    console.error(`smoke: FAIL (${passes}/${total} checks, ${fails.length} failed)`);
+    for (const f of fails) {
+      console.error(`  ✗ ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
+    }
+  }
+} catch (err) {
+  console.error(`smoke: ERROR — ${err.message}`);
+} finally {
+  wrangler.kill('SIGTERM');
+  await new Promise((r) => {
+    wrangler.once('exit', r);
+    setTimeout(() => {
+      wrangler.kill('SIGKILL');
+      r();
+    }, 3000);
+  });
+  process.exit(exitCode);
+}

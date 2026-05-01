@@ -165,6 +165,21 @@ try {
   check('rss: 200 OK',        rss.res.status === 200, `got ${rss.res.status}`);
   check('rss: has >=1 <item>', (rss.html.match(/<item>/g) || []).length >= 1);
 
+  // /contact — must 302 to mailto: so the address never appears in HTML.
+  // fetch() can't follow mailto:, so request with redirect: 'manual'.
+  const contact = await fetch(`${BASE}/contact`, { redirect: 'manual' });
+  check('contact: 302 redirect',    contact.status === 302, `got ${contact.status}`);
+  check(
+    'contact: Location is mailto:hello@mjrossi.com',
+    contact.headers.get('location') === 'mailto:hello@mjrossi.com',
+    contact.headers.get('location') ?? '(none)',
+  );
+  check(
+    'contact: Cache-Control no-store',
+    (contact.headers.get('cache-control') ?? '').includes('no-store'),
+    contact.headers.get('cache-control') ?? '(none)',
+  );
+
   const total = passes + fails.length;
   if (fails.length === 0) {
     console.log(`smoke: PASS (${passes}/${total} checks)`);

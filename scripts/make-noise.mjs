@@ -1,6 +1,6 @@
-// One-off regenerator for public/noise.png (the masthead grain overlay).
+// One-off regenerator for public/noise.webp (the masthead grain overlay).
 // Run from the project root after editing the SVG below:
-//   node scripts/make-noise.mjs public/noise.png
+//   node scripts/make-noise.mjs public/noise.webp
 import sharp from 'sharp';
 import { writeFileSync } from 'node:fs';
 
@@ -15,7 +15,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220">
 
 const out = await sharp(Buffer.from(svg))
   .resize(220, 220)
-  .png({ compressionLevel: 9, palette: false })
+  .webp({ quality: 80, alphaQuality: 90 })
   .toBuffer();
 
 writeFileSync(process.argv[2], out);

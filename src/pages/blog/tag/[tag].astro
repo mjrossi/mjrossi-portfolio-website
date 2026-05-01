@@ -1,0 +1,36 @@
+---
+import Base from '../../../layouts/Base.astro';
+import BlogPostEntry from '../../../components/BlogPostEntry.astro';
+import { getAllTags, getPostsByTag } from '../../../lib/blog.ts';
+
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
+
+const { tag } = Astro.params;
+const tags = await getAllTags();
+
+if (!tag || !tags.includes(tag)) {
+  return new Response('Not Found', { status: 404 });
+}
+
+const posts = await getPostsByTag(tag);
+---
+
+<Base
+  title={`Tag: ${tag}`}
+  description={`Posts tagged "${tag}" on mjrossi.com.`}
+>
+  <div class="page blog-page">
+    <div class="page-header">
+      <h1>Tag: {tag}</h1>
+      <p>{posts.length} {posts.length === 1 ? 'post' : 'posts'} tagged <em>{tag}</em>.</p>
+      <p class="page-meta">
+        <span><span class="page-meta-label">Back</span> <a href="/blog">All posts</a></span>
+      </p>
+    </div>
+
+    <section aria-label={`Posts tagged ${tag}`}>
+      {posts.map((post) => <BlogPostEntry post={post} />)}
+    </section>
+  </div>
+</Base>

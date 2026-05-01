@@ -1,7 +1,5 @@
 ---
-import { Image } from 'astro:assets';
 import Base from '../layouts/Base.astro';
-import profileImage from '../assets/profile.jpg';
 
 // Rendered on demand so the masthead edition line ("Vol. X · No. Y ·
 // Month YYYY") stays current without a scheduled rebuild. Cached at the
@@ -21,17 +19,14 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
     <div class="broadsheet-gutter" aria-hidden="true"></div>
     <div class="col-now">
       <span class="section-label">Now</span>
-      <Image
-        src={profileImage}
+      <img
+        src="/profile-avatar.webp"
         alt="Matthew Rossi"
         class="avatar"
-        width={64}
-        height={64}
-        densities={[1, 2]}
-        format="webp"
-        quality={70}
-        loading="eager"
-        fetchpriority="high"
+        width="64"
+        height="64"
+        loading="lazy"
+        decoding="async"
       />
       <p>As of May 2026, I'll have wrapped up 5 years as a Senior Software Engineer at <a href="https://www.heroku.com" target="_blank" rel="noopener noreferrer">Heroku (Salesforce)</a> in New York.</p>
       <p>Starting autumn 2026, I'll be in the <strong>EIT Urban Mobility Master's Program (SUMT)</strong> — a two-year double degree, first at Técnico Lisboa in Lisbon, then at UPC BarcelonaTech in Barcelona.</p>

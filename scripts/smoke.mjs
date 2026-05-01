@@ -93,7 +93,7 @@ check('sitemap: references /blog/',
 );
 
 // Static assets
-for (const asset of ['noise.png', 'favicon.svg', 'sitemap-index.xml', 'resume.pdf', 'og.png', '404.html']) {
+for (const asset of ['noise.webp', 'profile-avatar.webp', 'favicon.svg', 'sitemap-index.xml', 'resume.pdf', 'og.png', '404.html']) {
   check(`asset: ${asset}`, existsSync(resolve(DIST, asset)));
 }
 
@@ -161,7 +161,7 @@ if (cssFile) {
   check('css: --accent is #8f5520 (AA)', /--accent:\s*#8f5520/i.test(css));
   check('css: old #b86e2a accent gone',  !css.toLowerCase().includes('#b86e2a'));
   check('css: inline SVG data URI gone', !css.includes('data:image/svg+xml'));
-  check('css: noise.png referenced',     /url\(["']?\/noise\.png["']?\)/.test(css));
+  check('css: noise.webp referenced',    /url\(["']?\/noise\.webp["']?\)/.test(css));
   check('css: .nav-contact hides at mobile',
     /\.nav-contact\s*\{[^}]*display\s*:\s*none/.test(css) ||
     css.includes('.nav-contact{display:none}'),

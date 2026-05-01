@@ -80,7 +80,7 @@ body {
   pointer-events: none;
   opacity: 0.35;
   mix-blend-mode: multiply;
-  background-image: url("/noise.png");
+  background-image: url("/noise.webp");
   background-size: 220px 220px;
 }
 

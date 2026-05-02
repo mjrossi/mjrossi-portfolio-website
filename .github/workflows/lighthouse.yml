@@ -154,7 +154,7 @@ jobs:
           echo "status=ok" >> "$GITHUB_OUTPUT"
       - name: Post sticky PR comment
         if: always() && steps.ctx.outputs.pr != ''
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           number: ${{ steps.ctx.outputs.pr }}
           header: lighthouse

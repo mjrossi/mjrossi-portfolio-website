@@ -15,7 +15,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220">
 
 const out = await sharp(Buffer.from(svg))
   .resize(220, 220)
-  .webp({ quality: 80, alphaQuality: 90 })
+  .webp({ quality: 70, alphaQuality: 70, effort: 6 })
   .toBuffer();
 
 writeFileSync(process.argv[2], out);

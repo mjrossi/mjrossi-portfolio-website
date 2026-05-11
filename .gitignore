@@ -15,5 +15,6 @@ dist/
 # claude
 .claude/
 
-# mise local
+# mise local (committed: mise.toml; mise.local.toml.example is permitted)
+mise.local.toml
 mise.*.local.toml

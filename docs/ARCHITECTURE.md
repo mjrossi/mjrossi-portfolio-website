@@ -4,7 +4,9 @@ Reference for how mjrossi.com is built, deployed, and quality-checked. Read alon
 
 ## Rendering model
 
-Astro 6 with `@astrojs/cloudflare`, configured with `output: 'static'` (`astro.config.mjs`). Every page renders at build time except `src/pages/contact.ts`, which sets `export const prerender = false` and runs in the Cloudflare worker at request time. It returns a 302 to `mailto:hello@mjrossi.com`, keeping the address out of the static HTML.
+Astro 6 with `@astrojs/cloudflare`, configured with `output: 'static'` (`astro.config.mjs`). Every page renders at build time except the on-demand routes (the prerender-opt-out HTML pages, which set `export const prerender = false` so the edition line stays current, and the endpoints under `src/pages/api/*`). The convention: **anything that doesn't render a page lives under `src/pages/api/*`** and shares the `src/lib/server.ts` helpers (security headers, env access, JSON parsing, standard error responses).
+
+The original example was `/api/contact` (moved from `/contact` when the `/api/*` namespace landed): it returns a 302 to `mailto:hello@mjrossi.com`, keeping the address out of the static HTML.
 
 This shape exists because the alternatives don't fit:
 
@@ -15,7 +17,7 @@ This shape exists because the alternatives don't fit:
 The build emits two things:
 
 - `dist/client/` — every prerendered route plus `public/` assets. Served by Cloudflare via the `ASSETS` binding declared in `wrangler.jsonc`.
-- `dist/_worker.js` — the on-demand `/contact` route. `public/.assetsignore` lists `_worker.js` and `_routes.json` so Cloudflare doesn't try to serve them as static assets.
+- `dist/_worker.js` — every on-demand route (HTML pages + `/api/*` endpoints). `public/.assetsignore` lists `_worker.js` and `_routes.json` so Cloudflare doesn't try to serve them as static assets.
 
 ## Layout, components, and the edition line
 
@@ -29,11 +31,23 @@ Vol. <yearOffset since 2024 in roman> · No. <month in roman> · <Month YYYY>
 
 Every HTML route sets `export const prerender = false` so it renders in the Cloudflare worker and the edition line is always current. Every response carries `Cache-Control: public, max-age=3600`, so in steady state each POP serves the cached HTML and only refreshes once an hour.
 
-`src/components/ContactLinks.astro` renders the four contact icons (GitHub, LinkedIn, `/contact` for email, Bluesky) as inline SVGs that inherit `currentColor`. It's rendered twice per page (in nav and footer) — the smoke test asserts both occurrences and that they share the `aria-label="Contact"` wrapper.
+`src/components/ContactLinks.astro` renders the four contact icons (GitHub, LinkedIn, `/api/contact` for email, Bluesky) as inline SVGs that inherit `currentColor`. It's rendered twice per page (in nav and footer) — the smoke test asserts both occurrences and that they share the `aria-label="Contact"` wrapper.
+
+## /api/* endpoints
+
+Routes under `src/pages/api/*` are server-only — they don't render a page. They share `src/lib/server.ts` for plumbing:
+
+- `securityHeaders` — `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow`. Every endpoint applies this constant rather than re-inlining headers.
+- `getEnv(locals)` — typed accessor for `locals.runtime.env` (the Cloudflare Workers binding namespace). Throws if the runtime isn't available (i.e., the route is misconfigured as prerendered).
+- `parseJson(request, { maxBytes })` — content-type gate, size cap, JSON parse with typed `ParseJsonResult<T>` returns. Reject paths return a Response; accept paths return parsed data.
+- `jsonOk(body)`, `jsonError(status, code)`, `methodNotAllowed(allow)` — Response constructors with consistent shape and the security headers above.
+
+Adding a third endpoint means adding to `src/lib/server.ts` if a helper is missing, not re-inlining headers per file. `src/env.d.ts` types the `Env` interface so endpoint code gets autocomplete on `env.X`.
 
 ## Public assets and security
 
-- `public/_headers` — applies HSTS, a strict CSP (`default-src 'none'`, no `script-src` because the site has no JS), `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and a Permissions-Policy that disables every sensitive feature. The CSP includes `connect-src 'self'` so Lighthouse's robots.txt fetch doesn't fail (commit `3917ffa`).
+- `src/middleware.ts` — sets `Content-Security-Policy` on every HTML response. `public/_headers` covers static asset responses served by the Cloudflare ASSETS binding, but on-demand routes (every HTML page in this site) generate their responses through the Worker and bypass `_headers`. The middleware closes that gap with the same CSP value. The two must be kept in sync.
+- `public/_headers` — applies HSTS, a strict CSP (`default-src 'none'`, no `script-src` because the site has no JS), `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and a Permissions-Policy that disables every sensitive feature. The CSP includes `connect-src 'self'` so Lighthouse's robots.txt fetch doesn't fail (commit `3917ffa`). Smoke asserts a CSP header is present on `/blog` to guard against the middleware silently regressing.
 - `public/.assetsignore` — keeps the worker artifacts out of the static asset binding.
 - `public/robots.txt` — points at `/sitemap-index.xml`. The sitemap is generated by `@astrojs/sitemap` with a filter that excludes `/projects` (it's a `noindex` placeholder, not real content).
 - `public/og.png` — 1200×630 social card. Regenerate with `node scripts/make-og.mjs public/og.png` (uses `sharp` + an inline SVG that mirrors the Broadsheet masthead, then composites the avatar and tiled noise overlay). The card intentionally has no edition line so it doesn't drift between regenerations.
@@ -48,11 +62,11 @@ Production deploys run automatically via Cloudflare Workers Builds connected to 
 https://<branch-alias>-mjrossi-portfolio-website.link00seven.workers.dev
 ```
 
-where `<branch-alias>` is the lowercased branch name with non-alphanumerics collapsed to dashes (the alias-construction logic in `.github/workflows/lighthouse.yml` mirrors Cloudflare's). Manual deploys: `npm run deploy` (`astro build && wrangler deploy`). Local preview against the worker: `npm run preview` (`astro build && wrangler dev`) — this is the only way to exercise `/` or `/contact` locally; `astro dev` doesn't run the worker.
+where `<branch-alias>` is the lowercased branch name with non-alphanumerics collapsed to dashes (the alias-construction logic in `.github/workflows/lighthouse.yml` mirrors Cloudflare's). Manual deploys: `npm run deploy` (`astro build && wrangler deploy`). Local preview against the worker: `npm run preview` (`astro build && wrangler dev`) — this is the only way to exercise `/` or the `/api/*` endpoints locally; `astro dev` doesn't run the worker.
 
 ## CI workflows
 
-- `build.yml` — runs on PRs and pushes to `main`. `npm ci`, `npm run build`, `npm run smoke`.
+- `build.yml` — runs on PRs and pushes to `main`. Uses `jdx/mise-action@v3` to install the Node version pinned in `mise.toml`, then `npm ci`, `npm run build`, `npm run smoke`.
 - `lighthouse.yml` — fires on `check_suite` completion when the Cloudflare Workers Builds check finishes (and on `workflow_dispatch` for ad-hoc audits of any URL). Audits four routes (`/`, `/work`, `/education`, `/urban-mobility`). `/projects` is excluded because it's `noindex` and would fail SEO by design.
   - `main` uses `.github/lighthouserc.main.json` — all four categories enforce as `error` (perf/SEO at minScore 0.9, a11y/best-practices at 1.0).
   - PR previews use `.github/lighthouserc.json` — perf and SEO drop to `warn` because Cloudflare preview URLs ship `x-robots-tag: noindex` (kills SEO score) and shared CI runners produce high TBT variance under simulated throttling. A11y and best-practices stay strict.

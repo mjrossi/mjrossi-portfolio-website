@@ -165,9 +165,9 @@ try {
   check('rss: 200 OK',        rss.res.status === 200, `got ${rss.res.status}`);
   check('rss: has >=1 <item>', (rss.html.match(/<item>/g) || []).length >= 1);
 
-  // /contact — must 302 to mailto: so the address never appears in HTML.
+  // /api/contact — must 302 to mailto: so the address never appears in HTML.
   // fetch() can't follow mailto:, so request with redirect: 'manual'.
-  const contact = await fetch(`${BASE}/contact`, { redirect: 'manual' });
+  const contact = await fetch(`${BASE}/api/contact`, { redirect: 'manual' });
   check('contact: 302 redirect',    contact.status === 302, `got ${contact.status}`);
   check(
     'contact: Location is mailto:hello@mjrossi.com',
@@ -178,6 +178,24 @@ try {
     'contact: Cache-Control no-store',
     (contact.headers.get('cache-control') ?? '').includes('no-store'),
     contact.headers.get('cache-control') ?? '(none)',
+  );
+
+  // Every HTML response must carry a Content-Security-Policy header set by
+  // src/middleware.ts. public/_headers covers static asset responses but
+  // bypasses on-demand HTML routes; the middleware closes that gap. Sample
+  // /blog (an on-demand HTML route) — if CSP is set here, it's set
+  // everywhere assertSharedChrome runs.
+  const blogCsp = blog.res.headers.get('content-security-policy') ?? '';
+  check(
+    'blog: Content-Security-Policy header set by middleware',
+    blogCsp.length > 0,
+    'no CSP on /blog response',
+  );
+  const scriptSrcMatch = blogCsp.match(/script-src[^;]*/i);
+  check(
+    'blog: CSP script-src has no unsafe-inline',
+    !scriptSrcMatch || !scriptSrcMatch[0].includes("'unsafe-inline'"),
+    scriptSrcMatch ? scriptSrcMatch[0] : '(no script-src directive)',
   );
 
   const total = passes + fails.length;

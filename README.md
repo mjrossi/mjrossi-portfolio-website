@@ -1,6 +1,6 @@
 # mjrossi.com
 
-Personal portfolio site. [Astro](https://astro.build) build, deployed to Cloudflare Workers with Static Assets. The site is prerendered HTML except for one on-demand route (`/contact`) that 302s to a `mailto:` so the address never appears in static output.
+Personal portfolio site. [Astro](https://astro.build) build, deployed to Cloudflare Workers with Static Assets. The site is prerendered HTML except for the on-demand routes under `src/pages/api/*` — currently `/api/contact`, which 302s to a `mailto:` so the address never appears in static output.
 
 For the rendering model, deployment pipeline, CI, and quality gates, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -19,7 +19,7 @@ npm install
 npm run dev        # astro dev on http://localhost:4321
 ```
 
-`astro dev` does not run the Cloudflare worker, so the `/contact` redirect is only exercised under `npm run preview` (below).
+`astro dev` does not run the Cloudflare worker, so the `/api/*` endpoints (like the `/api/contact` redirect) are only exercised under `npm run preview` (below).
 
 ## Build and verify
 
@@ -33,7 +33,7 @@ The smoke test (`scripts/smoke.mjs`) checks that every route rendered, key asset
 ## Preview and deploy
 
 ```bash
-npm run preview    # build + wrangler dev (exercises /contact route)
+npm run preview    # build + wrangler dev (exercises /api/contact and every on-demand route)
 npm run deploy     # build + wrangler deploy
 ```
 

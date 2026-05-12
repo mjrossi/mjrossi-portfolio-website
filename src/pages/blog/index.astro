@@ -1,6 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
 import BlogPostEntry from '../../components/BlogPostEntry.astro';
+import NewsletterSignup from '../../components/NewsletterSignup.astro';
 import { getPublishedPosts } from '../../lib/blog.ts';
 
 export const prerender = false;
@@ -38,5 +39,12 @@ const postCountLabel = `${posts.length} post${posts.length === 1 ? '' : 's'}`;
         <p class="post-count">{postCountLabel}</p>
       </>
     )}
+
+    <NewsletterSignup />
+
+    <p class="blog-follow-note">
+      Or follow by <a href="/blog/rss.xml">RSS</a> ·
+      <a href="/api/contact">email me</a> to be added by hand
+    </p>
   </div>
 </Base>

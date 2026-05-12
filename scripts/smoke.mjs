@@ -180,23 +180,144 @@ try {
     contact.headers.get('cache-control') ?? '(none)',
   );
 
-  // Every HTML response must carry a Content-Security-Policy header set by
-  // src/middleware.ts. public/_headers covers static asset responses but
-  // bypasses on-demand HTML routes; the middleware closes that gap. Sample
-  // /blog (an on-demand HTML route) — if CSP is set here, it's set
-  // everywhere assertSharedChrome runs.
+  // Newsletter form on /blog only (and the /api/subscribe sad paths).
+  check(
+    'blog index: newsletter form present',
+    /id="newsletter-form"/.test(blog.html),
+  );
+  check(
+    'blog index: Turnstile script tag',
+    /challenges\.cloudflare\.com\/turnstile\/v0\/api\.js/.test(blog.html),
+  );
+
+  // CSP must be set on the HTML response (via middleware, since public/_headers
+  // doesn't apply to on-demand routes on Workers+Assets). Without this, the
+  // page ships with no CSP and any browser/extension-injected policy wins.
   const blogCsp = blog.res.headers.get('content-security-policy') ?? '';
   check(
-    'blog: Content-Security-Policy header set by middleware',
+    'blog: Content-Security-Policy header set',
     blogCsp.length > 0,
     'no CSP on /blog response',
   );
+  check(
+    'blog: CSP allows challenges.cloudflare.com',
+    blogCsp.includes('challenges.cloudflare.com'),
+    blogCsp || '(none)',
+  );
+  // script-src must NOT include 'unsafe-inline'. style-src is allowed to
+  // (Astro/Vite inline a few style declarations), so check the directive
+  // in isolation rather than the whole CSP string.
   const scriptSrcMatch = blogCsp.match(/script-src[^;]*/i);
   check(
-    'blog: CSP script-src has no unsafe-inline',
-    !scriptSrcMatch || !scriptSrcMatch[0].includes("'unsafe-inline'"),
+    'blog: CSP keeps script-src strict (no unsafe-inline)',
+    !!scriptSrcMatch && !scriptSrcMatch[0].includes("'unsafe-inline'"),
     scriptSrcMatch ? scriptSrcMatch[0] : '(no script-src directive)',
   );
+  // Submit handler must ship as an EXTERNAL module from /scripts/newsletter.js
+  // (a static asset under public/scripts/). An inline script would require
+  // 'unsafe-inline' in CSP, which we deliberately don't allow.
+  check(
+    'blog: submit handler is external (/scripts/newsletter.js)',
+    /<script[^>]+src=["']\/scripts\/newsletter\.js["']/i.test(blog.html),
+    'no external /scripts/newsletter.js <script src> found in blog HTML',
+  );
+  check(
+    'blog: submit handler is not inlined',
+    !/<script[^>]*>[^<]*newsletter-form[^<]*<\/script>/i.test(blog.html),
+    'an inline script referencing newsletter-form is still present',
+  );
+
+  // The subscription fallback line ("Or follow by RSS · email me") must live
+  // OUTSIDE the .newsletter <aside> so ad-block filter lists that target the
+  // newsletter card don't hide it too. Regression guard against re-inlining
+  // the fallback into the form fineprint.
+  const followNoteIdx = blog.html.indexOf('class="blog-follow-note"');
+  const newsletterCloseIdx = blog.html.indexOf('</aside>');
+  check(
+    'blog: follow note present',
+    followNoteIdx > 0,
+    'no blog-follow-note paragraph found',
+  );
+  check(
+    'blog: follow note is OUTSIDE the newsletter aside',
+    followNoteIdx > 0 && newsletterCloseIdx > 0 && followNoteIdx > newsletterCloseIdx,
+    'blog-follow-note appears inside .newsletter — ad blockers will hide it',
+  );
+  check(
+    'blog: follow note class name doesn\'t trip ad-block filters',
+    !/class="[^"]*(newsletter|subscribe|signup|email-form|mailing-list)[^"]*"/.test(
+      blog.html.slice(newsletterCloseIdx),
+    ) || /class="blog-follow-note"/.test(blog.html.slice(newsletterCloseIdx)),
+    'after </aside>, found an ad-block-magnet class name on a sibling',
+  );
+  const home = await fetchRoute('/');
+  check(
+    'home: no newsletter form (JS carve-out scoped to /blog)',
+    !/id="newsletter-form"/.test(home.html),
+  );
+  check(
+    'home: no Turnstile script',
+    !/challenges\.cloudflare\.com\/turnstile/.test(home.html),
+  );
+
+  // /api/subscribe sad paths — happy path needs a real Turnstile token
+  // (or Turnstile's documented test secret in .dev.vars) so it's not in CI.
+  // Astro's built-in CSRF protection (security.checkOrigin) rejects POSTs
+  // without a matching Origin at the framework layer, so all the assertions
+  // below pass an Origin header to exercise our handler rather than
+  // Astro's middleware. (A missing Origin would correctly 403 — that's
+  // the desired browser-facing behavior, just not what we're asserting here.)
+  const ORIGIN = { Origin: BASE };
+
+  const getSub = await fetch(`${BASE}/api/subscribe`, { method: 'GET', headers: ORIGIN });
+  check('subscribe: 405 on GET', getSub.status === 405, `got ${getSub.status}`);
+
+  const txtSub = await fetch(`${BASE}/api/subscribe`, {
+    method: 'POST',
+    headers: { ...ORIGIN, 'Content-Type': 'text/plain' },
+    body: 'hi',
+  });
+  check('subscribe: 415 on non-JSON', txtSub.status === 415, `got ${txtSub.status}`);
+
+  const badEmail = await fetch(`${BASE}/api/subscribe`, {
+    method: 'POST',
+    headers: { ...ORIGIN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'not-an-email', turnstileToken: 'x' }),
+  });
+  check('subscribe: 400 on invalid email', badEmail.status === 400, `got ${badEmail.status}`);
+
+  const noToken = await fetch(`${BASE}/api/subscribe`, {
+    method: 'POST',
+    headers: { ...ORIGIN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'a@b.co' }),
+  });
+  check(
+    'subscribe: 400 on missing turnstile token',
+    noToken.status === 400,
+    `got ${noToken.status}`,
+  );
+
+  // Astro's built-in CSRF protection (security.checkOrigin) rejects
+  // form-encoded POSTs without a matching Origin at the framework layer.
+  // JSON POSTs require browser preflight and reach the handler regardless,
+  // so this assertion specifically targets the form-style attack vector.
+  const noOrigin = await fetch(`${BASE}/api/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'email=a@b.co',
+  });
+  check(
+    'subscribe: 403 on form-encoded POST w/o Origin (CSRF guard)',
+    noOrigin.status === 403,
+    `got ${noOrigin.status}`,
+  );
+
+  // /privacy must exist and name the third parties so the form fineprint
+  // links to a real disclosure.
+  const privacy = await fetchRoute('/privacy');
+  check('privacy: 200 OK', privacy.res.status === 200, `got ${privacy.res.status}`);
+  check('privacy: names Buttondown', /Buttondown/i.test(privacy.html));
+  check('privacy: names Turnstile', /Turnstile/i.test(privacy.html));
 
   const total = passes + fails.length;
   if (fails.length === 0) {

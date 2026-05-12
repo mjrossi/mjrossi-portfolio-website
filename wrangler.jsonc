@@ -13,4 +13,34 @@
     "binding": "ASSETS",
     "directory": "dist/client"
   }
+
+  // ── Preview environment isolation (not active) ──────────────
+  // Branch deploys currently share production secrets — the same
+  // BUTTONDOWN_API_KEY set via `wrangler secret put` is injected
+  // into both prod and PR-branch deployments. Subscriptions
+  // submitted via a preview URL therefore land in the production
+  // Buttondown account. For a personal portfolio this is fine
+  // (preview URLs are noindex'd; volume is tiny).
+  //
+  // To isolate preview deploys with their own secrets:
+  //   1. Add an "env" block here:
+  //        "env": {
+  //          "preview": { "name": "mjrossi-portfolio-website-preview" }
+  //        }
+  //   2. Set the preview-only secrets:
+  //        wrangler secret put BUTTONDOWN_API_KEY --env preview
+  //        wrangler secret put TURNSTILE_SECRET_KEY --env preview
+  //      (use a separate Buttondown account or accept submissions
+  //       are sandbox-only — Buttondown's free tier is generous.)
+  //   3. Change Cloudflare → Workers → your project → Settings →
+  //      Build configuration → Deploy command to conditionally
+  //      append `--env preview` for non-main branches, e.g.:
+  //        npm run build && \
+  //          if [ "$CI_BRANCH" = "main" ]; \
+  //            then wrangler deploy; \
+  //            else wrangler deploy --env preview; \
+  //          fi
+  //   4. PUBLIC_TURNSTILE_SITE_KEY in Cloudflare's Build config
+  //      can stay the same (the test key works on *.workers.dev),
+  //      or be overridden per branch.
 }

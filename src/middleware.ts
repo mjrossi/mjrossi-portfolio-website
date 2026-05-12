@@ -7,15 +7,22 @@ import { defineMiddleware } from 'astro:middleware';
 // every HTML page in this site) generate their responses through the Worker
 // and bypass _headers entirely. So we set the CSP here.
 //
-// public/_headers still carries the same CSP as a fallback for static asset
-// responses — belt-and-suspenders for files served directly off the bucket.
-// Keep the two in sync when changing the policy.
+// public/_headers still carries the same CSP for static assets — that's
+// belt-and-suspenders for files served directly off the bucket.
+//
+// Turnstile (https://challenges.cloudflare.com) is allow-listed for
+// script-src, connect-src, and frame-src so the widget loads on /blog.
+// Browsers only fetch from Turnstile where a <script src> exists in markup
+// — i.e. /blog only — so the allow-list is global but the actual fetches
+// are scoped to the one route that ships the form.
 const CSP = [
   "default-src 'none'",
+  "script-src 'self' https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self'",
   "font-src 'self'",
-  "connect-src 'self'",
+  "connect-src 'self' https://challenges.cloudflare.com",
+  "frame-src https://challenges.cloudflare.com",
   "base-uri 'none'",
   "form-action 'none'",
   "frame-ancestors 'none'",

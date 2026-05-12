@@ -8,6 +8,20 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # PUBLIC_TURNSTILE_SITE_KEY is Cloudflare Turnstile's documented
+      # always-passes test site key. mise.ci.toml carries the same value
+      # as documented intent, but jdx/mise-action@v3 doesn't auto-export
+      # [env] to GITHUB_ENV in this setup (verified empirically). Set the
+      # value here directly to keep CI predictable. Keep the two values
+      # in sync when rotating; mise.ci.toml stays useful for contributors
+      # who run smoke locally with MISE_ENV=ci.
+      #
+      # Runtime secrets (BUTTONDOWN_API_KEY, TURNSTILE_SECRET_KEY) aren't
+      # needed in CI — smoke only exercises sad paths that return before
+      # the Worker reads env. Cloudflare's production Worker has them set
+      # via `wrangler secret put`.
+      PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v3

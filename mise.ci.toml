@@ -6,8 +6,10 @@
 # accidentally-leaked CI build artifacts can't be used to issue real
 # Turnstile tokens).
 #
-# `jdx/mise-action` exports [env] entries to GITHUB_ENV so subsequent
-# workflow steps see them.
+# jdx/mise-action@v3 installs mise but does NOT auto-export [env] to
+# GITHUB_ENV in our setup (verified empirically). The workflow runs
+# `mise env >> $GITHUB_ENV` after the action to surface this block's
+# values to subsequent build/smoke steps — see .github/workflows/build.yml.
 
 [env]
 # Turnstile's documented always-passes test site key.

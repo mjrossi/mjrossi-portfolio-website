@@ -39,13 +39,11 @@
     msg.textContent = '';
 
     if (!email) {
-      msg.textContent = 'Please enter your email.';
-      msg.classList.add('is-error');
+      showError('Please enter your email.');
       return;
     }
     if (!turnstileToken) {
-      msg.textContent = 'Please complete the spam check.';
-      msg.classList.add('is-error');
+      showError('Please complete the spam check.');
       return;
     }
 

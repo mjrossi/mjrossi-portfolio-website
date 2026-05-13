@@ -154,6 +154,16 @@ try {
     check(`blog post ${postSlug}: back link to /blog`, /href="\/blog"/.test(post.html));
   }
 
+  // Lock in the <Figure> contract: the Netherlands cycling post embeds three
+  // <Figure> components, each of which must render a <figcaption>. If this
+  // count drifts, either the component broke or the post was edited.
+  const figurePost = await fetchRoute('/blog/how-the-netherlands-got-me-back-on-a-bike/');
+  check(
+    'blog post (figures): renders >=3 figcaption elements',
+    (figurePost.html.match(/<figcaption>/g) || []).length >= 3,
+    `found ${(figurePost.html.match(/<figcaption>/g) || []).length}`,
+  );
+
   if (tag) {
     const tagPage = await fetchRoute(`/blog/tag/${tag}/`);
     assertSharedChrome(`blog tag ${tag}`, tagPage.res, tagPage.html, '/blog');

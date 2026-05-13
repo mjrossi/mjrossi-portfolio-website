@@ -889,6 +889,16 @@ em {
   border: 1px solid var(--border);
 }
 
+.post-cover figcaption {
+  margin-top: 0.5rem;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+  font-style: italic;
+}
+
 .post-body {
   font-family: var(--font);
   font-size: 1.05rem;
@@ -991,6 +1001,27 @@ em {
   height: auto;
   display: block;
   border: 1px solid var(--border);
+}
+
+.post-body .post-figure {
+  margin: 1.75rem 0;
+}
+
+.post-body .post-figure img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid var(--border);
+}
+
+.post-body .post-figure figcaption {
+  margin-top: 0.5rem;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+  font-style: italic;
 }
 
 .post-body hr {

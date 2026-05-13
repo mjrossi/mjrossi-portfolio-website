@@ -3,27 +3,38 @@
   ───────────────────────────────────────────────────────────────────────────────────────────
 
   Pairs with:
-    docs/buttondown-email-header.html
-    docs/buttondown-email-footer.html
-  in this same directory. Source of truth lives here; Buttondown's dashboard is
-  the copy that actually serves emails. Drift between the two is the operator's
-  responsibility — edit this file first, re-paste.
+    docs/buttondown-email-header.md
+    docs/buttondown-email-footer.md
 
-  Buttondown's pipeline injects this file at <head> level and typically inlines
-  the rules per element at send time for cross-client compatibility (most clients
-  strip <style> blocks; the inliner sidesteps that).
+  Buttondown's "2005-era CSS" caveat (per their docs) — keep selectors
+  conservative, avoid grid/flex, lean on text-align/display:block/colors.
+  Buttondown inlines this CSS per-element at send time so it survives
+  clients that strip <style> blocks.
 
-  ─── Email-client realities accepted in this design ───
-    • Web fonts (Fraunces, Source Serif 4, Inter) load in Apple Mail but fall back
-      to Georgia / system sans in most others. Fallback stacks are what the
-      majority of subscribers will see — design assumes fallback rendering reads
-      correctly.
-    • oklch() colors expanded to hex approximations (oklch isn't supported in any
-      mainstream email client).
-    • Background images and CSS variables omitted entirely.
-    • Tables for layout (still the safest cross-client primitive).
-    • Dark-mode handling varies by client. Apple Mail auto-inverts; Gmail mobile
-      auto-inverts; Outlook leaves alone. Color values chosen for both modes.
+  Source of truth lives here. Buttondown's dashboard is the copy that
+  actually serves emails. Drift is the operator's responsibility.
+
+  ─── Element vs class targeting ───
+  The header/footer Markdown produces standard elements (h1, p, em, hr,
+  small, a) plus the inline <span class="…"> hooks the Markdown files
+  introduce. CSS below targets:
+
+    Tag-level (broad, applied wherever the element appears in the email):
+      body, a, h1, hr, small
+
+    Class hooks (introduced by the header/footer Markdown):
+      .masthead-mj          — "MJ" portion of the masthead name
+      .masthead-surname     — "ROSSI" portion (warm-amber accent)
+      .masthead-loc         — "Brooklyn → Lisbon" location line
+      .masthead-edition     — "{{ publish date | %B %Y }}" edition line
+      .masthead-tagline     — italic tagline
+      .footer-colophon      — italic "Set in Fraunces…" line
+      .footer-meta          — "You're receiving this because…" line
+
+  Caveat: Buttondown also wraps the header/footer in its own container
+  classes (per their Modern template). Inspect a test email's source to
+  see what classes wrap the slot, and refine these rules if precision is
+  needed (e.g. avoid styling the post body's h1 with the masthead font).
 
   ─── Color tokens (hex from src/styles/global.css :root oklch) ───
     --bg                  → #f8f4ec  (warm cream page bg)
@@ -33,9 +44,10 @@
     --muted               → #807565  (secondary text)
     --accent              → #8f5520  (link, action)
     --accent-surname      → #c97d3e  (the "Rossi" highlight)
-    --accent-band         → #eed8b8  (masthead band)
-    --accent-band-border  → #d6b889  (band edge)
-    --accent-rule         → #c8a983  (hairline rule)
+    --accent-band         → #eed8b8  (masthead band — unused below; keep
+                                       palette docs intact for consistency)
+    --accent-band-border  → #d6b889  (band edge — same)
+    --accent-rule         → #c8a983  (hairline rule — used on hr)
     --accent-tagline      → #9c6f3d  (italic tagline color)
 */
 
@@ -54,34 +66,25 @@ body {
 a {
   color: #8f5520;
   text-decoration: underline;
-  text-decoration-color: #c8a983;
-  text-underline-offset: 2px;
 }
 
 a:hover {
   color: #7a4a1a;
-  text-decoration-color: #8f5520;
 }
 
-/* ──── Masthead (broadsheet header) ──── */
+/* ──── Masthead — first h1 in the email is the header's MJROSSI line ──── */
 
-.masthead {
-  background: #eed8b8;
-  border-bottom: 1px solid #d6b889;
-  padding: 22px 28px 18px;
-}
-
-.masthead-link {
-  text-decoration: none;
-  color: #2a2520;
-}
-
-.masthead-name {
+h1 {
   font-family: Fraunces, Georgia, 'Times New Roman', serif;
   font-size: 34px;
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1;
+  color: #2a2520;
+  margin: 0 0 12px;
+}
+
+.masthead-mj {
   color: #2a2520;
 }
 
@@ -89,17 +92,7 @@ a:hover {
   color: #c97d3e;
 }
 
-.masthead-name-cell {
-  vertical-align: bottom;
-}
-
-.masthead-meta-cell {
-  vertical-align: bottom;
-  text-align: right;
-}
-
 .masthead-loc {
-  display: block;
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   font-size: 11px;
   font-weight: 600;
@@ -109,77 +102,31 @@ a:hover {
 }
 
 .masthead-edition {
-  display: block;
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   font-size: 11px;
   letter-spacing: 0.04em;
   color: #807565;
-  margin-top: 2px;
-}
-
-.masthead-tagline-row {
-  margin-top: 14px;
-}
-
-.masthead-rule {
-  border-top: 1px solid #c8a983;
-  line-height: 0;
-  font-size: 0;
-  width: 40%;
 }
 
 .masthead-tagline {
-  padding: 0 12px;
   font-family: Fraunces, Georgia, 'Times New Roman', serif;
   font-style: italic;
   font-size: 14px;
   color: #9c6f3d;
-  white-space: nowrap;
-  text-align: center;
 }
 
-/* ──── Double-rule separator below masthead ──── */
+/* ──── Horizontal rule — used by both header and footer Markdown ──── */
 
-.rule-top {
-  background: #d6b889;
+hr {
+  border: 0;
+  border-top: 1px solid #c8a983;
+  margin: 18px 0;
   height: 1px;
-  font-size: 0;
-  line-height: 0;
 }
 
-.rule-gap {
-  background: #fdfbf6;
-  height: 3px;
-  font-size: 0;
-  line-height: 0;
-}
+/* ──── Footer ──── */
 
-.rule-bot {
-  background: #c8a983;
-  height: 1px;
-  font-size: 0;
-  line-height: 0;
-}
-
-/* ──── Post body inherits typography from body{}; nothing else needed unless
-       Buttondown injects per-element wrappers. Add overrides here if drafts
-       show a need. ──── */
-
-/* ──── Read-on-site link row (between body and footer) ──── */
-
-.read-on-site {
-  padding: 0 32px 28px;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  font-size: 13px;
-  color: #807565;
-  font-style: italic;
-}
-
-/* ──── Footer colophon ──── */
-
-.footer {
-  border-top: 1px solid #d6cdb8;
-  padding: 20px 32px 28px;
+small {
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   font-size: 12px;
   color: #807565;
@@ -188,15 +135,16 @@ a:hover {
 
 .footer-colophon {
   font-style: italic;
+  display: block;
+  margin-bottom: 10px;
 }
 
 .footer-meta {
-  display: inline-block;
-  margin-top: 10px;
+  display: block;
 }
 
-.footer a {
+.footer-meta a,
+.footer-colophon a {
   color: #807565;
   text-decoration: underline;
-  text-decoration-color: #d6cdb8;
 }

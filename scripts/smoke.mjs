@@ -49,8 +49,28 @@ for (const asset of [
   'og.png',
   '404.html',
   'sitemap-index.xml',
+  '_headers',
 ]) {
   check(`asset: ${asset}`, existsSync(resolve(DIST, asset)));
+}
+
+// _headers is generated post-build by scripts/gen-headers.mjs from the
+// canonical CSP in src/lib/csp.js. Assert the CSP made it into the file —
+// regression guard for the generator and for CSP drift between middleware
+// and static-asset responses.
+const headersPath = resolve(DIST, '_headers');
+if (existsSync(headersPath)) {
+  const headers = readFileSync(headersPath, 'utf8');
+  check(
+    '_headers: contains Content-Security-Policy',
+    /Content-Security-Policy:\s*default-src 'none'/.test(headers),
+    'CSP directive missing or wrong shape in dist/client/_headers',
+  );
+  check(
+    "_headers: CSP allows challenges.cloudflare.com",
+    headers.includes('challenges.cloudflare.com'),
+    'Turnstile origin missing from static-asset CSP',
+  );
 }
 
 const astroDir = resolve(DIST, '_astro');

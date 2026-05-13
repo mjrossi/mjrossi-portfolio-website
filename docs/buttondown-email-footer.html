@@ -1,0 +1,39 @@
+<!--
+  Buttondown email FOOTER — paste into Buttondown → Settings → Email design → Footer.
+  ──────────────────────────────────────────────────────────────────────────────────
+
+  Pairs with:
+    docs/buttondown-email-header.html
+    docs/buttondown-email-custom.css
+  in this same directory. See header file for the source-of-truth caveat.
+
+  Renders after the post body. Two sections:
+    1. "Read on site" links — useful for subscribers whose mail client renders
+       the email body poorly (footnotes, code blocks, embedded media).
+    2. Colophon + unsubscribe — colophon mirrors the site footer's "Set in
+       Fraunces & Source Serif · Built in Astro, served from the edge" line.
+
+  ─── Template variables ───
+  {{ rss_entry.link }}    — canonical URL of the post being mailed
+  {{ unsubscribe_url }}   — one-click unsubscribe link (Buttondown's responsibility)
+  The {% if rss_entry %} guard handles non-RSS broadcasts (manual sends, etc.)
+  where rss_entry isn't defined.
+-->
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td class="read-on-site">
+      {% if rss_entry %}<a href="{{ rss_entry.link }}">Read this on mjrossi.com</a> · {% endif %}<a href="https://mjrossi.com/blog">Browse the blog</a>
+    </td>
+  </tr>
+  <tr>
+    <td class="footer">
+      <span class="footer-colophon">Set in Fraunces &amp; Source Serif · Built in Astro, served from the edge.</span>
+      <br>
+      <span class="footer-meta">
+        You're receiving this because you subscribed at <a href="https://mjrossi.com/blog">mjrossi.com/blog</a>.
+        <a href="{{ unsubscribe_url }}">Unsubscribe</a>.
+      </span>
+    </td>
+  </tr>
+</table>

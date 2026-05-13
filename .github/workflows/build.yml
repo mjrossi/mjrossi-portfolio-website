@@ -9,22 +9,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # PUBLIC_TURNSTILE_SITE_KEY is Cloudflare Turnstile's documented
-      # always-passes test site key. mise.ci.toml carries the same value
-      # as documented intent, but jdx/mise-action@v3 doesn't auto-export
-      # [env] to GITHUB_ENV in this setup (verified empirically). Set the
-      # value here directly to keep CI predictable. Keep the two values
-      # in sync when rotating; mise.ci.toml stays useful for contributors
-      # who run smoke locally with MISE_ENV=ci.
-      #
-      # Runtime secrets (BUTTONDOWN_API_KEY, TURNSTILE_SECRET_KEY) aren't
-      # needed in CI — smoke only exercises sad paths that return before
-      # the Worker reads env. Cloudflare's production Worker has them set
-      # via `wrangler secret put`.
-      PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+      # Activates mise.ci.toml's [env] overlay (Turnstile's always-passes test
+      # site key) on top of mise.toml's [tools] + [env]. Below, we explicitly
+      # export mise's resolved environment to GITHUB_ENV — mise-action@v3
+      # installs mise but doesn't auto-propagate [env] to subsequent steps.
+      MISE_ENV: ci
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v3
+      - name: Export mise [env] to GITHUB_ENV
+        # `mise env --shell=bash` emits `export KEY="value"` lines; strip the
+        # `export ` prefix and surrounding quotes for GITHUB_ENV's KEY=value
+        # format. Single source of truth = mise.ci.toml + mise.toml.
+        run: mise env --shell=bash | sed -E 's/^export ([^=]+)="?([^"]*)"?$/\1=\2/' >> "$GITHUB_ENV"
       - run: npm ci
       - name: Diagnose env
         run: |
@@ -35,7 +32,7 @@ jobs:
           echo "=== mise files in repo ==="
           ls -la mise* 2>&1 || true
           echo "=== mise environment ==="
-          mise env 2>&1 || echo "(mise not on PATH or mise env failed)"
+          mise env --shell=bash 2>&1 || echo "(mise not on PATH or mise env failed)"
       - run: npm run build
       - name: Diagnose dist
         run: |

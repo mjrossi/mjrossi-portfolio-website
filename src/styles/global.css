@@ -1136,14 +1136,11 @@ em {
 }
 
 .newsletter-blurb a {
-  color: var(--accent);
-  text-decoration: underline;
   text-decoration-color: var(--accent-rule);
   text-underline-offset: 2px;
 }
 
 .newsletter-blurb a:hover {
-  color: var(--accent-hover);
   text-decoration-color: var(--accent);
 }
 
@@ -1175,7 +1172,6 @@ em {
 }
 
 #newsletter-form input[type='email']:focus-visible {
-  outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-color: var(--accent);
 }
@@ -1214,11 +1210,6 @@ em {
   border-color: var(--accent-hover);
 }
 
-#newsletter-form button[type='submit']:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
 #newsletter-form button[type='submit']:disabled {
   opacity: 0.6;
   cursor: progress;
@@ -1254,7 +1245,6 @@ em {
 
 .newsletter-fineprint a {
   color: var(--muted);
-  text-decoration: underline;
   text-decoration-color: var(--border);
   text-underline-offset: 2px;
 }

@@ -69,20 +69,19 @@ if (!siteKey) {
       <div class="newsletter-rule" aria-hidden="true"></div>
     </aside>
 
+    <!--
+      Submit handler lives as a static asset at /scripts/newsletter.js (under
+      public/scripts/). Shipped that way deliberately:
+       1. it's the only client JS on the site, so the bundle-vs-inline question
+          doesn't compound;
+       2. as a static asset it's served by the Cloudflare ASSETS binding and
+          loads under our strict `script-src 'self' …` CSP without needing
+          'unsafe-inline', per-page hashes, or nonces;
+       3. Astro's bundler may inline <script> blocks on on-demand routes
+          (especially under the Cloudflare adapter) — shipping the file under
+          public/ avoids that variability.
+    -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <script type="module" src="/scripts/newsletter.js" is:inline></script>
   </Fragment>
 )}
-
-<!--
-  Submit handler lives as a static asset at /scripts/newsletter.js (under
-  public/scripts/). Shipped that way deliberately:
-   1. it's the only client JS on the site, so the bundle-vs-inline question
-      doesn't compound;
-   2. as a static asset it's served by the Cloudflare ASSETS binding and
-      loads under our strict `script-src 'self' …` CSP without needing
-      'unsafe-inline', per-page hashes, or nonces;
-   3. Astro's bundler may inline <script> blocks on on-demand routes
-      (especially under the Cloudflare adapter) — shipping the file under
-      public/ avoids that variability.
--->
-<script type="module" src="/scripts/newsletter.js" defer is:inline></script>

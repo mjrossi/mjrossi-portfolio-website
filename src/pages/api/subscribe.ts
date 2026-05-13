@@ -1,6 +1,5 @@
 import type { APIRoute } from 'astro';
 import {
-  securityHeaders,
   getEnv,
   parseJson,
   jsonError,
@@ -52,8 +51,6 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
     return jsonError(500, 'misconfigured');
   }
 
-  // Turnstile siteverify.
-  let turnstileOk = false;
   try {
     const verify = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
       method: 'POST',
@@ -65,17 +62,13 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
       }),
     });
     const result = (await verify.json()) as { success?: boolean };
-    turnstileOk = result.success === true;
+    if (result.success !== true) return jsonError(401, 'turnstile_failed');
   } catch (err) {
     console.error('subscribe: turnstile verify threw', err);
     return jsonError(502, 'turnstile_unreachable');
   }
-  if (!turnstileOk) {
-    return jsonError(401, 'turnstile_failed');
-  }
 
-  // Forward to Buttondown. type: 'unactivated' triggers Buttondown's
-  // double-opt-in confirmation email.
+  // type: 'unactivated' triggers Buttondown's double-opt-in confirmation email.
   let bd: Response;
   try {
     bd = await fetch('https://api.buttondown.email/v1/subscribers', {
@@ -116,8 +109,5 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
   }
 
   console.error('subscribe: buttondown returned', bd.status);
-  return new Response(JSON.stringify({ error: 'upstream' }), {
-    status: 502,
-    headers: { ...securityHeaders, 'Content-Type': 'application/json' },
-  });
+  return jsonError(502, 'upstream');
 };

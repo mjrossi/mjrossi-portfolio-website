@@ -22,13 +22,18 @@
   const emailInput = form.querySelector('input[name=email]');
   const hpInput = form.querySelector('input[name=company]');
 
-  const turnstile = () => window.turnstile;
+  function showError(text) {
+    msg.textContent = text;
+    msg.classList.add('is-error');
+    window.turnstile?.reset?.();
+    btn.disabled = false;
+  }
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const email = emailInput.value.trim();
     const company = hpInput.value;
-    const turnstileToken = turnstile()?.getResponse?.() ?? '';
+    const turnstileToken = window.turnstile?.getResponse?.() ?? '';
 
     msg.classList.remove('is-error');
     msg.textContent = '';
@@ -61,20 +66,15 @@
         return;
       }
       const data = await res.json().catch(() => ({}));
-      msg.textContent =
+      showError(
         data.error === 'invalid_email'
           ? 'That email address looks off.'
           : data.error === 'turnstile_failed'
             ? 'Spam check failed. Try again.'
-            : 'Something went wrong. Try again in a minute.';
-      msg.classList.add('is-error');
-      turnstile()?.reset?.();
-      btn.disabled = false;
+            : 'Something went wrong. Try again in a minute.',
+      );
     } catch {
-      msg.textContent = 'Network error. Please try again.';
-      msg.classList.add('is-error');
-      turnstile()?.reset?.();
-      btn.disabled = false;
+      showError('Network error. Please try again.');
     }
   });
 })();

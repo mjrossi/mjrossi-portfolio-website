@@ -106,10 +106,11 @@ function assertSharedChrome(label, res, html, activeHref) {
     `${label}: no condensed-masthead residue`,
     !/masthead condensed|masthead-home-link|masthead-page-label/.test(html),
   );
+  const contactCount = occurrences(html, 'aria-label="Contact"');
   check(
     `${label}: ContactLinks rendered twice`,
-    occurrences(html, 'aria-label="Contact"') === 2,
-    `found ${occurrences(html, 'aria-label="Contact"')}`,
+    contactCount === 2,
+    `found ${contactCount}`,
   );
   if (activeHref) {
     const activeRx = new RegExp(
@@ -130,6 +131,7 @@ try {
   await waitForReady(`${BASE}/`, Date.now() + READY_TIMEOUT_MS);
 
   // Home + top-level pages
+  let homeHtml = '';
   for (const [label, path, activeHref] of [
     ['home', '/', null],
     ['work', '/work', '/work'],
@@ -138,12 +140,13 @@ try {
     ['blog', '/blog', '/blog'],
   ]) {
     const { res, html } = await fetchRoute(path);
+    if (path === '/') homeHtml = html;
     assertSharedChrome(label, res, html, activeHref);
   }
 
   // Blog chain: index → first post → first tag
   const blog = await fetchRoute('/blog');
-  const postSlug = blog.html.match(/href="\/blog\/([^"/]+)\//)?.[1];
+  const postSlug = blog.html.match(/href="\/blog\/(?!tag\/)([^"/]+)\//)?.[1];
   const tag = blog.html.match(/href="\/blog\/tag\/([^"/]+)\//)?.[1];
   check('blog index: links to at least one post', !!postSlug);
   check('blog index: links to at least one tag',  !!tag);
@@ -243,21 +246,20 @@ try {
     followNoteIdx > 0 && newsletterCloseIdx > 0 && followNoteIdx > newsletterCloseIdx,
     'blog-follow-note appears inside .newsletter — ad blockers will hide it',
   );
+  const afterAside = blog.html.slice(newsletterCloseIdx);
   check(
     'blog: follow note class name doesn\'t trip ad-block filters',
-    !/class="[^"]*(newsletter|subscribe|signup|email-form|mailing-list)[^"]*"/.test(
-      blog.html.slice(newsletterCloseIdx),
-    ) || /class="blog-follow-note"/.test(blog.html.slice(newsletterCloseIdx)),
+    !/class="[^"]*(newsletter|subscribe|signup|email-form|mailing-list)[^"]*"/.test(afterAside) ||
+    /class="blog-follow-note"/.test(afterAside),
     'after </aside>, found an ad-block-magnet class name on a sibling',
   );
-  const home = await fetchRoute('/');
   check(
     'home: no newsletter form (JS carve-out scoped to /blog)',
-    !/id="newsletter-form"/.test(home.html),
+    !/id="newsletter-form"/.test(homeHtml),
   );
   check(
     'home: no Turnstile script',
-    !/challenges\.cloudflare\.com\/turnstile/.test(home.html),
+    !/challenges\.cloudflare\.com\/turnstile/.test(homeHtml),
   );
 
   // /api/subscribe sad paths — happy path needs a real Turnstile token
@@ -311,6 +313,15 @@ try {
     noOrigin.status === 403,
     `got ${noOrigin.status}`,
   );
+
+  // Honeypot — a filled `company` field returns 200 silently so attackers
+  // can't tell the field exists. Runs before Turnstile so the token is irrelevant.
+  const honeypot = await fetch(`${BASE}/api/subscribe`, {
+    method: 'POST',
+    headers: { ...ORIGIN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'bot@example.com', turnstileToken: 'x', company: 'ACME Corp' }),
+  });
+  check('subscribe: 200 on filled honeypot field', honeypot.status === 200, `got ${honeypot.status}`);
 
   // /privacy must exist and name the third parties so the form fineprint
   // links to a real disclosure.

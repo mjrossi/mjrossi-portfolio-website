@@ -8,9 +8,20 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Activates mise.ci.toml's [env] overlay (Turnstile's always-passes test
+      # site key) on top of mise.toml's [tools] + [env]. Below, we explicitly
+      # export mise's resolved environment to GITHUB_ENV — mise-action@v3
+      # installs mise but doesn't auto-propagate [env] to subsequent steps.
+      MISE_ENV: ci
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
+      - name: Export mise [env] to GITHUB_ENV
+        # `mise env --shell=bash` emits `export KEY="value"` lines; strip the
+        # `export ` prefix and surrounding quotes for GITHUB_ENV's KEY=value
+        # format. Single source of truth = mise.ci.toml + mise.toml.
+        run: mise env --shell=bash | sed -E 's/^export ([^=]+)="?([^"]*)"?$/\1=\2/' >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run build
       - run: npm run smoke

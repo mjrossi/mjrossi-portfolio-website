@@ -1088,3 +1088,195 @@ em {
     font-size: 2.6rem;
   }
 }
+
+/* ── Newsletter signup (only rendered on /blog) ─────── */
+
+.newsletter {
+  margin: 3.5rem 0 1.5rem;
+}
+
+.newsletter-rule {
+  height: 1px;
+  background: var(--accent-rule);
+  position: relative;
+}
+
+.newsletter-rule::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4px;
+  height: 1px;
+  background: var(--accent-band-border);
+}
+
+.newsletter-card {
+  background: var(--accent-band);
+  border-left: 1px solid var(--accent-band-border);
+  border-right: 1px solid var(--accent-band-border);
+  padding: clamp(1.5rem, 4vw, 2rem) clamp(1.25rem, 4vw, 2rem);
+  margin: 8px 0;
+}
+
+.newsletter-card h2 {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+
+.newsletter-blurb {
+  font-family: var(--font);
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin: 0 0 1.25rem;
+  max-width: 38rem;
+}
+
+.newsletter-blurb a {
+  text-decoration-color: var(--accent-rule);
+  text-underline-offset: 2px;
+}
+
+.newsletter-blurb a:hover {
+  text-decoration-color: var(--accent);
+}
+
+#newsletter-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 28rem;
+}
+
+#newsletter-form label {
+  font-family: var(--font-ui);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: -0.4rem;
+}
+
+#newsletter-form input[type='email'] {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  font: inherit;
+  font-size: 1rem;
+}
+
+#newsletter-form input[type='email']:focus-visible {
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+
+.newsletter-hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cf-turnstile {
+  margin: 0.25rem 0;
+}
+
+#newsletter-form button[type='submit'] {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  padding: 0.6rem 1.5rem;
+  font-family: var(--font-ui);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+#newsletter-form button[type='submit']:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+#newsletter-form button[type='submit']:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.newsletter-msg {
+  min-height: 1.4em;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.newsletter-msg.is-error {
+  color: var(--accent-tagline);
+}
+
+.newsletter-success {
+  font-family: var(--font);
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--text);
+  margin: 0;
+}
+
+.newsletter-fineprint {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0.5rem 0 0;
+  max-width: 32rem;
+}
+
+.newsletter-fineprint a {
+  color: var(--muted);
+  text-decoration-color: var(--border);
+  text-underline-offset: 2px;
+}
+
+.newsletter-fineprint a:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
+/* Subscription fallback line — deliberately rendered OUTSIDE the .newsletter
+   aside (and named without "newsletter" / "subscribe" / "signup" / "email"
+   / "form" substrings) so it survives ad-block filter lists that hide the
+   signup card. Reads as a quiet editor's note in italics. */
+.blog-follow-note {
+  font-family: var(--font);
+  font-style: italic;
+  font-size: 0.92rem;
+  color: var(--muted);
+  text-align: center;
+  margin: 1.5rem auto 0;
+  max-width: 32rem;
+  letter-spacing: 0.01em;
+}
+
+.blog-follow-note a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-rule);
+  text-underline-offset: 2px;
+}
+
+.blog-follow-note a:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}

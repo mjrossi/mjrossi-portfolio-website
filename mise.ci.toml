@@ -1,0 +1,17 @@
+# CI environment for GitHub Actions builds.
+#
+# Activated by setting MISE_ENV=ci in the workflow. Overrides mise.toml's
+# real production Turnstile site key with the documented always-passes test
+# key so CI's smoke test doesn't depend on production config (and so
+# accidentally-leaked CI build artifacts can't be used to issue real
+# Turnstile tokens).
+#
+# jdx/mise-action@v3 installs mise but does NOT auto-export [env] to
+# GITHUB_ENV in our setup (verified empirically). The workflow runs
+# `mise env >> $GITHUB_ENV` after the action to surface this block's
+# values to subsequent build/smoke steps — see .github/workflows/build.yml.
+
+[env]
+# Turnstile's documented always-passes test site key.
+# https://developers.cloudflare.com/turnstile/troubleshooting/testing/
+PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"

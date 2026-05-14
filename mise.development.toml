@@ -1,0 +1,24 @@
+# Local development environment for mise.
+#
+# Activated when MISE_ENV=development (configure once in your shell: e.g.
+# `MISE_ENV=development` in ~/.zshrc or ~/.bashrc). Overrides mise.toml's
+# real production Turnstile site key with the documented always-passes
+# test key, so the form on /blog renders and validates locally without
+# adding localhost / *.workers.dev to your real Turnstile site config.
+#
+# Pairs with the matching test SECRET key in `.dev.vars` — see
+# .dev.vars.example. The two test keys work together: the test site key
+# (here, baked into HTML at build time) issues tokens that the test secret
+# key (in .dev.vars, used by /api/subscribe at runtime) always accepts.
+#
+# Committed by design: the test keys are publicly documented and have no
+# security value. `mise.local.toml` (gitignored) is still available if you
+# need machine-specific overrides on top of this.
+
+[tools]
+wrangler = "4.90.1"
+
+[env]
+# Turnstile's documented always-passes test site key.
+# https://developers.cloudflare.com/turnstile/troubleshooting/testing/
+PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"

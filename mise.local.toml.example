@@ -1,0 +1,17 @@
+# Optional machine-local mise overrides — copy to mise.local.toml
+# (gitignored) only if you need to override what's already committed.
+#
+# In practice you probably don't need this file:
+#   - mise.toml has the real production Turnstile site key
+#   - mise.development.toml overrides with the always-passes test key when
+#     MISE_ENV=development (and is committed, so every contributor gets it
+#     automatically)
+#   - mise.ci.toml does the same for CI when MISE_ENV=ci
+#
+# Use mise.local.toml only for things like:
+#   - pointing at a staging Turnstile site
+#   - testing with a different value than the test key
+#   - host/machine-specific config
+
+# [env]
+# PUBLIC_TURNSTILE_SITE_KEY = "0xYOUR_STAGING_KEY"

@@ -49,11 +49,18 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
   try {
     env = getEnv(locals);
   } catch {
-    return jsonError(500, 'misconfigured');
+    // Cloudflare runtime not available — usually means the route was
+    // accidentally pre-rendered. Distinct from "binding empty" so it's
+    // debuggable from the client error.
+    return jsonError(500, 'runtime_unavailable');
   }
-  if (!env.TURNSTILE_SECRET_KEY || !env.BUTTONDOWN_API_KEY) {
-    console.error('subscribe: missing required env (TURNSTILE_SECRET_KEY or BUTTONDOWN_API_KEY)');
-    return jsonError(500, 'misconfigured');
+  if (!env.TURNSTILE_SECRET_KEY) {
+    console.error('subscribe: TURNSTILE_SECRET_KEY is empty on the worker');
+    return jsonError(500, 'turnstile_secret_missing');
+  }
+  if (!env.BUTTONDOWN_API_KEY) {
+    console.error('subscribe: BUTTONDOWN_API_KEY is empty on the worker');
+    return jsonError(500, 'buttondown_key_missing');
   }
 
   try {

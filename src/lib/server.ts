@@ -1,4 +1,5 @@
 import type { APIContext } from 'astro';
+import { env } from 'cloudflare:workers';
 
 // Shared plumbing for /api/* endpoints. The pattern:
 //   1. import { securityHeaders, getEnv, parseJson, jsonError, jsonOk } from '../../lib/server'
@@ -13,12 +14,14 @@ export const securityHeaders = {
   'X-Robots-Tag': 'noindex, nofollow',
 } as const;
 
-export function getEnv(locals: APIContext['locals']): Env {
-  const runtime = (locals as App.Locals).runtime;
-  if (!runtime?.env) {
-    throw new Error('Cloudflare runtime env not available — is this route on-demand?');
-  }
-  return runtime.env;
+// Astro v6 + @astrojs/cloudflare 13 removed `Astro.locals.runtime.env`; the
+// adapter installs a getter that throws an explicit migration error pointing
+// here. The replacement is `import { env } from 'cloudflare:workers'`, a
+// virtual binding resolved by Cloudflare's bundler. The `_locals` parameter
+// is kept (underscored) so existing call sites compile without churn — there
+// is no longer anything to read off it for env access.
+export function getEnv(_locals?: APIContext['locals']): Env {
+  return env as Env;
 }
 
 type ParseJsonOk<T> = { ok: true; data: T };

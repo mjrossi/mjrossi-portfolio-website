@@ -228,13 +228,5 @@ Buttondown posts to your LinkedIn **profile** as a standard post. It cannot publ
 2. Settings → Automations → alongside the existing RSS-to-email automation, create two more:
    - Trigger: **When a newsletter is sent** → Action: **Create a LinkedIn post**
    - Trigger: **When a newsletter is sent** → Action: **Create a Bluesky post**
-3. Paste post bodies from `docs/buttondown-linkedin-template.md` and `docs/buttondown-bluesky-template.md` into the Automation editor. Same `{{ item.title }}` / `{{ item.url }}` / `{{ item.description }}` tags as the email template.
 
-### Repo files
-
-The post-body templates live in `docs/` as the source of truth; the dashboard is the copy that actually publishes — re-paste when they change, same convention as the existing email template.
-
-| File | Buttondown slot |
-|---|---|
-| `docs/buttondown-linkedin-template.md` | Automation → Create a LinkedIn post → **Body** |
-| `docs/buttondown-bluesky-template.md` | Automation → Create a Bluesky post → **Body** |
+Buttondown's LinkedIn and Bluesky automations don't expose a body-template field — the post body is generated from the newsletter's title and canonical URL automatically. Nothing in `docs/` to keep in sync for these two; the email template (`docs/buttondown-rss-template.md`) remains the only operator-managed surface.

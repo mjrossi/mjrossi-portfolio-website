@@ -4,9 +4,6 @@ import BlogPostEntry from '../../components/BlogPostEntry.astro';
 import NewsletterSignup from '../../components/NewsletterSignup.astro';
 import { getPublishedPosts } from '../../lib/blog.ts';
 
-export const prerender = false;
-Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
-
 const posts = await getPublishedPosts();
 const postCountLabel = `${posts.length} post${posts.length === 1 ? '' : 's'}`;
 ---

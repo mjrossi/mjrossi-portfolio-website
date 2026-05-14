@@ -4,7 +4,7 @@ Reference for how mjrossi.com is built, deployed, and quality-checked. Read alon
 
 ## Rendering model
 
-Astro 6 with `@astrojs/cloudflare`, configured with `output: 'static'` (`astro.config.mjs`). Every page renders at build time except the routes under `src/pages/api/*` (and the prerender-opt-out HTML pages, which set `export const prerender = false` so the edition line stays current). The convention: **anything that doesn't render a page lives under `src/pages/api/*`** and shares the `src/lib/server.ts` helpers.
+Astro 6 with `@astrojs/cloudflare`, configured with `output: 'server'` (`astro.config.mjs`). Every route runs on-demand in the Cloudflare Worker by default; the only routes that prerender are the ones that explicitly opt in via `export const prerender = true` — currently `/404` (Cloudflare needs a static `404.html` for the ASSETS binding to serve) and `/blog/rss.xml` (built from MDX known at build time; no reason to re-render per request). The convention: **anything that doesn't render a page lives under `src/pages/api/*`** and shares the `src/lib/server.ts` helpers.
 
 The original example was `/api/contact` (was `/contact` before the `/api/*` convention landed): it returns a 302 to `mailto:hello@mjrossi.com`, keeping the address out of the static HTML.
 
@@ -23,15 +23,21 @@ The build emits two things:
 
 `src/layouts/Base.astro` is the only layout. Every page gets the full Broadsheet masthead: name, location/edition meta, italic tagline framed by rules. The name renders as an `<h1>` on `/` and as a link back to `/` on every other page (to keep the page's own `<h1>` as the sole h1).
 
-The edition line is computed per request on every route:
+The edition line lives in `src/lib/edition.ts` (`toRoman(n)` + `editionLine(now?)`) and `Base.astro` calls it on every render:
 
 ```
 Vol. <yearOffset since 2024 in roman> · No. <month in roman> · <Month YYYY>
 ```
 
-Every HTML route sets `export const prerender = false` so it renders in the Cloudflare worker and the edition line is always current. Every response carries `Cache-Control: public, max-age=3600`, so in steady state each POP serves the cached HTML and only refreshes once an hour.
+Because `output: 'server'` makes every HTML route on-demand by default, the edition line is always current. `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response (unless a route emits its own value first — e.g. Astro's prerendered 404 carries `max-age=0`), so in steady state each POP serves the cached HTML and only refreshes once an hour.
 
-`src/components/ContactLinks.astro` renders the four contact icons (GitHub, LinkedIn, `/api/contact` for email, Bluesky) as inline SVGs that inherit `currentColor`. It's rendered twice per page (in nav and footer) — the smoke test asserts both occurrences and that they share the `aria-label="Contact"` wrapper.
+A handful of small shared components keep page templates thin:
+
+- `src/components/ContactLinks.astro` — four contact icons (GitHub, LinkedIn, `/api/contact` for email, Bluesky) as inline SVGs that inherit `currentColor`. Rendered twice per page (nav and footer); the smoke test asserts both occurrences and that they share the `aria-label="Contact"` wrapper.
+- `src/components/PageHeader.astro` — interior-page header (`<h1>` + optional description + default slot for `.page-meta` rows). Used by `/work`, `/education`, `/urban-mobility`, `/privacy`, and `/blog/tag/[tag]`. `/blog` keeps a custom `.blog-header` because its RSS-link variant doesn't fit the prop shape; absorbing it would inflate the component more than the duplication removed.
+- `src/components/PostTags.astro` — `<p class="post-tags">` chip list. `BlogPost.astro` renders it twice (header and footer) so the markup is in one place.
+
+`src/components/NewsletterSignup.astro` owns its own scoped `<style>` block. The `.newsletter-*` rules used to live in `src/styles/global.css`; they were moved into the component so the dependency is explicit and `global.css` carries only chrome-and-typography. `.cf-turnstile` is wrapped in `:global()` because the Turnstile script may rewrite the wrapper attributes; `.newsletter-success` is `:global` because it's created at runtime by `public/scripts/newsletter.js` via `document.createElement` (no Astro scoping attribute).
 
 ## Newsletter and `/api/*` endpoints
 
@@ -113,7 +119,9 @@ One post-build acceptance check: `scripts/smoke.mjs` (`npm run smoke`). No test 
 
 First it inspects `dist/client/` for static artifacts: the expected assets (`noise.webp`, `profile-avatar.webp`, `favicon.svg`, `resume.pdf`, `og.png`, `404.html`, `sitemap-index.xml`) exist, and the built CSS bundle still pins `--accent: #8f5520`, `--max: 1100px`, has no inline `data:image/svg+xml` URIs, and has no leftover condensed-masthead rules.
 
-Then it spins up `wrangler dev` once and fetches every on-demand route (`/`, `/work`, `/education`, `/urban-mobility`, `/blog`, one blog post chosen from the index, one tag page chosen from the index, `/blog/rss.xml`). For every HTML route it asserts: 200 OK, `Cache-Control: public, max-age=3600`, the full Broadsheet masthead rendered, the edition line matches `Vol. X · No. Y · Month YYYY`, no condensed-masthead residue, `ContactLinks` rendered twice (nav + footer), and the nav pill marked `active` on the correct link.
+Then it spins up `wrangler dev` once and fetches every on-demand route (`/`, `/work`, `/education`, `/urban-mobility`, `/blog`, one blog post chosen from the index, one tag page chosen from the index, `/blog/rss.xml`). The top-level GETs and the blog chain run in parallel — the wall-time savings are meaningful and `fetchExpectingNon5xx` already retries once on transient workerd 5xx. For every HTML route it asserts: 200 OK, `Cache-Control: public, max-age=3600` (set by `src/middleware.ts`, not per page), the full Broadsheet masthead rendered, the edition line matches `Vol. X · No. Y · Month YYYY`, no condensed-masthead residue, `ContactLinks` rendered twice (nav + footer), and the nav pill marked `active` on the correct link.
+
+The `/api/subscribe` sad paths are driven by a `subscribeCases` table (status-only assertions for the contract) and fanned out via `Promise.all`. Two assertions stay outside the table — the realistic-2.5KB-token payload guard (inequality, longer message) and the privacy-page content checks — but they fetch in parallel too.
 
 If you change a CSS token, a route's chrome, or the navigation contract, expect to update the corresponding assertion in `scripts/smoke.mjs`.
 
@@ -126,5 +134,6 @@ If you change a CSS token, a route's chrome, or the navigation contract, expect 
 
 - The design tokens live in one place (`:root` in `src/styles/global.css`). Touch them and the smoke test will likely complain — update `scripts/smoke.mjs` in the same change.
 - The masthead is a single variant that renders everywhere. The name is an `<h1>` on `/` and a link to `/` on subpages.
-- Every HTML route is on-demand (`prerender = false`) with `Cache-Control: public, max-age=3600`. The only things that prerender are `404.html`, `/blog/rss.xml`, the sitemap, and static assets. New routes should follow the same pattern — and get a smoke assertion in `scripts/smoke.mjs`.
-- Anything that needs to stay current without a rebuild belongs on an on-demand route (with a sensible `Cache-Control`).
+- Output mode is `server`, so new HTML routes are on-demand by default — no `prerender` export needed. The only routes that opt back into prerender are `/404` (Cloudflare needs a static `404.html`) and `/blog/rss.xml`. `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response, so individual pages don't need to. New routes still need a smoke assertion in `scripts/smoke.mjs`.
+- Anything that needs to stay current without a rebuild belongs on a non-prerendered route (the default) and inherits the middleware cache header.
+- Interior pages reuse `src/components/PageHeader.astro` for the `.page-header` shape. If a new page needs a different header (e.g. embedded RSS link like `/blog`), use a bespoke header rather than inflating `PageHeader`'s prop surface.

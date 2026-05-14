@@ -34,6 +34,12 @@ function occurrences(haystack, needle) {
   return n;
 }
 
+// Substring-match a response header. Returns false for missing headers so
+// the failure message points at the assertion rather than throwing.
+function headerContains(res, name, value) {
+  return (res.headers.get(name) ?? '').includes(value);
+}
+
 // ── Static artifacts ─────────────────────────────────
 
 if (!existsSync(DIST)) {
@@ -97,6 +103,10 @@ if (cssFile) {
   check('css: --accent is #8f5520 (AA contrast)', /--accent:\s*#8f5520/i.test(css));
   check('css: --max token present',               /--max:\s*1100px/.test(css));
   check('css: no inline SVG data URIs',           !css.includes('data:image/svg+xml'));
+  // Guards a prior masthead design (condensed variant + home-link/page-label
+  // bar) that was reverted. The rules below assert those classes never
+  // reappear in the built CSS or rendered HTML — without these, a copy-paste
+  // from the old design could ship unnoticed.
   check('css: condensed masthead rules gone',
     !/\.masthead\.condensed|\.masthead-home-link|\.masthead-page-label/.test(css));
 }
@@ -127,7 +137,7 @@ function assertSharedChrome(label, res, html, activeHref) {
   check(`${label}: 200 OK`, res.status === 200, `got ${res.status}`);
   check(
     `${label}: Cache-Control max-age=3600`,
-    (res.headers.get('cache-control') ?? '').includes('max-age=3600'),
+    headerContains(res, 'cache-control', 'max-age=3600'),
     res.headers.get('cache-control') ?? '(none)',
   );
   check(`${label}: full masthead`, html.includes('class="masthead full"'));
@@ -135,6 +145,7 @@ function assertSharedChrome(label, res, html, activeHref) {
     `${label}: edition line (Vol. X · No. Y · Month YYYY)`,
     /Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+ · \w+ \d{4}/.test(html),
   );
+  // See the matching css-side guard above — same prior-design regression.
   check(
     `${label}: no condensed-masthead residue`,
     !/masthead condensed|masthead-home-link|masthead-page-label/.test(html),
@@ -163,41 +174,48 @@ let exitCode = 1;
 try {
   await waitForReady(`${BASE}/`, Date.now() + READY_TIMEOUT_MS);
 
-  // Home + top-level pages
-  let homeHtml = '';
-  for (const [label, path, activeHref] of [
+  // Home + top-level pages, fetched in parallel — they're independent GETs
+  // and wrangler-dev parallelism noticeably shaves wall time over a serial loop.
+  const topRoutes = [
     ['home', '/', null],
     ['work', '/work', '/work'],
     ['education', '/education', '/education'],
     ['urban-mobility', '/urban-mobility', '/urban-mobility'],
     ['blog', '/blog', '/blog'],
-  ]) {
-    const { res, html } = await fetchRoute(path);
+  ];
+  const topResults = await Promise.all(topRoutes.map(([, path]) => fetchRoute(path)));
+  let homeHtml = '';
+  let blog = null;
+  topResults.forEach(({ res, html }, i) => {
+    const [label, path, activeHref] = topRoutes[i];
     if (path === '/') homeHtml = html;
+    if (path === '/blog') blog = { res, html };
     assertSharedChrome(label, res, html, activeHref);
-  }
+  });
 
-  // Blog chain: index → first post → first tag
-  const blog = await fetchRoute('/blog');
+  // Blog chain: pick a post + a tag off the index, then fetch both in parallel.
   const postSlug = blog.html.match(/href="\/blog\/(?!tag\/)([^"/]+)\//)?.[1];
   const tag = blog.html.match(/href="\/blog\/tag\/([^"/]+)\//)?.[1];
   check('blog index: links to at least one post', !!postSlug);
   check('blog index: links to at least one tag',  !!tag);
 
-  if (postSlug) {
-    const post = await fetchRoute(`/blog/${postSlug}/`);
+  const [post, tagPage, rss] = await Promise.all([
+    postSlug ? fetchRoute(`/blog/${postSlug}/`) : Promise.resolve(null),
+    tag ? fetchRoute(`/blog/tag/${tag}/`) : Promise.resolve(null),
+    fetchRoute('/blog/rss.xml'),
+  ]);
+
+  if (post) {
     assertSharedChrome(`blog post ${postSlug}`, post.res, post.html, '/blog');
     check(`blog post ${postSlug}: back link to /blog`, /href="\/blog"/.test(post.html));
   }
 
-  if (tag) {
-    const tagPage = await fetchRoute(`/blog/tag/${tag}/`);
+  if (tagPage) {
     assertSharedChrome(`blog tag ${tag}`, tagPage.res, tagPage.html, '/blog');
     check(`blog tag ${tag}: lists at least one post`, /href="\/blog\/[^"/]+\//.test(tagPage.html));
   }
 
   // RSS
-  const rss = await fetchRoute('/blog/rss.xml');
   check('rss: 200 OK',        rss.res.status === 200, `got ${rss.res.status}`);
   check('rss: has >=1 <item>', (rss.html.match(/<item>/g) || []).length >= 1);
 
@@ -212,7 +230,7 @@ try {
   );
   check(
     'contact: Cache-Control no-store',
-    (contact.headers.get('cache-control') ?? '').includes('no-store'),
+    headerContains(contact, 'cache-control', 'no-store'),
     contact.headers.get('cache-control') ?? '(none)',
   );
 
@@ -303,6 +321,11 @@ try {
   // Astro's middleware. (A missing Origin would correctly 403 — that's
   // the desired browser-facing behavior, just not what we're asserting here.)
   const ORIGIN = { Origin: BASE };
+  const jsonPost = (body) => ({
+    method: 'POST',
+    headers: { ...ORIGIN, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 
   // Helper: explicitly drain the response body (so connection releases promptly)
   // and retry once on 5xx (wrangler dev / workerd has been observed returning
@@ -323,72 +346,74 @@ try {
     return res;
   }
 
-  const getSub = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, { method: 'GET', headers: ORIGIN });
-  check('subscribe: 405 on GET', getSub.status === 405, `got ${getSub.status}`);
+  // Sad-path matrix: every entry exercises a distinct contract on
+  // /api/subscribe. Honeypot must come after happy-path-shaped inputs
+  // because its 200 response is the contract — not an empty pass.
+  const subscribeCases = [
+    {
+      name: '405 on GET',
+      init: { method: 'GET', headers: ORIGIN },
+      expect: 405,
+    },
+    {
+      name: '415 on non-JSON',
+      init: { method: 'POST', headers: { ...ORIGIN, 'Content-Type': 'text/plain' }, body: 'hi' },
+      expect: 415,
+    },
+    {
+      name: '400 on invalid email',
+      init: jsonPost({ email: 'not-an-email', turnstileToken: 'x' }),
+      expect: 400,
+    },
+    {
+      name: '400 on missing turnstile token',
+      init: jsonPost({ email: 'a@b.co' }),
+      expect: 400,
+    },
+    {
+      // Astro's built-in CSRF protection (security.checkOrigin) rejects
+      // form-encoded POSTs without a matching Origin at the framework layer.
+      // JSON POSTs require browser preflight and reach the handler regardless,
+      // so this assertion specifically targets the form-style attack vector.
+      name: '403 on form-encoded POST w/o Origin (CSRF guard)',
+      init: { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'email=a@b.co' },
+      expect: 403,
+    },
+    {
+      // Honeypot — a filled `company` field returns 200 silently so attackers
+      // can't tell the field exists. Runs before Turnstile so the token is irrelevant.
+      name: '200 on filled honeypot field',
+      init: jsonPost({ email: 'bot@example.com', turnstileToken: 'x', company: 'ACME Corp' }),
+      expect: 200,
+    },
+  ];
 
-  const txtSub = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
-    method: 'POST',
-    headers: { ...ORIGIN, 'Content-Type': 'text/plain' },
-    body: 'hi',
-  });
-  check('subscribe: 415 on non-JSON', txtSub.status === 415, `got ${txtSub.status}`);
-
-  const badEmail = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
-    method: 'POST',
-    headers: { ...ORIGIN, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'not-an-email', turnstileToken: 'x' }),
-  });
-  check('subscribe: 400 on invalid email', badEmail.status === 400, `got ${badEmail.status}`);
-
-  const noToken = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
-    method: 'POST',
-    headers: { ...ORIGIN, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'a@b.co' }),
-  });
-  check(
-    'subscribe: 400 on missing turnstile token',
-    noToken.status === 400,
-    `got ${noToken.status}`,
+  // Run the subscribe matrix + the realistic-payload guard + the privacy fetch
+  // in parallel — none of them share state. The handful of POSTs that workerd
+  // has historically flaked on are covered by fetchExpectingNon5xx's one-shot
+  // retry, so concurrent fan-out is safe.
+  const subscribeResults = await Promise.all(
+    subscribeCases.map((c) => fetchExpectingNon5xx(`${BASE}/api/subscribe`, c.init)),
   );
-
-  // Astro's built-in CSRF protection (security.checkOrigin) rejects
-  // form-encoded POSTs without a matching Origin at the framework layer.
-  // JSON POSTs require browser preflight and reach the handler regardless,
-  // so this assertion specifically targets the form-style attack vector.
-  const noOrigin = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'email=a@b.co',
+  subscribeResults.forEach((res, i) => {
+    const c = subscribeCases[i];
+    check(`subscribe: ${c.name}`, res.status === c.expect, `got ${res.status}`);
   });
-  check(
-    'subscribe: 403 on form-encoded POST w/o Origin (CSRF guard)',
-    noOrigin.status === 403,
-    `got ${noOrigin.status}`,
-  );
-
-  // Honeypot — a filled `company` field returns 200 silently so attackers
-  // can't tell the field exists. Runs before Turnstile so the token is irrelevant.
-  const honeypot = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
-    method: 'POST',
-    headers: { ...ORIGIN, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'bot@example.com', turnstileToken: 'x', company: 'ACME Corp' }),
-  });
-  check('subscribe: 200 on filled honeypot field', honeypot.status === 200, `got ${honeypot.status}`);
 
   // Realistic-sized payload doesn't 413. Real Turnstile tokens are 2-4 KB;
   // the parseJson maxBytes cap must accommodate. Send a 2.5 KB token payload
   // (won't pass Turnstile verify, but that's fine — we're asserting the body
   // cap, not the verify path). Should return one of the 4xx Turnstile codes,
-  // NEVER 413.
-  const bigTokenPayload = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
-    method: 'POST',
-    headers: { ...ORIGIN, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  // NEVER 413. Kept out of the table above because the assertion is an
+  // inequality with a longer diagnostic message.
+  const [bigTokenPayload, privacy] = await Promise.all([
+    fetchExpectingNon5xx(`${BASE}/api/subscribe`, jsonPost({
       email: 'sized@example.com',
       turnstileToken: 'x'.repeat(2500),
       company: '',
-    }),
-  });
+    })),
+    fetchRoute('/privacy'),
+  ]);
   check(
     'subscribe: realistic 2.5KB payload is not rejected as too large (regression guard for the 1KB cap)',
     bigTokenPayload.status !== 413,
@@ -397,7 +422,6 @@ try {
 
   // /privacy must exist and name the third parties so the form fineprint
   // links to a real disclosure.
-  const privacy = await fetchRoute('/privacy');
   check('privacy: 200 OK', privacy.res.status === 200, `got ${privacy.res.status}`);
   check('privacy: names Buttondown', /Buttondown/i.test(privacy.html));
   check('privacy: names Turnstile', /Turnstile/i.test(privacy.html));

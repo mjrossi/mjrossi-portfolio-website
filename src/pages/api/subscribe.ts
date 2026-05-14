@@ -8,8 +8,6 @@ import {
   fetchWithRetry,
 } from '../../lib/server';
 
-export const prerender = false;
-
 type SubscribeBody = {
   email?: unknown;
   turnstileToken?: unknown;

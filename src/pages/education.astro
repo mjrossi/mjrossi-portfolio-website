@@ -1,17 +1,12 @@
 ---
 import Base from '../layouts/Base.astro';
-
-export const prerender = false;
-Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
+import PageHeader from '../components/PageHeader.astro';
 ---
 
 <Base title="Education" description="Matthew Rossi's education — EIT Urban Mobility master's program and Wayne State University.">
 
   <div class="page">
-  <div class="page-header">
-    <h1>Education</h1>
-    <p>Lifelong learner from engineering to urban policy.</p>
-  </div>
+  <PageHeader title="Education" description="Lifelong learner from engineering to urban policy." />
 
   <section aria-label="Education history">
 

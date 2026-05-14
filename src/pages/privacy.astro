@@ -1,17 +1,12 @@
 ---
 import Base from '../layouts/Base.astro';
-
-export const prerender = false;
-Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
+import PageHeader from '../components/PageHeader.astro';
 ---
 
 <Base title="Privacy" description="What this site collects and who it shares with.">
 
   <div class="page">
-    <div class="page-header">
-      <h1>Privacy</h1>
-      <p>A short, plain account of what this site collects and who it shares with.</p>
-    </div>
+    <PageHeader title="Privacy" description="A short, plain account of what this site collects and who it shares with." />
 
     <section aria-labelledby="newsletter-heading">
       <h2 id="newsletter-heading">Newsletter</h2>

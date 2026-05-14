@@ -2,6 +2,7 @@
 import { Font } from 'astro:assets';
 import '../styles/global.css';
 import ContactLinks from '../components/ContactLinks.astro';
+import { editionLine } from '../lib/edition';
 
 interface Props {
   title: string;
@@ -20,24 +21,7 @@ const canonical = new URL(pathname, Astro.site).href;
 const ogImage = new URL('/og.png', Astro.site).href;
 const fullTitle = title === 'Matthew Rossi' ? title : `${title} — Matthew Rossi`;
 
-const now = new Date();
-const currentMonthYear = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-
-const toRoman = (n: number): string => {
-  const map: [number, string][] = [
-    [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'],
-    [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'],
-    [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
-  ];
-  let out = '';
-  let rem = n;
-  for (const [v, s] of map) {
-    while (rem >= v) { out += s; rem -= v; }
-  }
-  return out;
-};
-
-const editionLine = `Vol. ${toRoman(now.getFullYear() - 2024)} · No. ${toRoman(now.getMonth() + 1)} · ${currentMonthYear}`;
+const editionLineStr = editionLine();
 
 const navLinks = [
   { href: '/work', label: 'Work' },
@@ -92,7 +76,7 @@ const isHome = pathname === '/';
         )}
         <div class="masthead-meta">
           <span class="masthead-meta-loc">Brooklyn, New York</span>
-          <span class="masthead-meta-edition">{editionLine}</span>
+          <span class="masthead-meta-edition">{editionLineStr}</span>
         </div>
       </div>
       <div class="masthead-tagline-row">

@@ -1,6 +1,7 @@
 ---
 import { Image } from 'astro:assets';
 import Base from './Base.astro';
+import PostTags from '../components/PostTags.astro';
 import { dateFormatter, isoDate, postReadingTime, type Post } from '../lib/blog.ts';
 
 interface Props {
@@ -34,13 +35,7 @@ const readLabel = postReadingTime(post);
           </>
         )}
       </p>
-      {tags.length > 0 && (
-        <p class="post-tags">
-          {tags.map((tag) => (
-            <a href={`/blog/tag/${tag}/`} class="tag-chip">{tag}</a>
-          ))}
-        </p>
-      )}
+      <PostTags tags={tags} />
       {cover && (
         <figure class="post-cover">
           <Image src={cover.src} alt={cover.alt} loading="eager" />
@@ -53,13 +48,7 @@ const readLabel = postReadingTime(post);
     </div>
 
     <footer class="post-footer">
-      {tags.length > 0 ? (
-        <p class="post-tags">
-          {tags.map((tag) => (
-            <a href={`/blog/tag/${tag}/`} class="tag-chip">{tag}</a>
-          ))}
-        </p>
-      ) : <span></span>}
+      {tags.length > 0 ? <PostTags tags={tags} /> : <span></span>}
       <a href="/blog" class="post-back post-back-bottom">← All posts</a>
     </footer>
   </article>

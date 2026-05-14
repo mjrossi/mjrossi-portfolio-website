@@ -375,6 +375,26 @@ try {
   });
   check('subscribe: 200 on filled honeypot field', honeypot.status === 200, `got ${honeypot.status}`);
 
+  // Realistic-sized payload doesn't 413. Real Turnstile tokens are 2-4 KB;
+  // the parseJson maxBytes cap must accommodate. Send a 2.5 KB token payload
+  // (won't pass Turnstile verify, but that's fine — we're asserting the body
+  // cap, not the verify path). Should return one of the 4xx Turnstile codes,
+  // NEVER 413.
+  const bigTokenPayload = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
+    method: 'POST',
+    headers: { ...ORIGIN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'sized@example.com',
+      turnstileToken: 'x'.repeat(2500),
+      company: '',
+    }),
+  });
+  check(
+    'subscribe: realistic 2.5KB payload is not rejected as too large (regression guard for the 1KB cap)',
+    bigTokenPayload.status !== 413,
+    `got ${bigTokenPayload.status} (413 means the body cap is too tight — real Turnstile tokens are 2-4 KB)`,
+  );
+
   // /privacy must exist and name the third parties so the form fineprint
   // links to a real disclosure.
   const privacy = await fetchRoute('/privacy');

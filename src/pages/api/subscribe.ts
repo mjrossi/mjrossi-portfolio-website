@@ -22,7 +22,11 @@ const MAX_EMAIL_LEN = 254;
 export const GET: APIRoute = () => methodNotAllowed('POST');
 
 export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
-  const parsed = await parseJson<SubscribeBody>(request, { maxBytes: 1024 });
+  // 8 KB cap — Turnstile tokens alone can be 2-4 KB; plus email (max 254),
+  // honeypot, and JSON overhead. 1 KB would have rejected real submissions
+  // (which is what was happening — verified empirically when production tokens
+  // returned 413).
+  const parsed = await parseJson<SubscribeBody>(request, { maxBytes: 8192 });
   if (!parsed.ok) return parsed.response;
 
   const { email, turnstileToken, company } = parsed.data;

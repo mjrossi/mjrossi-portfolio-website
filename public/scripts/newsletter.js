@@ -68,6 +68,7 @@
       // failure mode is debuggable from the UI without Worker logs.
       const messages = {
         invalid_email: 'That email address looks off.',
+        missing_turnstile_token: 'Please complete the spam check.',
         turnstile_failed: 'Spam check failed. Try again.',
         rate_limited: 'Subscription temporarily rate-limited. Try again in a few minutes.',
         upstream: 'Our email provider returned an error. Try again shortly.',
@@ -75,6 +76,10 @@
           "Couldn't reach our email provider. Check your connection and try again.",
         turnstile_unreachable: "Couldn't reach the spam-check service. Try again shortly.",
         misconfigured: "The newsletter isn't set up correctly. Please email me directly.",
+        payload_too_large: 'Submission was unexpectedly large. Try again or email me directly.',
+        unsupported_media_type: "Browser sent the wrong content type. That's a bug — please email me.",
+        invalid_json: "Couldn't read the submission. Try again or email me directly.",
+        body_read_failed: "Couldn't read the submission. Try again or email me directly.",
       };
       showError(messages[data.error] ?? 'Something went wrong. Try again in a minute.');
     } catch {

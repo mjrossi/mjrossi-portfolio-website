@@ -2,39 +2,37 @@
   Buttondown email CUSTOM CSS — paste into Buttondown → Settings → Email design → Custom CSS.
   ───────────────────────────────────────────────────────────────────────────────────────────
 
-  Pairs with:
-    docs/buttondown-email-header.md
-    docs/buttondown-email-footer.md
+  Pairs with: docs/buttondown-rss-template.md (the RSS-to-email automation's
+  template, which uses h1/h2/hr/small + inline <span class="…"> hooks).
 
   Buttondown's "2005-era CSS" caveat (per their docs) — keep selectors
   conservative, avoid grid/flex, lean on text-align/display:block/colors.
   Buttondown inlines this CSS per-element at send time so it survives
-  clients that strip <style> blocks.
+  clients that strip <style> blocks. The Custom CSS slot is global to the
+  account: it applies to ALL outgoing emails (regular broadcasts and
+  RSS-to-email both).
 
   Source of truth lives here. Buttondown's dashboard is the copy that
   actually serves emails. Drift is the operator's responsibility.
 
   ─── Element vs class targeting ───
-  The header/footer Markdown produces standard elements (h1, p, em, hr,
-  small, a) plus the inline <span class="…"> hooks the Markdown files
-  introduce. CSS below targets:
+  CSS below targets:
 
     Tag-level (broad, applied wherever the element appears in the email):
-      body, a, h1, hr, small
+      body, a, h1, h2, hr, small
 
-    Class hooks (introduced by the header/footer Markdown):
-      .masthead-mj          — "MJ" portion of the masthead name
+    Class hooks (introduced inline by the Markdown template):
+      .masthead-mj          — "MJ" portion of the writer brand
       .masthead-surname     — "ROSSI" portion (warm-amber accent)
-      .masthead-loc         — "Brooklyn → Lisbon" location line
-      .masthead-edition     — "{{ publish date | %B %Y }}" edition line
-      .masthead-tagline     — italic tagline
+      .masthead-tagline     — italic subtitle ("A record of systems…")
       .footer-colophon      — italic "Set in Fraunces…" line
       .footer-meta          — "You're receiving this because…" line
 
-  Caveat: Buttondown also wraps the header/footer in its own container
-  classes (per their Modern template). Inspect a test email's source to
-  see what classes wrap the slot, and refine these rules if precision is
-  needed (e.g. avoid styling the post body's h1 with the masthead font).
+  Caveat: Buttondown wraps its slot output in its own container classes.
+  Inspect a test email's source to see what classes wrap each section,
+  and tighten these rules if precision is needed (e.g. avoid styling the
+  post body's h1 with the masthead font — currently a non-issue because
+  the RSS-to-email template uses linked titles, not headed posts).
 
   ─── Color tokens (hex from src/styles/global.css :root oklch) ───
     --bg                  → #f8f4ec  (warm cream page bg)
@@ -72,7 +70,7 @@ a:hover {
   color: #7a4a1a;
 }
 
-/* ──── Masthead — first h1 in the email is the header's MJROSSI line ──── */
+/* ──── Masthead — h1 is the writer brand (MJROSSI), h2 is the subtitle ──── */
 
 h1 {
   font-family: Fraunces, Georgia, 'Times New Roman', serif;
@@ -84,6 +82,16 @@ h1 {
   margin: 0 0 12px;
 }
 
+h2 {
+  font-family: Fraunces, Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: #9c6f3d;
+  margin: 0 0 4px;
+}
+
 .masthead-mj {
   color: #2a2520;
 }
@@ -92,26 +100,9 @@ h1 {
   color: #c97d3e;
 }
 
-.masthead-loc {
-  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #9c6f3d;
-}
-
-.masthead-edition {
-  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: #807565;
-}
-
 .masthead-tagline {
   font-family: Fraunces, Georgia, 'Times New Roman', serif;
   font-style: italic;
-  font-size: 14px;
   color: #9c6f3d;
 }
 

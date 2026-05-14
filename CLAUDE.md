@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository. For the full architecture, 
 
 ## Stack
 
-Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece of client JS (the `/blog` newsletter form — see "Newsletter" below). Most routes prerender; `src/pages/index.astro` and the `src/pages/api/*` endpoints are on-demand and run in the Cloudflare worker. Build output: `dist/client/` (assets, served via the `ASSETS` binding in `wrangler.jsonc`) plus the server bundle in `dist/server/` that Wrangler deploys as the worker. Node 22 (pinned in `mise.toml`).
+Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece of client JS (the `/blog` newsletter form — see "Newsletter" below). `output: 'server'` — every route runs in the Cloudflare worker by default; `/404` and `/blog/rss.xml` opt back into static via `export const prerender = true`. `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response so the edge cache absorbs traffic while the dynamic edition line refreshes hourly. Build output: `dist/client/` (assets, served via the `ASSETS` binding in `wrangler.jsonc`) plus the server bundle in `dist/server/` that Wrangler deploys as the worker. Node 22 (pinned in `mise.toml`).
 
 **Server endpoint convention:** anything that doesn't render a page (redirects, JSON APIs) lives under `src/pages/api/*`. All endpoints share `src/lib/server.ts` for security headers, env access, JSON parsing, and error responses.
 
@@ -13,8 +13,10 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece 
 - `src/layouts/Base.astro` — shared shell. Renders the full Broadsheet masthead on every page, with the name as an `<h1>` on `/` and as a link back to `/` on subpages. Builds the edition line (`Vol. <yearOffset> · No. <monthRoman> · <Month YYYY>`) at request time so it stays current without a scheduled rebuild.
 - `src/components/ContactLinks.astro` — inline-SVG icon row (GitHub, LinkedIn, `/api/contact` email, Bluesky). Rendered twice per page (nav + footer); the smoke tests assert both occurrences.
 - `src/components/BlogPostEntry.astro` — shared `<article class="post-entry">` card used by `blog/index.astro` and `blog/tag/[tag].astro`.
-- `src/components/NewsletterSignup.astro` — newspaper-style email signup form. Rendered **only** in `src/pages/blog/index.astro` — this is the single carve-out from the no-client-JS rule. Loads Cloudflare Turnstile + a hoisted submit handler. Smoke asserts the form is present on `/blog` and absent on `/` (regression guard against accidental lifts into shared chrome).
-- `src/pages/*.astro` — one file per route. Pages: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/blog`, `/privacy`, `/404`. Everything except `/404` is on-demand (`export const prerender = false`) with `Cache-Control: public, max-age=3600`, so the edition line stays current and the edge cache absorbs traffic.
+- `src/components/NewsletterSignup.astro` — newspaper-style email signup form. Rendered **only** in `src/pages/blog/index.astro` — this is the single carve-out from the no-client-JS rule. Loads Cloudflare Turnstile + a hoisted submit handler. Owns its own scoped `<style>` block (the `.newsletter-*` rules live with the component, not in `global.css`). Smoke asserts the form is present on `/blog` and absent on `/` (regression guard against accidental lifts into shared chrome).
+- `src/components/PageHeader.astro` — shared interior-page header (`<h1>` + optional description + default slot for `.page-meta`). Used by `/work`, `/education`, `/urban-mobility`, `/privacy`, and `/blog/tag/[tag]`. `/blog` keeps its custom `.blog-header` since the RSS-link variant doesn't fit the prop shape.
+- `src/components/PostTags.astro` — `<p class="post-tags">` chip list, rendered twice by `BlogPost.astro` (header and footer). Single source of truth for the tag-list markup.
+- `src/pages/*.astro` — one file per route. Pages: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/blog`, `/privacy`, `/404`. Output mode is `server`, so every page runs on-demand by default; `/404` and `/blog/rss.xml` opt back into static via `export const prerender = true`. `Cache-Control: public, max-age=3600` is applied centrally by `src/middleware.ts`, not per-page.
 - `src/pages/api/contact.ts` — on-demand redirect. `GET /api/contact` returns 302 to `mailto:hello@mjrossi.com` so the address never appears in static HTML. Cloudflare's `_redirects` rejects `mailto:` destinations and the deploy is a Worker with Static Assets (not classic Pages), so `functions/` is unavailable.
 - `src/pages/api/subscribe.ts` — on-demand POST endpoint. Receives `{ email, turnstileToken, company }` from the newsletter form, verifies the Turnstile token, forwards to Buttondown (`type: 'unactivated'` → double opt-in). Treats already-subscribed as success to avoid leaking the subscriber list. Uses helpers from `src/lib/server.ts`.
 - `src/lib/server.ts` — shared `/api/*` plumbing: `securityHeaders`, `getEnv()`, `parseJson()`, `jsonOk()`, `jsonError()`, `methodNotAllowed()`. The single source of truth for server-endpoint conventions.
@@ -22,12 +24,13 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece 
 - `src/content.config.ts` — Zod schema for blog post frontmatter (single source of truth for required/optional fields and tag validation).
 - `src/content/blog/<slug>.mdx` — one file per post (or `<slug>/index.mdx` when colocating images).
 - `src/lib/blog.ts` — `getPublishedPosts`, `getAllTags`, `getPostsByTag`, plus the `dateFormatter` / `isoDate` / `postReadingTime` helpers used by `BlogPostEntry.astro`. The single boundary between content source and rendering — a future D1 migration swaps only this module.
+- `src/lib/edition.ts` — `toRoman(n)` and `editionLine(now?)` for the masthead "Vol. X · No. Y · Month YYYY" line. Imported by `Base.astro` and rebuilt on every on-demand render so the line stays current without a scheduled rebuild.
 - `src/layouts/BlogPost.astro` — post chrome (title, byline, tags, optional cover, back link).
 - `src/pages/blog/index.astro`, `src/pages/blog/[...slug].astro`, `src/pages/blog/tag/[tag].astro`, `src/pages/blog/rss.xml.ts` — list, post, per-tag, and RSS routes.
 - `src/styles/global.css` — all styles, imported once via `Base.astro`. Uses CSS custom properties.
 - `astro.config.mjs` — Cloudflare adapter, MDX integration (for the blog), sitemap integration, Astro `Font` integration for Inter / Fraunces / Source Serif 4.
 - `wrangler.jsonc` — Worker config; `ASSETS` binding points at `dist/client`.
-- `src/middleware.ts` — sets `Content-Security-Policy` (and any other response-level headers) on every HTML response. `public/_headers` rules only apply to static asset responses served by the Cloudflare ASSETS binding; on-demand HTML pages bypass that file, so middleware is the single source of truth for HTML CSP.
+- `src/middleware.ts` — sets `Content-Security-Policy` and the default `Cache-Control: public, max-age=3600` on every HTML response. Routes can override Cache-Control by setting it before middleware runs (e.g. prerendered `/404` emits `max-age=0` from Astro and middleware leaves it alone). `public/_headers` rules only apply to static asset responses served by the Cloudflare ASSETS binding; on-demand HTML pages bypass that file, so middleware is the single source of truth for HTML CSP + cache behavior.
 - `public/_headers` — security headers (HSTS, COOP, X-Frame-Options, Referrer-Policy, Permissions-Policy) and a fallback CSP for static asset responses. Kept in sync with `src/middleware.ts` for defense-in-depth.
 - `public/scripts/newsletter.js` — the only client-side JS on the site. Served as a static asset (not bundled by Astro) so it loads as an external module from `/scripts/newsletter.js` and works under the strict `script-src 'self'` CSP. Imported only by `src/components/NewsletterSignup.astro`.
 - `public/.assetsignore` — keeps worker artifacts out of the static asset binding.
@@ -160,6 +163,78 @@ Then:
 - `npm run preview` — full build + `wrangler dev`. Only way to exercise the form.
 - `npm run smoke` — runs the post-build assertions including `/api/subscribe` sad paths.
 
+#### Running smoke — read this before you debug a failure
+
+**`PUBLIC_TURNSTILE_SITE_KEY` must be exported in the shell at build time, every time.** This trips people up regularly. `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` is inlined into the bundle by Vite during `astro build`; if the var isn't set when `npm run build` runs, the form never reaches the HTML and four smoke assertions go red:
+
+```
+✗ blog index: newsletter form present
+✗ blog index: Turnstile script tag
+✗ blog: submit handler is external (/scripts/newsletter.js) — no external /scripts/newsletter.js <script src> found in blog HTML
+✗ blog: follow note is OUTSIDE the newsletter aside — blog-follow-note appears inside .newsletter — ad blockers will hide it
+```
+
+When you see that signature, the bug is **build-time env**, not the assertions. Rebuild with the var set.
+
+The tidy way is to activate mise — `mise.development.toml` and `mise.ci.toml` both export the documented Turnstile always-passes test key (`1x00000000000000000000AA`):
+
+```sh
+MISE_ENV=development mise exec -- npm run build && npm run smoke
+# or, if mise auto-activates via shell hook:
+mise install && npm run build && npm run smoke
+```
+
+If mise isn't installed locally, set the test key directly before the build:
+
+```sh
+PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA npm run build && npm run smoke
+```
+
+CI handles this via `MISE_ENV=ci` in `.github/workflows/build.yml`, so the issue only bites in a fresh local shell without mise active.
+
+**Other smoke gotchas worth knowing:**
+
+- **A previous smoke run left wrangler running.** The script spawns `wrangler dev` on port 8788 and traps SIGINT/SIGTERM to clean up, but a hard kill (timeout, `kill -9`, sandbox shutdown) leaves the process orphaned. Symptom: smoke prints `Address already in use (127.0.0.1:8788)` and bails. Fix: `pkill -9 -f wrangler && pkill -9 -f workerd` (and confirm with `lsof -i :8788`), then re-run.
+- **Cold-start wrangler can take 30–60s** in slow environments. The script's internal `READY_TIMEOUT_MS` is 30s; if your wrapper has its own timeout, give smoke at least 2 minutes end-to-end.
+- **Build is stale.** Smoke reads `dist/client/` plus on-demand routes from the worker bundle. If you tweak source files and run smoke without rebuilding, you're testing the previous build. Always `npm run build && npm run smoke` together (or use the chained commands above).
+
 ### Preview deploys
 
 PR branches get preview URLs from Cloudflare Workers Builds. **Preview deploys currently share production secrets** — a subscription via a preview URL lands in the production Buttondown account. Acceptable for a personal site (preview URLs are `noindex`'d). `wrangler.jsonc` carries a commented scaffold for isolating preview into its own environment if that ever needs to change.
+
+## Syndication (LinkedIn + Bluesky)
+
+New blog posts fan out to LinkedIn and Bluesky from the same Buttondown pipeline that handles email — Buttondown's Automations feature posts to both natively. **No code in this repo** owns the syndication; everything is configured operator-side in Buttondown's dashboard.
+
+```
+new MDX → git push → Cloudflare build → /blog/rss.xml → Buttondown polls
+                                                            ↓
+                                              ┌─────────────┼─────────────┐
+                                              ↓             ↓             ↓
+                                            email       Bluesky        LinkedIn
+```
+
+### Why Buttondown, not in-repo
+
+Buttondown owns OAuth refresh (LinkedIn tokens expire in 60 days), Bluesky app-password storage, rate limiting, retries, and dedup state. Building any of that into the Worker would mean adding KV/D1 + cron triggers + smoke sad-paths for a personal site with infrequent posts. Buttondown already owns the email side; expanding to social keeps one provider, one auth surface, one place to debug. If Buttondown ever drops a platform, the escape hatch is small — a single Worker endpoint reading `/blog/rss.xml` and posting via the AT Protocol / LinkedIn API. Don't pre-build it.
+
+### Known limitation: LinkedIn Newsletters
+
+Buttondown posts to your LinkedIn **profile** as a standard post. It cannot publish to LinkedIn **Newsletters** (LinkedIn's own newsletter product) — LinkedIn doesn't expose an API for that surface, only for standard posts. The standard-post route is fine: the post text plus the canonical link does the same job.
+
+### Operator setup (one-time, in Buttondown dashboard)
+
+1. Settings → Integrations → connect LinkedIn (OAuth) and connect Bluesky (app password).
+2. Settings → Automations → alongside the existing RSS-to-email automation, create two more:
+   - Trigger: **When a newsletter is sent** → Action: **Create a LinkedIn post**
+   - Trigger: **When a newsletter is sent** → Action: **Create a Bluesky post**
+3. Paste post bodies from `docs/buttondown-linkedin-template.md` and `docs/buttondown-bluesky-template.md` into the Automation editor. Same `{{ item.title }}` / `{{ item.url }}` / `{{ item.description }}` tags as the email template.
+
+### Repo files
+
+The post-body templates live in `docs/` as the source of truth; the dashboard is the copy that actually publishes — re-paste when they change, same convention as the existing email template.
+
+| File | Buttondown slot |
+|---|---|
+| `docs/buttondown-linkedin-template.md` | Automation → Create a LinkedIn post → **Body** |
+| `docs/buttondown-bluesky-template.md` | Automation → Create a Bluesky post → **Body** |

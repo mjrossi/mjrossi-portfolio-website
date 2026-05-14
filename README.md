@@ -1,12 +1,12 @@
 # mjrossi.com
 
-Personal portfolio site. [Astro](https://astro.build) build, deployed to Cloudflare Workers with Static Assets. The site is prerendered HTML except for the on-demand routes under `src/pages/api/*` — currently `/api/contact`, which 302s to a `mailto:` so the address never appears in static output.
+Personal portfolio site. [Astro](https://astro.build) build, deployed to Cloudflare Workers with Static Assets. The site is prerendered HTML except for a handful of on-demand routes under `src/pages/api/*` (`/api/contact` 302s to a `mailto:` so the address never appears in static output; `/api/subscribe` relays newsletter signups to Buttondown after a Turnstile check).
 
 For the rendering model, deployment pipeline, CI, and quality gates, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Prerequisites
 
-- [mise](https://mise.jdx.dev/) — Node version pinned in `mise.toml`
+- [mise](https://mise.jdx.dev/) — Node 22 is pinned in `mise.toml`
 
 ```bash
 mise install   # installs Node 22
@@ -15,11 +15,44 @@ npm install
 
 ## Local development
 
+For pure content work (writing blog posts, adjusting copy), `astro dev` is enough — it doesn't run the Cloudflare worker but it serves every prerendered page instantly:
+
 ```bash
 npm run dev        # astro dev on http://localhost:4321
 ```
 
-`astro dev` does not run the Cloudflare worker, so the `/api/*` endpoints (like the `/api/contact` redirect) are only exercised under `npm run preview` (below).
+The newsletter signup form on `/blog` needs the Cloudflare worker (for `/api/subscribe`) and a Turnstile site key (for the widget). To exercise it end to end:
+
+1. **Copy the env templates** (both are gitignored):
+
+   ```bash
+   cp mise.local.toml.example mise.local.toml   # build-time vars
+   cp .dev.vars.example .dev.vars               # worker-runtime secrets
+   ```
+
+   The defaults give you a working form except for the actual Buttondown call — that returns 502 to the client because the placeholder API key isn't real. Replace `BUTTONDOWN_API_KEY` in `.dev.vars` with a real free-tier key from <https://buttondown.com> if you want the full happy path.
+
+2. **Run the worker locally**:
+
+   ```bash
+   npm run preview    # build + wrangler dev (exercises every on-demand route)
+   ```
+
+   This is the only way to hit `/api/contact`, `/api/subscribe`, or to see Turnstile render. `astro dev` skips the worker entirely.
+
+### How env vars flow
+
+Two files, two layers. Each variable lives in exactly one place:
+
+| Variable | File | Read by | When |
+|---|---|---|---|
+| `PUBLIC_TURNSTILE_SITE_KEY` | `mise.toml` `[env]` (committed) — real production site key, public by design | Astro / Vite (`import.meta.env`) | build time (inlined into HTML) |
+| `BUTTONDOWN_API_KEY` | `.dev.vars` | Wrangler → Worker (`locals.runtime.env`) | runtime |
+| `TURNSTILE_SECRET_KEY` | `.dev.vars` | Wrangler → Worker (`locals.runtime.env`) | runtime |
+
+mise owns shell env (build-time tools, language version, and the public Turnstile site key). Wrangler owns worker bindings (runtime secrets). Keeping the worker secrets out of shell env means only wrangler can see them — a small but real defense-in-depth boundary. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture and [CLAUDE.md](CLAUDE.md) for the "how mise and wrangler relate" explanation.
+
+mise picks files in this precedence order: `mise.local.toml` (gitignored, optional) > `mise.<MISE_ENV>.toml` (committed; e.g. `mise.development.toml`, `mise.ci.toml`) > `mise.toml`. The recommended local shell setting is `MISE_ENV=development` (in your `~/.zshrc` / `~/.bashrc`), which auto-substitutes the always-passes Turnstile test key locally — no need to add `localhost` to your real Turnstile site's hostname allowlist. CI does the same with `MISE_ENV=ci`, set in `.github/workflows/build.yml`.
 
 ## Build and verify
 
@@ -28,13 +61,26 @@ npm run build      # outputs dist/client/ and dist/_worker.js
 npm run smoke      # post-build assertions over dist/client/
 ```
 
-The smoke test (`scripts/smoke.mjs`) checks that every route rendered, key assets exist, and the CSS bundle still carries the expected design tokens. Run it after any structural or design-token change.
+The smoke test (`scripts/smoke.mjs`) checks that every route rendered, key assets exist, the CSS bundle still carries the expected design tokens, and `/api/subscribe` rejects malformed input. Run it after any structural or design-token change.
+
+If `PUBLIC_TURNSTILE_SITE_KEY` is missing at build time, `/blog` will render *without* the newsletter form and log the misconfiguration to Worker observability via `console.error`. The rest of the blog renders normally — visitors don't see a 500, but you'll notice the form is missing and find the log line.
 
 ## Preview and deploy
 
 ```bash
-npm run preview    # build + wrangler dev (exercises /api/contact and every on-demand route)
-npm run deploy     # build + wrangler deploy
+npm run preview    # build + wrangler dev (run on every on-demand route)
+npm run deploy     # build + wrangler deploy (manual)
 ```
 
-In normal operation production deploys run automatically via Cloudflare Workers Builds on push to `main`; `npm run deploy` is for manual deploys.
+In normal operation production deploys run automatically via Cloudflare Workers Builds on push to `main`. PR branches get preview deploys at `<branch>-<project>.workers.dev`.
+
+**Preview deploys currently share production secrets.** A subscription submitted via a preview URL goes to the production Buttondown account. For a personal portfolio this is acceptable (preview URLs are `noindex`'d, traffic is low). `wrangler.jsonc` carries a commented scaffold for isolating preview into its own environment if that ever changes — runtime secrets would then be set with `wrangler secret put X --env preview`.
+
+## Newsletter setup (one-time)
+
+Before the form works in production, four out-of-band steps:
+
+1. **Turnstile site**: Cloudflare → Turnstile → add site `mjrossi.com` (add `link00seven.workers.dev` to Hostname management if you want preview URLs to render the widget too). Paste the **Site key** into `mise.toml`'s `[env]` block (replacing `REPLACE_WITH_TURNSTILE_SITE_KEY`), commit, push. `wrangler secret put TURNSTILE_SECRET_KEY` for the secret half.
+2. **Cloudflare build command**: Workers & Pages → `mjrossi-portfolio-website` → Settings → Build → set Build command to `mise install && mise exec -- npm run build`. Without this, Cloudflare won't export `mise.toml`'s `[env]` block during the build and the site key won't reach Astro.
+3. **Buttondown account**: sign up, copy API key, `wrangler secret put BUTTONDOWN_API_KEY`. In Settings → Newsletter → RSS-to-email, add `https://mjrossi.com/blog/rss.xml`. New posts then auto-email; the publishing flow stays "write MDX, `git push`."
+4. **Rate limit (optional)**: Cloudflare → Security → WAF → add a rate-limit rule on `/api/subscribe` (e.g. 10 req/min/IP) as a layer above the in-handler honeypot + Turnstile check.

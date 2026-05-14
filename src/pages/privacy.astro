@@ -1,0 +1,63 @@
+---
+import Base from '../layouts/Base.astro';
+
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
+---
+
+<Base title="Privacy" description="What this site collects and who it shares with.">
+
+  <div class="page">
+    <div class="page-header">
+      <h1>Privacy</h1>
+      <p>A short, plain account of what this site collects and who it shares with.</p>
+    </div>
+
+    <section aria-labelledby="newsletter-heading">
+      <h2 id="newsletter-heading">Newsletter</h2>
+      <p>
+        If you subscribe via the form at the bottom of <a href="/blog">/blog</a>, your email
+        address is sent to <a href="https://buttondown.com" rel="noopener">Buttondown</a>,
+        which stores it and delivers new posts to you by email. I don't run my own
+        mailing infrastructure. Buttondown sends a confirmation email before adding you
+        to the list (double opt-in), and every email it sends includes a one-click
+        unsubscribe link. Buttondown's own privacy policy covers what they do with
+        subscriber data.
+      </p>
+      <p>
+        To delete your address, use the unsubscribe link in any email or write to
+        <a href="/api/contact">hello@mjrossi.com</a> and I'll remove you.
+      </p>
+    </section>
+
+    <section aria-labelledby="turnstile-heading">
+      <h2 id="turnstile-heading">Anti-spam</h2>
+      <p>
+        The signup form uses <a href="https://www.cloudflare.com/products/turnstile/" rel="noopener">Cloudflare Turnstile</a>
+        to block automated submissions. Turnstile is a CAPTCHA replacement that doesn't
+        set tracking cookies and is designed not to require user-identifying signals.
+        It runs only on the blog page where the form lives.
+      </p>
+    </section>
+
+    <section aria-labelledby="hosting-heading">
+      <h2 id="hosting-heading">Hosting and logs</h2>
+      <p>
+        This site is served by Cloudflare Workers. Cloudflare receives the standard
+        request metadata any web host receives (IP address, user agent, requested URL)
+        and applies its own DDoS and security protections. I don't run analytics,
+        third-party trackers, or advertising on the site. There are no cookies set by
+        this site.
+      </p>
+    </section>
+
+    <section aria-labelledby="changes-heading">
+      <h2 id="changes-heading">Changes</h2>
+      <p>
+        If this changes, it'll change here. Questions: <a href="/api/contact">hello@mjrossi.com</a>.
+      </p>
+    </section>
+
+  </div>
+
+</Base>

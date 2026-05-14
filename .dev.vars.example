@@ -1,0 +1,39 @@
+# Wrangler-runtime secrets for `wrangler dev` (used by `npm run preview` and
+# `npm run smoke`). Copy to .dev.vars (gitignored) and fill in real values.
+#
+# WHY THIS FILE EXISTS ALONGSIDE mise.local.toml
+# ───────────────────────────────────────────────
+# These are different things and do not overlap:
+#
+#   mise.local.toml  →  sets shell env vars     →  Astro reads at BUILD time
+#                                                  (PUBLIC_TURNSTILE_SITE_KEY)
+#
+#   .dev.vars        →  wrangler reads at start →  Worker reads at RUNTIME
+#                                                  via locals.runtime.env.*
+#                                                  (BUTTONDOWN_API_KEY,
+#                                                   TURNSTILE_SECRET_KEY)
+#
+# Each variable lives in exactly one file. Worker-runtime secrets are kept
+# out of shell env on purpose — only wrangler reads .dev.vars, so they
+# can't leak into other tools' process.env.
+#
+# In PRODUCTION, .dev.vars is not used at all. Real values are set with:
+#   wrangler secret put BUTTONDOWN_API_KEY
+#   wrangler secret put TURNSTILE_SECRET_KEY
+#
+# WHAT WORKS WITH THE DEFAULTS BELOW
+# ───────────────────────────────────
+# The defaults give you a working form for everything EXCEPT the actual
+# Buttondown call: form renders → Turnstile renders + always passes (test
+# secret) → /api/subscribe verifies token → Buttondown call returns 401
+# (the placeholder API key isn't real) → endpoint returns 502 to client.
+# That's enough to exercise the entire pipeline locally.
+#
+# To test the full happy path locally, replace BUTTONDOWN_API_KEY with a
+# real key from a free Buttondown account (Settings → Programming → API).
+#
+# Turnstile test keys (always pass / never block) are documented at:
+#   https://developers.cloudflare.com/turnstile/troubleshooting/testing/
+
+BUTTONDOWN_API_KEY=your-buttondown-api-key
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA

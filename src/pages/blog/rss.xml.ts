@@ -7,8 +7,8 @@ export async function GET(context: APIContext) {
   const site = context.site ?? new URL('https://mjrossi.com');
 
   return rss({
-    title: 'Matthew Rossi — Blog',
-    description: 'Writing on software, urban mobility, and getting around cities without a car.',
+    title: 'The Urbanist Lexicon',
+    description: 'A record of systems, movement, and the transition from bits to bricks.',
     site,
     items: posts.map((post) => ({
       title: post.data.title,

@@ -1,0 +1,185 @@
+/*
+  Buttondown email CUSTOM CSS — paste into Buttondown → Settings → Email design → Custom CSS.
+  ───────────────────────────────────────────────────────────────────────────────────────────
+
+  Pairs with: docs/buttondown-rss-template.md (the RSS-to-email automation's
+  template, which uses h1/h2/hr/small + inline <span class="…"> hooks).
+
+  Buttondown's "2005-era CSS" caveat (per their docs) — keep selectors
+  conservative, avoid grid/flex, lean on text-align/display:block/colors.
+  Buttondown inlines this CSS per-element at send time so it survives
+  clients that strip <style> blocks. The Custom CSS slot is global to the
+  account: it applies to ALL outgoing emails (regular broadcasts and
+  RSS-to-email both).
+
+  Source of truth lives here. Buttondown's dashboard is the copy that
+  actually serves emails. Drift is the operator's responsibility.
+
+  ─── Element vs class targeting ───
+  CSS below targets:
+
+    Tag-level (broad, applied wherever the element appears in the email):
+      body, a, h1, h1 a, hr, small
+
+    Class hooks (introduced inline by the Markdown template):
+      .masthead-ribbon             — small-caps "THE URBANIST LEXICON" kicker
+                                     at the top of the email card
+      .masthead-publication-accent — "LEXICON" portion (warm-amber accent),
+                                     used inside .masthead-ribbon
+      .post-dek                    — italic one-line summary under the title
+                                     (from frontmatter `description`)
+      .masthead-byline             — "By Matthew Rossi · mjrossi.com/blog"
+                                     under the article
+      .footer-colophon             — italic "Set in Fraunces…" line
+      .footer-meta                 — "You're receiving this because…" line
+
+  Caveat: Buttondown wraps its slot output in its own container classes.
+  Inspect a test email's source to see what classes wrap each section,
+  and tighten these rules if precision is needed (e.g. avoid styling the
+  post body's h1 with the masthead font — currently a non-issue because
+  the RSS-to-email template uses linked titles, not headed posts).
+
+  ─── Color tokens (hex from src/styles/global.css :root oklch) ───
+    --bg                  → #f8f4ec  (warm cream page bg)
+    --bg2                 → #ece2cf  (slightly darker surface)
+    --border              → #d6cdb8  (hairline divider)
+    --text                → #2a2520  (primary text)
+    --muted               → #807565  (secondary text)
+    --accent              → #8f5520  (link, action)
+    --accent-surname      → #c97d3e  (the "Rossi" highlight)
+    --accent-band         → #eed8b8  (masthead band — unused below; keep
+                                       palette docs intact for consistency)
+    --accent-band-border  → #d6b889  (band edge — same)
+    --accent-rule         → #c8a983  (hairline rule — used on hr)
+    --accent-tagline      → #9c6f3d  (italic tagline color)
+*/
+
+/* ──── Web fonts ────
+   Best-effort load of Fraunces / Inter / Source Serif 4 via Google Fonts.
+   Apple Mail and Gmail (web) honor `@import` in email CSS and will pick up
+   the proper typefaces. Outlook (desktop) and most mobile Gmail clients
+   strip `@import` silently and fall back to the next item in each
+   font-family stack (Georgia for serif, Inter/system for the ribbon and
+   byline). The fallbacks are designed to read well; this `@import` is a
+   bonus, not a dependency. Mirrors the import in docs/buttondown-web-custom.css. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap');
+
+/* ──── Body container ──── */
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #f8f4ec;
+  color: #2a2520;
+  font-family: 'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+a {
+  color: #8f5520;
+  text-decoration: underline;
+}
+
+a:hover {
+  color: #7a4a1a;
+}
+
+/* ──── Masthead ribbon — small-caps kicker at the top of the email card ──── */
+
+.masthead-ribbon {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #2a2520;
+  display: block;
+  margin: 0 0 18px;
+}
+
+.masthead-publication-accent {
+  color: #c97d3e;
+}
+
+/* ──── Article title (h1) + dek — the typographic lead inside the card ──── */
+
+h1 {
+  font-family: Fraunces, Georgia, 'Times New Roman', serif;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #2a2520;
+  margin: 0 0 10px;
+}
+
+/* The h1 wraps a link to the post (the entire title is the click target).
+   Strip the default underline so the big serif reads as a styled title,
+   not a link; keep the dark text color so it doesn't compete with body
+   links. Hover swap to accent for clients that support it. */
+h1 a {
+  color: #2a2520;
+  text-decoration: none;
+}
+
+h1 a:hover {
+  color: #8f5520;
+}
+
+.post-dek {
+  font-family: 'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.5;
+  color: #807565;
+  margin: 0 0 18px;
+}
+
+/* ──── Byline — small Inter line under the article ──── */
+
+.masthead-byline {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  display: block;
+  color: #807565;
+  margin: -6px 0 14px;
+}
+
+.masthead-byline a {
+  color: #807565;
+  text-decoration: underline;
+}
+
+/* ──── Horizontal rule — used by both header and footer Markdown ──── */
+
+hr {
+  border: 0;
+  border-top: 1px solid #c8a983;
+  margin: 18px 0;
+  height: 1px;
+}
+
+/* ──── Footer ──── */
+
+small {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 12px;
+  color: #807565;
+  line-height: 1.5;
+}
+
+.footer-colophon {
+  font-style: italic;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.footer-meta {
+  display: block;
+}
+
+.footer-meta a,
+.footer-colophon a {
+  color: #807565;
+  text-decoration: underline;
+}

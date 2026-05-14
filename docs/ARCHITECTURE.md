@@ -4,9 +4,9 @@ Reference for how mjrossi.com is built, deployed, and quality-checked. Read alon
 
 ## Rendering model
 
-Astro 6 with `@astrojs/cloudflare`, configured with `output: 'static'` (`astro.config.mjs`). Every page renders at build time except the on-demand routes (the prerender-opt-out HTML pages, which set `export const prerender = false` so the edition line stays current, and the endpoints under `src/pages/api/*`). The convention: **anything that doesn't render a page lives under `src/pages/api/*`** and shares the `src/lib/server.ts` helpers (security headers, env access, JSON parsing, standard error responses).
+Astro 6 with `@astrojs/cloudflare`, configured with `output: 'static'` (`astro.config.mjs`). Every page renders at build time except the routes under `src/pages/api/*` (and the prerender-opt-out HTML pages, which set `export const prerender = false` so the edition line stays current). The convention: **anything that doesn't render a page lives under `src/pages/api/*`** and shares the `src/lib/server.ts` helpers.
 
-The original example was `/api/contact` (moved from `/contact` when the `/api/*` namespace landed): it returns a 302 to `mailto:hello@mjrossi.com`, keeping the address out of the static HTML.
+The original example was `/api/contact` (was `/contact` before the `/api/*` convention landed): it returns a 302 to `mailto:hello@mjrossi.com`, keeping the address out of the static HTML.
 
 This shape exists because the alternatives don't fit:
 
@@ -33,21 +33,55 @@ Every HTML route sets `export const prerender = false` so it renders in the Clou
 
 `src/components/ContactLinks.astro` renders the four contact icons (GitHub, LinkedIn, `/api/contact` for email, Bluesky) as inline SVGs that inherit `currentColor`. It's rendered twice per page (in nav and footer) — the smoke test asserts both occurrences and that they share the `aria-label="Contact"` wrapper.
 
-## /api/* endpoints
+## Newsletter and `/api/*` endpoints
 
-Routes under `src/pages/api/*` are server-only — they don't render a page. They share `src/lib/server.ts` for plumbing:
+`src/pages/blog/index.astro` is the only route that renders `<NewsletterSignup />`, and the form is the only client-side JavaScript on the site. Submission goes through `/api/subscribe`, which verifies a Cloudflare Turnstile token server-side and then forwards to Buttondown's API with `type: 'unactivated'` to trigger double opt-in. Buttondown polls `/blog/rss.xml` and sends new posts automatically — the publishing flow stays "write MDX, `git push`."
 
-- `securityHeaders` — `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow`. Every endpoint applies this constant rather than re-inlining headers.
-- `getEnv(locals)` — typed accessor for `locals.runtime.env` (the Cloudflare Workers binding namespace). Throws if the runtime isn't available (i.e., the route is misconfigured as prerendered).
-- `parseJson(request, { maxBytes })` — content-type gate, size cap, JSON parse with typed `ParseJsonResult<T>` returns. Reject paths return a Response; accept paths return parsed data.
-- `jsonOk(body)`, `jsonError(status, code)`, `methodNotAllowed(allow)` — Response constructors with consistent shape and the security headers above.
+```
+Reader → /blog (on-demand HTML) → fills form
+       → POST /api/subscribe (on-demand Worker route)
+              ├─ verify Turnstile via siteverify (server-side)
+              └─ forward to Buttondown (double opt-in)
+       ← 200 → "Check your inbox to confirm"
+Buttondown → polls /blog/rss.xml → emails new posts
+```
 
-Adding a third endpoint means adding to `src/lib/server.ts` if a helper is missing, not re-inlining headers per file. `src/env.d.ts` types the `Env` interface so endpoint code gets autocomplete on `env.X`.
+`src/lib/server.ts` is the single source of truth for endpoint plumbing — `securityHeaders` (`Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow`), `getEnv(locals)`, `parseJson()`, `jsonOk()`, `jsonError()`, `methodNotAllowed()`. Both `/api/contact` and `/api/subscribe` import from here; adding a third endpoint means adding to this module, not re-inlining headers.
+
+**Secrets and env vars:**
+
+| Variable | Where | Source (single, across all environments) |
+|---|---|---|
+| `PUBLIC_TURNSTILE_SITE_KEY` | Astro build (`import.meta.env`) | `mise.toml` `[env]` (committed). The real production site key is checked into the repo because it's public by design (Turnstile renders it into HTML on /blog). `mise.development.toml` and `mise.ci.toml` both override with the always-passes test key (when `MISE_ENV=development` locally or `MISE_ENV=ci` in CI). `mise.local.toml` (gitignored) can override anything for machine-specific testing. |
+| `BUTTONDOWN_API_KEY` | Worker runtime (`locals.runtime.env`) | `wrangler secret put BUTTONDOWN_API_KEY` (production). `.dev.vars` (local). Not needed in CI — smoke runs sad paths only. |
+| `TURNSTILE_SECRET_KEY` | Worker runtime (`locals.runtime.env`) | `wrangler secret put TURNSTILE_SECRET_KEY` (production). `.dev.vars` (local). Not needed in CI. |
+
+**Cloudflare Workers Builds reads `mise.toml`'s `[tools]` automatically** (which is how Node 22 gets picked up). It does **not** auto-activate `[env]`. To expose `[env]` to `npm run build`, the dashboard's **Build command** must be set to `mise install && mise exec -- npm run build` (rather than the default `npm run build`). With that change, mise activates during the build and the production `PUBLIC_TURNSTILE_SITE_KEY` from `mise.toml` reaches Astro.
+
+The split between mise and wrangler is by **layer**, not by convenience:
+
+- **mise → shell env → build time.** mise's `[env]` table populates the shell's environment variables. Astro/Vite reads them via `process.env` / `import.meta.env` while building static HTML. This layer is for things that need to exist before the worker runs — `PUBLIC_*` vars, tool config, language version.
+- **wrangler → `.dev.vars` → worker runtime.** Wrangler dev reads `.dev.vars` at startup and injects the values into the Worker's `env` binding. They never reach shell env, the browser bundle, or any other tool's `process.env`. In production the same binding is populated by `wrangler secret put` (encrypted at rest in Cloudflare's secret store) — `.dev.vars` is local-only.
+
+No variable appears in both files; each layer reads its own source; the only thing the layers share is the Worker's `env` interface (which mise has no business writing to and wrangler has no business reading shell env for). Keeping runtime secrets out of shell env is the defense-in-depth boundary — only wrangler should see them, not every npm script in the tree. `NewsletterSignup.astro` gracefully omits the form (with a `console.error` to Worker observability) if `PUBLIC_TURNSTILE_SITE_KEY` is missing — keeps the rest of `/blog` rendering for visitors; the endpoint returns `500 { error: 'misconfigured' }` if either runtime secret is missing.
+
+The local files (`mise.local.toml`, `.dev.vars`) are gitignored with committed `.example` siblings. `mise.ci.toml` is itself committed because its values are publicly documented Turnstile test keys.
+
+**CI uses `jdx/mise-action`** in `.github/workflows/build.yml`, which handles both the Node 22 install (from `mise.toml`) and the `MISE_ENV=ci` env-var export (from `mise.ci.toml`). CI doesn't need wrangler runtime secrets at all — smoke's POST assertions all exit before `getEnv()` is reached.
+
+**Preview deploys share production runtime secrets.** Cloudflare Workers Builds deploys PR branches to per-branch URLs against the same worker, with the same `wrangler secret put` values as production. Subscriptions via a preview URL therefore land in the production Buttondown account. Acceptable for a personal site (preview URLs are `noindex`'d and traffic is tiny); `wrangler.jsonc` carries a commented scaffold showing how to isolate preview into its own environment via `[env.preview]` + `wrangler secret put --env preview` + a conditional Cloudflare Builds deploy command if the trade-off ever changes.
+
+**CSP exception:** the Content Security Policy allows `https://challenges.cloudflare.com` for `script-src`, `connect-src`, and `frame-src` because Turnstile requires it. The allowlist is global, but the browser only fetches Turnstile where a `<script src>` exists — i.e., `/blog`. Smoke asserts the form (and its Turnstile script tag) is present on `/blog` and absent on `/` as a regression guard against accidental lifts into shared chrome.
+
+**Where the CSP lives.** `src/middleware.ts` sets `Content-Security-Policy` on every HTML response — that's the source of truth for what browsers actually see on `/`, `/blog`, etc. `public/_headers` carries the same policy for static asset responses (CSS, fonts, images, the `/scripts/newsletter.js` helper) served by the Cloudflare ASSETS binding. We have to maintain both because Workers-with-Static-Assets routes on-demand requests through the Worker (bypassing `_headers`) and static-asset requests directly through the binding (which honors `_headers`). Smoke checks the CSP header on `/blog`'s on-demand response so the two can't silently drift.
+
+**Why the newsletter submit handler lives in `public/scripts/`.** It's the only client-side JS on the site. Astro's bundler can inline `<script>` block contents into on-demand HTML responses (variable behavior under the Cloudflare adapter), which would force us to relax `script-src` with `'unsafe-inline'` or per-page hashes. Shipping the handler as a static asset under `public/scripts/newsletter.js` sidesteps that: the asset loads via the ASSETS binding, satisfies `script-src 'self'`, and is the one file that needs to stay vanilla JS (Vite doesn't process it).
+
+**Turnstile test keys** are documented at <https://developers.cloudflare.com/turnstile/troubleshooting/testing/> and pre-filled in `.dev.vars.example` / `mise.local.toml.example` for local development. CI does not need any of these — the smoke test only runs sad paths.
 
 ## Public assets and security
 
-- `src/middleware.ts` — sets `Content-Security-Policy` on every HTML response. `public/_headers` covers static asset responses served by the Cloudflare ASSETS binding, but on-demand routes (every HTML page in this site) generate their responses through the Worker and bypass `_headers`. The middleware closes that gap with the same CSP value. The two must be kept in sync.
-- `public/_headers` — applies HSTS, a strict CSP (`default-src 'none'`, no `script-src` because the site has no JS), `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and a Permissions-Policy that disables every sensitive feature. The CSP includes `connect-src 'self'` so Lighthouse's robots.txt fetch doesn't fail (commit `3917ffa`). Smoke asserts a CSP header is present on `/blog` to guard against the middleware silently regressing.
+- `public/_headers` — applies HSTS, a strict CSP (`default-src 'none'`, no `script-src` because the site has no JS), `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and a Permissions-Policy that disables every sensitive feature. The CSP includes `connect-src 'self'` so Lighthouse's robots.txt fetch doesn't fail (commit `3917ffa`).
 - `public/.assetsignore` — keeps the worker artifacts out of the static asset binding.
 - `public/robots.txt` — points at `/sitemap-index.xml`. The sitemap is generated by `@astrojs/sitemap` with a filter that excludes `/projects` (it's a `noindex` placeholder, not real content).
 - `public/og.png` — 1200×630 social card. Regenerate with `node scripts/make-og.mjs public/og.png` (uses `sharp` + an inline SVG that mirrors the Broadsheet masthead, then composites the avatar and tiled noise overlay). The card intentionally has no edition line so it doesn't drift between regenerations.
@@ -66,7 +100,7 @@ where `<branch-alias>` is the lowercased branch name with non-alphanumerics coll
 
 ## CI workflows
 
-- `build.yml` — runs on PRs and pushes to `main`. Uses `jdx/mise-action@v3` to install the Node version pinned in `mise.toml`, then `npm ci`, `npm run build`, `npm run smoke`.
+- `build.yml` — runs on PRs and pushes to `main`. `npm ci`, `npm run build`, `npm run smoke`.
 - `lighthouse.yml` — fires on `check_suite` completion when the Cloudflare Workers Builds check finishes (and on `workflow_dispatch` for ad-hoc audits of any URL). Audits four routes (`/`, `/work`, `/education`, `/urban-mobility`). `/projects` is excluded because it's `noindex` and would fail SEO by design.
   - `main` uses `.github/lighthouserc.main.json` — all four categories enforce as `error` (perf/SEO at minScore 0.9, a11y/best-practices at 1.0).
   - PR previews use `.github/lighthouserc.json` — perf and SEO drop to `warn` because Cloudflare preview URLs ship `x-robots-tag: noindex` (kills SEO score) and shared CI runners produce high TBT variance under simulated throttling. A11y and best-practices stay strict.

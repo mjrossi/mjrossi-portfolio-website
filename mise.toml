@@ -1,2 +1,5 @@
 [tools]
 node = "22"
+
+[env]
+PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAADNX41uDNZXvcMTg"

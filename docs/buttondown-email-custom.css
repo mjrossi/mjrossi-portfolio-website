@@ -19,13 +19,17 @@
   CSS below targets:
 
     Tag-level (broad, applied wherever the element appears in the email):
-      body, a, h1, h2, hr, small
+      body, a, h1, h1 a, hr, small
 
     Class hooks (introduced inline by the Markdown template):
-      .masthead-publication        — "THE URBANIST" portion of the periodical name
-      .masthead-publication-accent — "LEXICON" portion (warm-amber accent)
-      .masthead-tagline            — italic subtitle ("A record of systems…")
-      .masthead-byline             — "By Matthew Rossi · mjrossi.com/blog" under the post link
+      .masthead-ribbon             — small-caps "THE URBANIST LEXICON" kicker
+                                     at the top of the email card
+      .masthead-publication-accent — "LEXICON" portion (warm-amber accent),
+                                     used inside .masthead-ribbon
+      .post-dek                    — italic one-line summary under the title
+                                     (from frontmatter `description`)
+      .masthead-byline             — "By Matthew Rossi · mjrossi.com/blog"
+                                     under the article
       .footer-colophon             — italic "Set in Fraunces…" line
       .footer-meta                 — "You're receiving this because…" line
 
@@ -71,41 +75,58 @@ a:hover {
   color: #7a4a1a;
 }
 
-/* ──── Masthead — h1 is the periodical name (THE URBANIST LEXICON), h2 is the subtitle ──── */
+/* ──── Masthead ribbon — small-caps kicker at the top of the email card ──── */
 
-h1 {
-  font-family: Fraunces, Georgia, 'Times New Roman', serif;
-  font-size: 34px;
+.masthead-ribbon {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: #2a2520;
-  margin: 0 0 12px;
-}
-
-h2 {
-  font-family: Fraunces, Georgia, 'Times New Roman', serif;
-  font-style: italic;
-  font-size: 16px;
-  font-weight: 400;
-  line-height: 1.35;
-  color: #9c6f3d;
-  margin: 0 0 4px;
-}
-
-.masthead-publication {
-  color: #2a2520;
+  display: block;
+  margin: 0 0 18px;
 }
 
 .masthead-publication-accent {
   color: #c97d3e;
 }
 
-.masthead-tagline {
+/* ──── Article title (h1) + dek — the typographic lead inside the card ──── */
+
+h1 {
   font-family: Fraunces, Georgia, 'Times New Roman', serif;
-  font-style: italic;
-  color: #9c6f3d;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #2a2520;
+  margin: 0 0 10px;
 }
+
+/* The h1 wraps a link to the post (the entire title is the click target).
+   Strip the default underline so the big serif reads as a styled title,
+   not a link; keep the dark text color so it doesn't compete with body
+   links. Hover swap to accent for clients that support it. */
+h1 a {
+  color: #2a2520;
+  text-decoration: none;
+}
+
+h1 a:hover {
+  color: #8f5520;
+}
+
+.post-dek {
+  font-family: 'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.5;
+  color: #807565;
+  margin: 0 0 18px;
+}
+
+/* ──── Byline — small Inter line under the article ──── */
 
 .masthead-byline {
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;

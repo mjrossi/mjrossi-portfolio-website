@@ -5,9 +5,9 @@
 
   NOTE: This is NOT the same as the regular "Email design" Header/Footer slots.
   Buttondown's RSS-to-email automation has its own dedicated template setting,
-  with different available variables ({{ item.title }} and {{ item.url }} for
-  each entry pulled from the feed). Pasting this into the regular Email design
-  slots won't produce the right output.
+  with different available variables ({{ item.title }}, {{ item.url }}, and
+  {{ item.description }} for each entry pulled from the feed). Pasting this
+  into the regular Email design slots won't produce the right output.
 
   Pairs with: docs/buttondown-email-custom.css (paste into Settings → Email
   design → Custom CSS — that slot's CSS does carry over and style this
@@ -27,31 +27,32 @@
   a glance in a busy inbox; the post title alone is sometimes ambiguous.
 
   ─── Template variables ───
-  {{ item.title }}        — title of an RSS entry being mailed
-  {{ item.url }}          — canonical URL of the entry
-  {{ unsubscribe_url }}   — Buttondown's one-click unsubscribe link
+  {{ item.title }}         — title of an RSS entry being mailed
+  {{ item.url }}           — canonical URL of the entry
+  {{ item.description }}   — frontmatter "description" field (the one-line
+                             summary required by src/content.config.ts; also
+                             used on the blog list page and OG cards)
+  {{ unsubscribe_url }}    — Buttondown's one-click unsubscribe link
 
   ─── Design intent ───
-  The blog is a periodical within the site. Site identity is "Matthew Rossi"
-  (the author, masthead of every page); blog identity is "The Urbanist
-  Lexicon" (the periodical). Emails lead with the periodical — h1 is the
-  publication name, h2 is the periodical tagline — and the author drops to
-  a byline below the post link. Body is a simple linked title; visitors
-  click through to read on the site, where full broadsheet typography lives.
-  Email is the push notification, not the reading surface.
+  Magazine layout. The article — post title + dek — gets the typographic
+  lead inside the white card. The periodical name lives in a small-caps
+  ribbon above it (kicker), parallel weight to Buttondown's auto-injected
+  "THE URBANIST LEXICON · <DATE>" line just above the card, so the brand
+  appears without dominating. Author drops to a small byline below the
+  article. Email is the push notification + an inbox-readable dek — the
+  full post lives on the site, where broadsheet typography belongs.
 -->
 
 ============================================================================
 PASTE EVERYTHING BELOW THIS LINE INTO BUTTONDOWN'S RSS-TO-EMAIL TEMPLATE:
 ============================================================================
 
-# <span class="masthead-publication">THE URBANIST <span class="masthead-publication-accent">LEXICON</span></span>
+<small class="masthead-ribbon">THE URBANIST <span class="masthead-publication-accent">LEXICON</span></small>
 
-## <span class="masthead-tagline">A record of systems, movement, and the transition from bits to bricks.</span>
+# [{{ item.title }}]({{ item.url }})
 
----
-
-[{{ item.title }}]({{ item.url }})
+<p class="post-dek">{{ item.description }}</p>
 
 ---
 

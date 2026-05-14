@@ -114,20 +114,15 @@ For Cloudflare Workers Builds to pick up `mise.toml`'s `[env]` block, the **buil
 
 ### Buttondown email design (operator-side)
 
-The email design lives in three files in `docs/` plus one inline HTML snippet for the global Email design Header slot. Source of truth is the repo; Buttondown's dashboard is the copy that actually serves emails. Re-paste when these change:
+The email design lives in three files in `docs/` — source of truth is the repo; Buttondown's dashboard is the copy that actually serves emails. Re-paste when these change:
 
-| File / snippet | Buttondown slot |
+| File | Buttondown slot |
 |---|---|
 | `docs/buttondown-rss-template.md` | RSS-to-email automation → **Template** field |
 | `docs/buttondown-email-custom.css` | Email design → **Custom CSS** |
 | `docs/buttondown-web-custom.css` | Web design → **Custom CSS** (Buttondown's hosted archive page) |
-| Inline below | Email design → **Header** (toggle on, then paste) |
 
-The Email design Header slot carries the small-caps "THE URBANIST LEXICON" ribbon globally, so every email — broadcast or RSS-to-email — shows the masthead. Paste this exact HTML into the Header slot (Custom CSS provides the typography):
-
-```html
-<small class="masthead-ribbon">THE URBANIST <span class="masthead-publication-accent">LEXICON</span></small>
-```
+The Email design **Header** slot is text-only (inline HTML is emitted as literal characters), so the masthead ribbon — which needs a `<span>` for the two-tone accent on "LEXICON" — lives in the RSS template body, not the Header slot. Leave Header toggled off. Free-form broadcast emails therefore don't carry the masthead; RSS-to-email mailings do. RSS-to-email is the primary surface, so this is acceptable.
 
 The RSS-to-email automation also has a separate **Subject** field (not in the repo, set in the dashboard). Use:
 

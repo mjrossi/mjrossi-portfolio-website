@@ -6,7 +6,7 @@ import cloudflare from "@astrojs/cloudflare";
 
 export default defineConfig({
   site: 'https://mjrossi.com',
-  output: 'static',
+  output: 'server',
   integrations: [
     mdx(),
     sitemap(),

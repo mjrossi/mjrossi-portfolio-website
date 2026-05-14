@@ -1,0 +1,15 @@
+---
+interface Props {
+  tags: string[];
+}
+
+const { tags } = Astro.props;
+---
+
+{tags.length > 0 && (
+  <p class="post-tags">
+    {tags.map((tag) => (
+      <a href={`/blog/tag/${tag}/`} class="tag-chip">{tag}</a>
+    ))}
+  </p>
+)}

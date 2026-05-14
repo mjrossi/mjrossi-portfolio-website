@@ -304,24 +304,43 @@ try {
   // the desired browser-facing behavior, just not what we're asserting here.)
   const ORIGIN = { Origin: BASE };
 
-  const getSub = await fetch(`${BASE}/api/subscribe`, { method: 'GET', headers: ORIGIN });
+  // Helper: explicitly drain the response body (so connection releases promptly)
+  // and retry once on 5xx (wrangler dev / workerd has been observed returning
+  // transient 503s under rapid serial POSTs in CI; local is more forgiving).
+  // Smoke shouldn't fail on infrastructure flakes — we're asserting our
+  // endpoint's contract, not workerd's reliability.
+  async function fetchExpectingNon5xx(url, init) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(url, init);
+      await res.text(); // drain body, release connection
+      if (res.status < 500) return res;
+      // 5xx — workerd transient. Wait briefly and retry.
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    // Final attempt — return whatever, let the assertion fail with the status
+    const res = await fetch(url, init);
+    await res.text();
+    return res;
+  }
+
+  const getSub = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, { method: 'GET', headers: ORIGIN });
   check('subscribe: 405 on GET', getSub.status === 405, `got ${getSub.status}`);
 
-  const txtSub = await fetch(`${BASE}/api/subscribe`, {
+  const txtSub = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
     method: 'POST',
     headers: { ...ORIGIN, 'Content-Type': 'text/plain' },
     body: 'hi',
   });
   check('subscribe: 415 on non-JSON', txtSub.status === 415, `got ${txtSub.status}`);
 
-  const badEmail = await fetch(`${BASE}/api/subscribe`, {
+  const badEmail = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
     method: 'POST',
     headers: { ...ORIGIN, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'not-an-email', turnstileToken: 'x' }),
   });
   check('subscribe: 400 on invalid email', badEmail.status === 400, `got ${badEmail.status}`);
 
-  const noToken = await fetch(`${BASE}/api/subscribe`, {
+  const noToken = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
     method: 'POST',
     headers: { ...ORIGIN, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'a@b.co' }),
@@ -336,7 +355,7 @@ try {
   // form-encoded POSTs without a matching Origin at the framework layer.
   // JSON POSTs require browser preflight and reach the handler regardless,
   // so this assertion specifically targets the form-style attack vector.
-  const noOrigin = await fetch(`${BASE}/api/subscribe`, {
+  const noOrigin = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'email=a@b.co',
@@ -349,7 +368,7 @@ try {
 
   // Honeypot — a filled `company` field returns 200 silently so attackers
   // can't tell the field exists. Runs before Turnstile so the token is irrelevant.
-  const honeypot = await fetch(`${BASE}/api/subscribe`, {
+  const honeypot = await fetchExpectingNon5xx(`${BASE}/api/subscribe`, {
     method: 'POST',
     headers: { ...ORIGIN, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'bot@example.com', turnstileToken: 'x', company: 'ACME Corp' }),

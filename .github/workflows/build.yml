@@ -23,24 +23,5 @@ jobs:
         # format. Single source of truth = mise.ci.toml + mise.toml.
         run: mise env --shell=bash | sed -E 's/^export ([^=]+)="?([^"]*)"?$/\1=\2/' >> "$GITHUB_ENV"
       - run: npm ci
-      - name: Diagnose env
-        run: |
-          echo "=== node version ==="
-          node --version
-          echo "=== PUBLIC_TURNSTILE_SITE_KEY ==="
-          echo "[${PUBLIC_TURNSTILE_SITE_KEY:-NOT_SET}]"
-          echo "=== mise files in repo ==="
-          ls -la mise* 2>&1 || true
-          echo "=== mise environment (shell=bash) ==="
-          mise env --shell=bash 2>&1 || echo "(mise not on PATH or mise env failed)"
       - run: npm run build
-      - name: Diagnose dist
-        if: always()
-        run: |
-          echo "=== dist tree ==="
-          ls -la dist/ 2>&1 || true
-          echo "=== dist/client ==="
-          ls -la dist/client/ 2>&1 | head -20 || true
-          echo "=== dist/server (chunks) ==="
-          ls -la dist/server/chunks/ 2>&1 | head -10 || true
       - run: npm run smoke

@@ -54,6 +54,16 @@
     --accent-tagline      → #9c6f3d  (italic tagline color)
 */
 
+/* ──── Web fonts ────
+   Best-effort load of Fraunces / Inter / Source Serif 4 via Google Fonts.
+   Apple Mail and Gmail (web) honor `@import` in email CSS and will pick up
+   the proper typefaces. Outlook (desktop) and most mobile Gmail clients
+   strip `@import` silently and fall back to the next item in each
+   font-family stack (Georgia for serif, Inter/system for the ribbon and
+   byline). The fallbacks are designed to read well; this `@import` is a
+   bonus, not a dependency. Mirrors the import in docs/buttondown-web-custom.css. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap');
+
 /* ──── Body container ──── */
 
 body {

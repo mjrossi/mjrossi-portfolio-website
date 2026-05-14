@@ -26,6 +26,14 @@
   Prefixing with the periodical name helps subscribers identify the email at
   a glance in a busy inbox; the post title alone is sometimes ambiguous.
 
+  ─── Email design Header slot (global, applies to every email) ───
+  The small-caps "THE URBANIST LEXICON" ribbon lives in Buttondown's
+  Email design → Header slot — see CLAUDE.md "Buttondown email design
+  (operator-side)" for the exact HTML. The Header slot appears above the
+  body of every email (broadcast or RSS), so the masthead is consistent
+  across surfaces. Don't duplicate the ribbon in this template body — it
+  would render twice.
+
   ─── Template variables ───
   {{ item.title }}         — title of an RSS entry being mailed
   {{ item.url }}           — canonical URL of the entry
@@ -36,19 +44,19 @@
 
   ─── Design intent ───
   Magazine layout. The article — post title + dek — gets the typographic
-  lead inside the white card. The periodical name lives in a small-caps
-  ribbon above it (kicker), parallel weight to Buttondown's auto-injected
-  "THE URBANIST LEXICON · <DATE>" line just above the card, so the brand
-  appears without dominating. Author drops to a small byline below the
-  article. Email is the push notification + an inbox-readable dek — the
-  full post lives on the site, where broadsheet typography belongs.
+  lead inside the white card. The periodical name appears once via the
+  Email design Header slot (above the card) so every email format
+  (broadcast or RSS) shows the same masthead. Buttondown's auto-injected
+  "THE URBANIST LEXICON · <DATE>" stamp sits between the Header slot and
+  the card and acts as the issue/date line. Author drops to a small byline
+  below the article. Email is the push notification + an inbox-readable
+  dek — the full post lives on the site, where broadsheet typography
+  belongs.
 -->
 
 ============================================================================
 PASTE EVERYTHING BELOW THIS LINE INTO BUTTONDOWN'S RSS-TO-EMAIL TEMPLATE:
 ============================================================================
-
-<small class="masthead-ribbon">THE URBANIST <span class="masthead-publication-accent">LEXICON</span></small>
 
 # [{{ item.title }}]({{ item.url }})
 

@@ -64,30 +64,29 @@
         return;
       }
       const data = await res.json().catch(() => ({}));
-      // Map server error codes to specific user-facing messages so the next
-      // failure mode is debuggable from the UI without Worker logs.
+      // Three buckets: (A) things the user can fix, (B) transient infra
+      // where naming the flake aids the retry decision, (C) "should never
+      // happen" — operator misconfig (turnstile_secret_missing,
+      // buttondown_key_missing) or bot/curl probes (payload_too_large,
+      // unsupported_media_type, invalid_json, body_read_failed). Bucket C
+      // collapses to one fallback with a recovery action; the server still
+      // emits each code distinctly so worker logs retain the diagnostic
+      // detail.
+      const fallback =
+        "Something's off on our end. Please email hello@mjrossi.com and I'll add you manually.";
       const messages = {
+        // (A) user-fixable
         invalid_email: 'That email address looks off.',
         missing_turnstile_token: 'Please complete the spam check.',
         turnstile_failed: 'Spam check failed. Try again.',
+        // (B) transient infra — naming where the flake is helps the retry decision
         rate_limited: 'Subscription temporarily rate-limited. Try again in a few minutes.',
         upstream: 'Our email provider returned an error. Try again shortly.',
         upstream_unreachable:
           "Couldn't reach our email provider. Check your connection and try again.",
         turnstile_unreachable: "Couldn't reach the spam-check service. Try again shortly.",
-        // Configuration errors — name the specific binding so the operator
-        // (most likely the site author) can fix without checking Worker logs.
-        runtime_unavailable: 'Worker runtime unavailable. This is a deploy bug — please email me.',
-        turnstile_secret_missing:
-          "Server config: TURNSTILE_SECRET_KEY isn't set on the Worker. Please email me.",
-        buttondown_key_missing:
-          "Server config: BUTTONDOWN_API_KEY isn't set on the Worker. Please email me.",
-        payload_too_large: 'Submission was unexpectedly large. Try again or email me directly.',
-        unsupported_media_type: "Browser sent the wrong content type. That's a bug — please email me.",
-        invalid_json: "Couldn't read the submission. Try again or email me directly.",
-        body_read_failed: "Couldn't read the submission. Try again or email me directly.",
       };
-      showError(messages[data.error] ?? 'Something went wrong. Try again in a minute.');
+      showError(messages[data.error] ?? fallback);
     } catch {
       showError('Network error. Please try again.');
     }

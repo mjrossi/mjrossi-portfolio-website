@@ -58,6 +58,8 @@ Static page copy lives in the page files under `src/pages/`. Pages in order: `/`
 
 ## Blog
 
+The blog is a **periodical within the site**. Site identity is "Matthew Rossi" (the author, masthead of every page); blog identity is "The Urbanist Lexicon" (the periodical, set on `/blog` and `/blog/rss.xml` and in the RSS-to-email mailings). Keep them distinct: the site masthead is author-led, the blog header and emails are periodical-led with the author dropping to a byline.
+
 Driven by Astro Content Collections + MDX. Posts are markdown, published via `git push` — no database, no runtime.
 
 - `src/content.config.ts` — Zod schema for post frontmatter (single source of truth)
@@ -103,12 +105,30 @@ The blog index has an email signup form (`src/components/NewsletterSignup.astro`
 | Variable | Where | Source (all environments) |
 |---|---|---|
 | `PUBLIC_TURNSTILE_SITE_KEY` | Astro build (`import.meta.env`) — baked into HTML | `mise.toml` `[env]` (commits the real production site key — it's public by design). `mise.development.toml` overrides with the always-passes test key when `MISE_ENV=development` (recommended local shell setting). `mise.ci.toml` does the same when `MISE_ENV=ci` (set in `build.yml`). `mise.local.toml` (gitignored) can override anything for machine-specific testing. |
-| `BUTTONDOWN_API_KEY` | Worker runtime (`locals.runtime.env`) | `.dev.vars` locally; `wrangler secret put` in production |
-| `TURNSTILE_SECRET_KEY` | Worker runtime (`locals.runtime.env`) | `.dev.vars` locally; `wrangler secret put` in production |
+| `BUTTONDOWN_API_KEY` | Worker runtime (`import { env } from 'cloudflare:workers'`) | `.dev.vars` locally; `wrangler secret put` in production |
+| `TURNSTILE_SECRET_KEY` | Worker runtime (`import { env } from 'cloudflare:workers'`) | `.dev.vars` locally; `wrangler secret put` in production |
 
 For Cloudflare Workers Builds to pick up `mise.toml`'s `[env]` block, the **build command** in the dashboard must activate mise — `mise install && mise exec -- npm run build` (rather than the default `npm run build`). Cloudflare reads `[tools]` automatically but does not auto-activate `[env]`.
 
-`NewsletterSignup.astro` gracefully degrades when `PUBLIC_TURNSTILE_SITE_KEY` is missing — the form is omitted and a `console.error` is logged to Worker observability, but the rest of `/blog` renders normally. (Because `/blog` is on-demand, `import.meta.env.PUBLIC_*` is inlined at build time but the missing-value check only fires at request time. Throwing here would 500 the entire blog for visitors; logging-and-omitting is the right trade.) The endpoint returns `500 { error: 'misconfigured' }` if either runtime secret is missing.
+`NewsletterSignup.astro` gracefully degrades when `PUBLIC_TURNSTILE_SITE_KEY` is missing — the form is omitted and a `console.error` is logged to Worker observability, but the rest of `/blog` renders normally. (Because `/blog` is on-demand, `import.meta.env.PUBLIC_*` is inlined at build time but the missing-value check only fires at request time. Throwing here would 500 the entire blog for visitors; logging-and-omitting is the right trade.) If a runtime secret is missing, the endpoint returns `500 { error: 'turnstile_secret_missing' }` or `{ error: 'buttondown_key_missing' }` — names the specific binding so the operator can fix without checking Worker logs.
+
+### Buttondown email design (operator-side)
+
+The email design lives in three files in `docs/` — source of truth is the repo; Buttondown's dashboard is the copy that actually serves emails. Re-paste when these change:
+
+| File | Buttondown slot |
+|---|---|
+| `docs/buttondown-rss-template.md` | RSS-to-email automation → **Template** field |
+| `docs/buttondown-email-custom.css` | Email design → **Custom CSS** |
+| `docs/buttondown-web-custom.css` | Web design → **Custom CSS** (Buttondown's hosted archive page) |
+
+The RSS-to-email automation also has a separate **Subject** field (not in the repo, set in the dashboard). Use:
+
+```
+The Urbanist Lexicon · {{ item.title }}
+```
+
+Prefixing with the periodical name helps subscribers identify the email in a busy inbox.
 
 **mise is the single source of truth for shell-level vars.** `mise.toml` pins Node 22 and commits the production `PUBLIC_TURNSTILE_SITE_KEY` (public by design). Two committed overrides switch in the always-passes Turnstile test key under specific contexts: `mise.development.toml` (when `MISE_ENV=development`, the recommended local-dev default) and `mise.ci.toml` (when `MISE_ENV=ci`, set in `.github/workflows/build.yml`). `mise.local.toml` (gitignored) remains available for machine-specific overrides on top of those. `jdx/mise-action` exports `[env]` to `GITHUB_ENV` so subsequent steps see the values. Cloudflare Workers Builds picks up `mise.toml` via the build command (`mise install && mise exec -- npm run build`).
 

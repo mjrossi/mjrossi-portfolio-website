@@ -22,11 +22,12 @@
       body, a, h1, h2, hr, small
 
     Class hooks (introduced inline by the Markdown template):
-      .masthead-mj          — "MJ" portion of the writer brand
-      .masthead-surname     — "ROSSI" portion (warm-amber accent)
-      .masthead-tagline     — italic subtitle ("A record of systems…")
-      .footer-colophon      — italic "Set in Fraunces…" line
-      .footer-meta          — "You're receiving this because…" line
+      .masthead-publication        — "THE URBANIST" portion of the periodical name
+      .masthead-publication-accent — "LEXICON" portion (warm-amber accent)
+      .masthead-tagline            — italic subtitle ("A record of systems…")
+      .masthead-byline             — "By Matthew Rossi · mjrossi.com/blog" under the post link
+      .footer-colophon             — italic "Set in Fraunces…" line
+      .footer-meta                 — "You're receiving this because…" line
 
   Caveat: Buttondown wraps its slot output in its own container classes.
   Inspect a test email's source to see what classes wrap each section,
@@ -70,7 +71,7 @@ a:hover {
   color: #7a4a1a;
 }
 
-/* ──── Masthead — h1 is the writer brand (MJROSSI), h2 is the subtitle ──── */
+/* ──── Masthead — h1 is the periodical name (THE URBANIST LEXICON), h2 is the subtitle ──── */
 
 h1 {
   font-family: Fraunces, Georgia, 'Times New Roman', serif;
@@ -92,11 +93,11 @@ h2 {
   margin: 0 0 4px;
 }
 
-.masthead-mj {
+.masthead-publication {
   color: #2a2520;
 }
 
-.masthead-surname {
+.masthead-publication-accent {
   color: #c97d3e;
 }
 
@@ -104,6 +105,18 @@ h2 {
   font-family: Fraunces, Georgia, 'Times New Roman', serif;
   font-style: italic;
   color: #9c6f3d;
+}
+
+.masthead-byline {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  display: block;
+  color: #807565;
+  margin: -6px 0 14px;
+}
+
+.masthead-byline a {
+  color: #807565;
+  text-decoration: underline;
 }
 
 /* ──── Horizontal rule — used by both header and footer Markdown ──── */

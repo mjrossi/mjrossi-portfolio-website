@@ -21,7 +21,7 @@ const MAX_EMAIL_LEN = 254;
 
 export const GET: APIRoute = () => methodNotAllowed('POST');
 
-export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
+export const POST: APIRoute = async ({ request, clientAddress }) => {
   // 8 KB cap — Turnstile tokens alone can be 2-4 KB; plus email (max 254),
   // honeypot, and JSON overhead. 1 KB would have rejected real submissions
   // (which is what was happening — verified empirically when production tokens
@@ -45,15 +45,7 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
     return jsonError(400, 'missing_turnstile_token');
   }
 
-  let env: Env;
-  try {
-    env = getEnv(locals);
-  } catch {
-    // Cloudflare runtime not available — usually means the route was
-    // accidentally pre-rendered. Distinct from "binding empty" so it's
-    // debuggable from the client error.
-    return jsonError(500, 'runtime_unavailable');
-  }
+  const env = getEnv();
   if (!env.TURNSTILE_SECRET_KEY) {
     console.error('subscribe: TURNSTILE_SECRET_KEY is empty on the worker');
     return jsonError(500, 'turnstile_secret_missing');

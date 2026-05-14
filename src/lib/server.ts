@@ -1,12 +1,12 @@
-import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
 
 // Shared plumbing for /api/* endpoints. The pattern:
 //   1. import { securityHeaders, getEnv, parseJson, jsonError, jsonOk } from '../../lib/server'
 //   2. handler returns Responses constructed via the helpers so headers stay consistent
 //
-// All endpoints under src/pages/api/* are on-demand (export const prerender = false);
-// these helpers assume the Cloudflare runtime is available on locals.
+// Env access goes through `cloudflare:workers` (Astro v6 + @astrojs/cloudflare
+// 13 removed the old `Astro.locals.runtime.env` path; the adapter installs a
+// getter on that path that throws an explicit migration error).
 
 export const securityHeaders = {
   'Cache-Control': 'no-store',
@@ -14,13 +14,10 @@ export const securityHeaders = {
   'X-Robots-Tag': 'noindex, nofollow',
 } as const;
 
-// Astro v6 + @astrojs/cloudflare 13 removed `Astro.locals.runtime.env`; the
-// adapter installs a getter that throws an explicit migration error pointing
-// here. The replacement is `import { env } from 'cloudflare:workers'`, a
-// virtual binding resolved by Cloudflare's bundler. The `_locals` parameter
-// is kept (underscored) so existing call sites compile without churn — there
-// is no longer anything to read off it for env access.
-export function getEnv(_locals?: APIContext['locals']): Env {
+// Single seam for runtime env. Kept as a wrapper rather than re-exporting
+// `env` directly so the `as Env` cast lives in one place and we can swap to
+// `astro:env/server` (typed, schema-validated) later without touching callers.
+export function getEnv(): Env {
   return env as Env;
 }
 

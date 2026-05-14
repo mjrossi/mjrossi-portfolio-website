@@ -64,13 +64,19 @@
         return;
       }
       const data = await res.json().catch(() => ({}));
-      showError(
-        data.error === 'invalid_email'
-          ? 'That email address looks off.'
-          : data.error === 'turnstile_failed'
-            ? 'Spam check failed. Try again.'
-            : 'Something went wrong. Try again in a minute.',
-      );
+      // Map server error codes to specific user-facing messages so the next
+      // failure mode is debuggable from the UI without Worker logs.
+      const messages = {
+        invalid_email: 'That email address looks off.',
+        turnstile_failed: 'Spam check failed. Try again.',
+        rate_limited: 'Subscription temporarily rate-limited. Try again in a few minutes.',
+        upstream: 'Our email provider returned an error. Try again shortly.',
+        upstream_unreachable:
+          "Couldn't reach our email provider. Check your connection and try again.",
+        turnstile_unreachable: "Couldn't reach the spam-check service. Try again shortly.",
+        misconfigured: "The newsletter isn't set up correctly. Please email me directly.",
+      };
+      showError(messages[data.error] ?? 'Something went wrong. Try again in a minute.');
     } catch {
       showError('Network error. Please try again.');
     }

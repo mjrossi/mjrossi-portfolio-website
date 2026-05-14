@@ -41,6 +41,19 @@ if (!existsSync(DIST)) {
   process.exit(1);
 }
 
+// Guard against accidental removal of fetchWithRetry from src/lib/server.ts.
+// /api/subscribe relies on it for transient-503 resilience on the Turnstile
+// siteverify and Buttondown create-subscriber calls.
+const serverLibPath = resolve('src/lib/server.ts');
+if (existsSync(serverLibPath)) {
+  const serverLib = readFileSync(serverLibPath, 'utf8');
+  check(
+    'src/lib/server.ts: fetchWithRetry is exported',
+    /export\s+async\s+function\s+fetchWithRetry\b/.test(serverLib),
+    'fetchWithRetry export missing or renamed — /api/subscribe needs it for upstream retries',
+  );
+}
+
 for (const asset of [
   'noise.webp',
   'profile-avatar.webp',

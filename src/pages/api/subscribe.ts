@@ -5,6 +5,7 @@ import {
   jsonError,
   jsonOk,
   methodNotAllowed,
+  fetchWithRetry,
 } from '../../lib/server';
 
 export const prerender = false;
@@ -52,7 +53,7 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
   }
 
   try {
-    const verify = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    const verify = await fetchWithRetry('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -71,7 +72,7 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
   // type: 'unactivated' triggers Buttondown's double-opt-in confirmation email.
   let bd: Response;
   try {
-    bd = await fetch('https://api.buttondown.email/v1/subscribers', {
+    bd = await fetchWithRetry('https://api.buttondown.email/v1/subscribers', {
       method: 'POST',
       headers: {
         Authorization: `Token ${env.BUTTONDOWN_API_KEY}`,

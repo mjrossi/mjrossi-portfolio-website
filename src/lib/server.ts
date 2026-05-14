@@ -74,3 +74,39 @@ export function methodNotAllowed(allow: string): Response {
     headers: { ...securityHeaders, Allow: allow, 'Content-Type': 'application/json' },
   });
 }
+
+// Retry-with-backoff wrapper around fetch. Retries on transient failures
+// (network errors and 5xx responses); does NOT retry on 4xx (those are
+// deterministic client errors). Default budget: 3 total attempts (initial +
+// 2 retries) with 250ms, 500ms exponential backoff — adds at most ~750ms
+// to the rare path that genuinely needs retries; zero cost on the happy
+// path.
+//
+// Used by /api/subscribe for the two upstream calls (Turnstile siteverify,
+// Buttondown create-subscriber) where occasional 503s have been observed.
+export async function fetchWithRetry(
+  input: RequestInfo,
+  init: RequestInit,
+  opts: { retries?: number; baseMs?: number } = {},
+): Promise<Response> {
+  const retries = opts.retries ?? 2;
+  const baseMs = opts.baseMs ?? 250;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(input, init);
+      if (res.status >= 500 && attempt < retries) {
+        await new Promise((r) => setTimeout(r, baseMs * 2 ** attempt));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, baseMs * 2 ** attempt));
+        continue;
+      }
+    }
+  }
+  throw lastErr ?? new Error('fetchWithRetry: exhausted');
+}

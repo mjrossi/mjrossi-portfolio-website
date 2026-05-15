@@ -39,6 +39,7 @@ const readLabel = postReadingTime(post);
       {cover && (
         <figure class="post-cover">
           <Image src={cover.src} alt={cover.alt} loading="eager" />
+          {cover.caption && <figcaption>{cover.caption}</figcaption>}
         </figure>
       )}
     </header>

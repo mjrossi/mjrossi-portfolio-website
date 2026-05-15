@@ -43,6 +43,7 @@ const blog = defineCollection({
         .object({
           src: image(),
           alt: z.string(),
+          caption: z.string().optional(),
         })
         .optional(),
     }),

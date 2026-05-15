@@ -70,7 +70,8 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     return jsonError(502, 'turnstile_unreachable');
   }
 
-  // type: 'unactivated' triggers Buttondown's double-opt-in confirmation email.
+  // Buttondown's default behavior is double opt-in — the new subscriber gets
+  // a confirmation email and isn't active on the list until they click through.
   let bd: Response;
   try {
     bd = await fetchWithRetry('https://api.buttondown.email/v1/subscribers', {
@@ -79,7 +80,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         Authorization: `Token ${env.BUTTONDOWN_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email_address: email, type: 'unactivated' }),
+      body: JSON.stringify({ email_address: email, ip_address: clientAddress }),
     });
   } catch (err) {
     console.error('subscribe: buttondown fetch threw', err);
@@ -103,7 +104,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       return jsonOk({ ok: true });
     }
     console.error('subscribe: buttondown 400', bodyText);
-    return jsonError(400, 'invalid_email');
+    return jsonError(400, 'upstream_rejected');
   }
 
   if (bd.status === 429) {

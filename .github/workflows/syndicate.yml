@@ -1,0 +1,70 @@
+name: Syndicate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/content/blog/**'
+
+jobs:
+  bluesky:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Need both `before` and `after` SHAs reachable for the diff below.
+          # `fetch-depth: 0` is overkill for the common case but covers
+          # multi-commit pushes (e.g. force pushes, merge queue batches)
+          # without arithmetic on commit counts.
+          fetch-depth: 0
+
+      - name: Find added MDX posts in this push
+        id: detect
+        run: |
+          set -euo pipefail
+          before="${{ github.event.before }}"
+          after="${{ github.event.after }}"
+          # Initial push to a new branch ref has before=000...000 — nothing
+          # to diff against, and the first push of a repo isn't a realistic
+          # syndication trigger anyway.
+          if [[ "$before" =~ ^0+$ ]]; then
+            echo "Initial push (before=$before); skipping syndication."
+            echo "files=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # `--diff-filter=A` keeps additions only (modifications and
+          # renames are intentionally excluded — only new posts syndicate).
+          # Filter to .mdx in awk because git pathspecs don't recurse `**`
+          # by default.
+          files=$(git diff --name-status --diff-filter=A "$before" "$after" -- 'src/content/blog' \
+            | awk '$2 ~ /\.mdx?$/ {print $2}')
+          if [ -z "$files" ]; then
+            echo "No new blog posts in this push."
+          else
+            echo "New posts:"
+            echo "$files"
+          fi
+          {
+            echo "files<<EOF"
+            echo "$files"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.detect.outputs.files != ''
+        with:
+          node-version: '22'
+
+      - name: Post to Bluesky
+        if: steps.detect.outputs.files != ''
+        env:
+          BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            echo "::group::Syndicating $file"
+            node scripts/syndicate-bluesky.mjs "$file"
+            echo "::endgroup::"
+          done <<< "${{ steps.detect.outputs.files }}"

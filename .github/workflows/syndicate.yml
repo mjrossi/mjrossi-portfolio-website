@@ -6,11 +6,21 @@ on:
     paths:
       - 'src/content/blog/**'
 
+# Serialize runs so two rapid pushes can't post overlapping skeets for the
+# same (or different) new posts.
+concurrency:
+  group: syndicate-bluesky
+  cancel-in-progress: false
+
+# Default GITHUB_TOKEN scope is over-broad. This job only reads the repo.
+permissions:
+  contents: read
+
 jobs:
   bluesky:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           # Need both `before` and `after` SHAs reachable for the diff below.
           # `fetch-depth: 0` is overkill for the common case but covers
@@ -20,15 +30,16 @@ jobs:
 
       - name: Find added MDX posts in this push
         id: detect
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.event.after }}
         run: |
           set -euo pipefail
-          before="${{ github.event.before }}"
-          after="${{ github.event.after }}"
           # Initial push to a new branch ref has before=000...000 — nothing
           # to diff against, and the first push of a repo isn't a realistic
           # syndication trigger anyway.
-          if [[ "$before" =~ ^0+$ ]]; then
-            echo "Initial push (before=$before); skipping syndication."
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+            echo "Initial push (before=$BEFORE_SHA); skipping syndication."
             echo "files=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -36,7 +47,7 @@ jobs:
           # renames are intentionally excluded — only new posts syndicate).
           # Filter to .mdx in awk because git pathspecs don't recurse `**`
           # by default.
-          files=$(git diff --name-status --diff-filter=A "$before" "$after" -- 'src/content/blog' \
+          files=$(git diff --name-status --diff-filter=A "$BEFORE_SHA" "$AFTER_SHA" -- 'src/content/blog' \
             | awk '$2 ~ /\.mdx?$/ {print $2}')
           if [ -z "$files" ]; then
             echo "No new blog posts in this push."
@@ -50,7 +61,7 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         if: steps.detect.outputs.files != ''
         with:
           node-version: '22'
@@ -60,6 +71,9 @@ jobs:
         env:
           BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          # Pass via env (never expression-interpolated into the script body)
+          # so a filename containing shell metacharacters can't inject.
+          FILES: ${{ steps.detect.outputs.files }}
         run: |
           set -euo pipefail
           while IFS= read -r file; do
@@ -67,4 +81,4 @@ jobs:
             echo "::group::Syndicating $file"
             node scripts/syndicate-bluesky.mjs "$file"
             echo "::endgroup::"
-          done <<< "${{ steps.detect.outputs.files }}"
+          done <<< "$FILES"

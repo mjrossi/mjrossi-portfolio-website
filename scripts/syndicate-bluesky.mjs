@@ -20,6 +20,11 @@ const MAX_GRAPHEMES = 300;
 const READY_TIMEOUT_MS = 10 * 60 * 1000;
 const INITIAL_BACKOFF_MS = 10_000;
 const MAX_BACKOFF_MS = 60_000;
+// A persistent 404 almost always means the slug doesn't match what was
+// deployed (deriveSlug drift, missed branch, etc.) — bail fast instead of
+// burning the full 10-minute deadline. Cloudflare can briefly 404 right
+// after a deploy as the asset binding warms, so allow a few attempts.
+const MAX_404_ATTEMPTS = 5;
 
 function die(msg) {
   console.error(`syndicate-bluesky: ${msg}`);
@@ -49,8 +54,11 @@ function deriveSlug(path) {
   return slug;
 }
 
-// Zod (src/content.config.ts) already enforces the frontmatter shape at
-// build time, so we trust the format and only pull the two fields we need.
+// Minimal frontmatter reader: pulls the two scalar fields we need. Zod
+// (src/content.config.ts) enforces shape at *build* time, not when this
+// script runs, so an MDX file with a YAML block scalar (`>` or `|`) or
+// multi-line value would die() here. Current posts use single-line
+// scalars; harden this if that ever changes.
 function parseFrontmatter(source) {
   const m = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!m) die('no YAML frontmatter found');
@@ -104,7 +112,7 @@ function composeSkeet({ title, description, url }) {
   let skipDesc = false;
 
   if (graphemeLength(base) > MAX_GRAPHEMES) {
-    const overhead = titleLen + sepLen + sepLen + urlLen + 1;
+    const overhead = titleLen + sepLen + sepLen + urlLen + 1; // +1: ellipsis
     const budget = MAX_GRAPHEMES - overhead;
     if (budget <= 0) {
       const noDesc = `${title}${sep}${url}`;
@@ -140,6 +148,7 @@ async function waitForUrl(url) {
   const deadline = Date.now() + READY_TIMEOUT_MS;
   let delay = INITIAL_BACKOFF_MS;
   let attempt = 0;
+  let consecutive404 = 0;
   while (Date.now() < deadline) {
     attempt++;
     let status = 'error';
@@ -150,8 +159,19 @@ async function waitForUrl(url) {
         console.log(`URL ready after ${attempt} attempt(s): ${url}`);
         return;
       }
+      if (res.status === 404) {
+        consecutive404++;
+        if (consecutive404 >= MAX_404_ATTEMPTS) {
+          die(
+            `URL returned 404 for ${MAX_404_ATTEMPTS} consecutive attempts — slug likely wrong: ${url}`,
+          );
+        }
+      } else {
+        consecutive404 = 0;
+      }
     } catch (e) {
       status = e.message;
+      consecutive404 = 0;
     }
     const remaining = Math.max(0, deadline - Date.now());
     if (remaining <= 0) break;

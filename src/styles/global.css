@@ -511,6 +511,12 @@ em {
   padding-top: 0.2rem;
 }
 
+.entry-links {
+  margin-top: 0.4rem;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+}
+
 .detail {
   color: var(--muted);
   font-size: 0.9rem;

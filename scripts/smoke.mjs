@@ -179,6 +179,7 @@ try {
   const topRoutes = [
     ['home', '/', null],
     ['work', '/work', '/work'],
+    ['projects', '/projects', '/projects'],
     ['education', '/education', '/education'],
     ['urban-mobility', '/urban-mobility', '/urban-mobility'],
     ['blog', '/blog', '/blog'],

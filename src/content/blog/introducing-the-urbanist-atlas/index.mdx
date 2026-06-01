@@ -1,0 +1,49 @@
+---
+title: "Introducing the Urbanist Atlas"
+description: "A directory of urban advocacy groups across the US and Canada, searchable by zip/postal code."
+pubDate: 2026-06-01
+tags: ["urban-mobility", "advocacy", "walkability", "transit", "safe-streets"]
+---
+
+import Figure from '../../../components/Figure.astro';
+import urbanist_atlas_homepage from './urbanist_atlas_homepage.jpg';
+
+## A long time ago, in a Brooklyn brownstone far, far away...
+
+Alright — 2019, not exactly ancient history. I'd just moved to New York from Chicago and wanted to plug into the local advocacy scene. After some searching, I found a few groups to get involved with. It sparked an idea I floated to a friend at the time: *what if we built a website where you just enter your zip code and get a list of local advocacy orgs?*
+
+## Seven years later
+
+It exists. And it exists for one reason: when someone moves to a new city — or wakes up one morning in the place they've lived their entire life, angry about a dangerous intersection three blocks from home that no one has ever fixed — they should be able to find the people already organizing for better streets and better transit nearby. In under a minute.
+
+That's the Urbanist Atlas, and it's live at [urbanistatlas.com](https://urbanistatlas.com).
+
+<Figure src={urbanist_atlas_homepage} alt="The Urbanist Atlas masthead, styled like a newspaper front page: the title 'Urbanist Atlas' above the tagline 'Find the people fighting for better streets where you live', with Front, Browse, Submit, and About navigation and a live count of 146 organizations across 80 regions." caption="The header of the Urbanist Atlas" />
+
+## Core Principles
+
+This is my small contribution to fellow advocates across the US and Canada — many of whom fight tirelessly, day after day, in political and social headwinds that rarely favor them. A few principles guide how it's built:
+
+- **Curated, not scraped.** Every listing is reviewed by an editor (me, for now!) against published criteria — applied case by case, not picked by an algorithm.
+- **Deliberately narrow.** Transit and safe-streets advocacy only, and only groups with a real geographic home base. The tight scope is what keeps a zip-code search useful instead of noisy.
+- **Open, and built to grow.** The full codebase is open source and the dataset is open-licensed (ODbL). A public submission process lets anyone add a group or file a correction — so organizers, researchers, and advocates can find (and improve) the listings where they are, and the directory stays fresh as a community effort.
+
+The [About](https://urbanistatlas.com/about) page has more details on what gets in, what's excluded, and how the directory stays independent.
+
+## Tech Stack
+
+For the developers in the audience, here's how it's built. The Urbanist Atlas repository on [Github](https://github.com/mjrossi/urbanist-atlas) is a monorepo, split into two components:
+
+- **API** - A Go service, with HTTP handling via the chi routing library, deployed to Fly.io. It is a stateless application: the `api/seed/` TOML/CSV bundle is baked into the image and loaded into an in-memory `FileStore` at boot. It hosts the public JSON API at `/api/v1`. For now, this is only accessible by the WEB component, but the ultimate goal is to allow registration of API keys so anyone can integrate with the Atlas easily.
+
+- **WEB** — Built as a React + Vite SPA, and deployed to Cloudflare Workers + Pages (Static Assets). It consumes the JSON API to power all of the data.
+
+More information is available in the repository and the site itself.
+
+## What's next?
+
+For now: get the word out, watch how the API and site perform at scale, and keep curating to expand coverage across the US and Canada. Beyond that, I want to open the API up for use outside the web component, and — longer term — support more countries. The [region graph](https://github.com/mjrossi/urbanist-atlas/blob/main/docs/region-graph.md) I designed is built to be flexible enough for it: a wide range of regions and all their edge cases.
+
+I'm thrilled to see it come to life. If you're a developer who wants early API access or to contribute to the source code, reach out — and anyone's welcome to write with questions or corrections.
+
+*Find the people fighting for better streets where you live.*

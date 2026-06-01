@@ -1,0 +1,39 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHeader from '../components/PageHeader.astro';
+---
+
+<Base
+  title="Projects"
+  description="Things Matthew Rossi has built — open-source tools for transit and safe-streets advocacy."
+>
+
+  <div class="page">
+  <PageHeader
+    title="Projects"
+    description="Side projects, tools, and experiments — mostly at the intersection of software and urban mobility."
+  />
+
+  <section aria-label="Projects">
+
+    <div class="entry">
+      <div class="entry-header">
+        <div class="entry-meta">
+          <span class="company">Urbanist Atlas</span>
+          <span class="role">Open-source web app · Go + React on Cloudflare and Fly.io</span>
+        </div>
+        <span class="date">2026–</span>
+      </div>
+      <p>A geographically-organized directory of transit and safe-streets advocacy organizations across the US and Canada. Enter a postal code to find the local and regional groups working in your area, or browse by metro, city, or state. Data is community-maintained and open-licensed (ODbL); submissions flow through GitHub for review.</p>
+      <p class="entry-links">
+        <a href="https://urbanistatlas.com">urbanistatlas.com</a>
+        · <a href="https://github.com/mjrossi/urbanist-atlas">Source on GitHub</a>
+        · <a href="/blog/introducing-the-urbanist-atlas/">Read the launch post →</a>
+      </p>
+    </div>
+
+  </section>
+
+  </div>
+
+</Base>

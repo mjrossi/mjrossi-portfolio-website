@@ -15,7 +15,7 @@ jobs:
       # installs mise but doesn't auto-propagate [env] to subsequent steps.
       MISE_ENV: ci
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - name: Export mise [env] to GITHUB_ENV
         # `mise env --shell=bash` emits `export KEY="value"` lines; strip the

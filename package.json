@@ -12,11 +12,11 @@
   "dependencies": {
     "@astrojs/cloudflare": "13",
     "@astrojs/mdx": "^5.0.4",
-    "@astrojs/rss": "^4.0.18",
+    "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.3",
     "astro": "^6.2.2"
   },
   "devDependencies": {
-    "wrangler": "^4.104.0"
+    "wrangler": "^4.106.0"
   }
 }

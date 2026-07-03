@@ -5,6 +5,14 @@ updates:
     schedule:
       interval: weekly
     groups:
+      # Astro majors move in lockstep (astro + its integrations share peer
+      # ranges); splitting them across PRs makes every PR fail ERESOLVE.
+      astro-major:
+        patterns:
+          - astro
+          - "@astrojs/*"
+        update-types:
+          - major
       npm-minor-patch:
         update-types:
           - minor

@@ -37,7 +37,8 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece 
 - `public/.assetsignore` — keeps worker artifacts out of the static asset binding.
 - `scripts/smoke.mjs` — post-build smoke test. Checks static artifacts in `dist/client/` (CSS tokens, assets) and then spins up `wrangler dev` to hit every on-demand route. Run via `npm run smoke`.
 - `scripts/make-noise.mjs`, `scripts/make-og.mjs` — one-off regenerators for `public/noise.png` and `public/og.png`.
-- `.github/workflows/` — `build.yml` (build + smoke), `lighthouse.yml` (audits CF deploys, sticky PR comment).
+- `scripts/syndicate-bluesky.mjs` — single-post Bluesky syndicator invoked by `.github/workflows/syndicate.yml`. See the "Syndication" section below for the full flow. Supports `--dry-run` for local verification of skeet shape and facet byte offsets.
+- `.github/workflows/` — `build.yml` (build + smoke), `lighthouse.yml` (audits CF deploys, sticky PR comment), `syndicate.yml` (posts new MDX files to Bluesky on push to `main`).
 
 ## Design system
 
@@ -205,31 +206,49 @@ CI handles this via `MISE_ENV=ci` in `.github/workflows/build.yml`, so the issue
 
 PR branches get preview URLs from Cloudflare Workers Builds. **Preview deploys currently share production secrets** — a subscription via a preview URL lands in the production Buttondown account. Acceptable for a personal site (preview URLs are `noindex`'d). `wrangler.jsonc` carries a commented scaffold for isolating preview into its own environment if that ever needs to change.
 
-## Syndication (LinkedIn + Bluesky)
+## Syndication (Bluesky)
 
-New blog posts fan out to LinkedIn and Bluesky from the same Buttondown pipeline that handles email — Buttondown's Automations feature posts to both natively. **No code in this repo** owns the syndication; everything is configured operator-side in Buttondown's dashboard.
+New blog posts auto-post to Bluesky via a GitHub Actions workflow in this repo. Email syndication remains a separate pipeline (Buttondown polls `/blog/rss.xml` — see "Newsletter" above).
 
 ```
-new MDX → git push → Cloudflare build → /blog/rss.xml → Buttondown polls
-                                                            ↓
-                                              ┌─────────────┼─────────────┐
-                                              ↓             ↓             ↓
-                                            email       Bluesky        LinkedIn
+new MDX → git push to main → Cloudflare build → site live
+                          ↓                          ↓
+                          └→ syndicate.yml waits for canonical URL → Bluesky post
 ```
 
-### Why Buttondown, not in-repo
+`.github/workflows/syndicate.yml` runs on `push` to `main` whenever `src/content/blog/**` changes. It diffs `github.event.before..after` with `--diff-filter=A` to find **added** `.mdx` files (modifications are intentionally skipped — edits shouldn't re-post) and invokes `scripts/syndicate-bluesky.mjs` per file. The script parses the post's frontmatter, derives the slug, polls the canonical URL until it returns 200 (Cloudflare deploys take 1–3 min), then posts a 300-grapheme skeet with a link facet via the AT Protocol's plain HTTP API. No new dependencies, no Worker code, no external state.
 
-Buttondown owns OAuth refresh (LinkedIn tokens expire in 60 days), Bluesky app-password storage, rate limiting, retries, and dedup state. Building any of that into the Worker would mean adding KV/D1 + cron triggers + smoke sad-paths for a personal site with infrequent posts. Buttondown already owns the email side; expanding to social keeps one provider, one auth surface, one place to debug. If Buttondown ever drops a platform, the escape hatch is small — a single Worker endpoint reading `/blog/rss.xml` and posting via the AT Protocol / LinkedIn API. Don't pre-build it.
+### Out of scope: LinkedIn, Facebook, others
 
-### Known limitation: LinkedIn Newsletters
+Considered and explicitly declined for now:
 
-Buttondown posts to your LinkedIn **profile** as a standard post. It cannot publish to LinkedIn **Newsletters** (LinkedIn's own newsletter product) — LinkedIn doesn't expose an API for that surface, only for standard posts. The standard-post route is fine: the post text plus the canonical link does the same job.
+- **LinkedIn** — the LinkedIn API requires an OAuth app with 60-day token refresh. Owning that refresh loop (storing the refreshed token somewhere durable, alerting on failure) is more operational overhead than a personal blog warrants. Revisit if post cadence justifies it.
+- **Facebook / Meta** — Meta's Graph API no longer allows posting to personal profiles, only to Pages, and Page posting requires app review. Not viable for a personal site without a Page.
+- **Buttondown's Bluesky/LinkedIn automations** — gated behind the Standard plan ($29/mo). Self-built is cheaper than the upgrade for a single platform.
 
-### Operator setup (one-time, in Buttondown dashboard)
+If LinkedIn ever comes back into scope, the cheapest landing pad is a second GitHub Actions step in `syndicate.yml` calling a parallel `scripts/syndicate-linkedin.mjs`, with the refreshed access token stored as a GitHub Actions secret (rotated manually, or via a separate workflow that runs every ~50 days).
 
-1. Settings → Integrations → connect LinkedIn (OAuth) and connect Bluesky (app password).
-2. Settings → Automations → alongside the existing RSS-to-email automation, create two more:
-   - Trigger: **When a newsletter is sent** → Action: **Create a LinkedIn post**
-   - Trigger: **When a newsletter is sent** → Action: **Create a Bluesky post**
+### Secrets
 
-Buttondown's LinkedIn and Bluesky automations don't expose a body-template field — the post body is generated from the newsletter's title and canonical URL automatically. Nothing in `docs/` to keep in sync for these two; the email template (`docs/buttondown-rss-template.md`) remains the only operator-managed surface.
+Two GitHub Actions **repository secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Source | Notes |
+|---|---|---|
+| `BLUESKY_IDENTIFIER` | The handle (e.g. `mjrossi.com` if domain-verified, else `<user>.bsky.social`) | Not a secret in the cryptographic sense, but kept alongside the password for symmetry |
+| `BLUESKY_APP_PASSWORD` | Bluesky Settings → App Passwords | Revocable, separate from the account password — generate a dedicated one for this workflow |
+
+These are **not** Worker secrets — the syndication workflow never touches Cloudflare. Do **not** add them to `wrangler secret put` or to `.dev.vars`. They're also not build-time vars, so they don't belong in `mise.toml` either.
+
+### Known limitation: re-running the workflow re-posts
+
+The dedup signal is the push commit's "added files" diff. Manually re-running the workflow on the same SHA (GitHub Actions' "Re-run all jobs" button) will re-detect the same added files and post again. Don't do that unless the original run failed before posting. If this becomes a real problem, add a `posted.json` manifest committed back to the repo by the workflow — the smallest mitigation, deferred until needed.
+
+### Local verification
+
+`scripts/syndicate-bluesky.mjs` takes a `--dry-run` flag that prints the would-be skeet body, facets, and grapheme/byte counts without calling Bluesky:
+
+```sh
+node scripts/syndicate-bluesky.mjs src/content/blog/why-im-pivoting.mdx --dry-run
+```
+
+Use this after editing the script or when adding a post with unusual title/description lengths (the script truncates the description with an ellipsis when the total exceeds 300 graphemes).

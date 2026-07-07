@@ -1,0 +1,84 @@
+name: Syndicate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/content/blog/**'
+
+# Serialize runs so two rapid pushes can't post overlapping skeets for the
+# same (or different) new posts.
+concurrency:
+  group: syndicate-bluesky
+  cancel-in-progress: false
+
+# Default GITHUB_TOKEN scope is over-broad. This job only reads the repo.
+permissions:
+  contents: read
+
+jobs:
+  bluesky:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          # Need both `before` and `after` SHAs reachable for the diff below.
+          # `fetch-depth: 0` is overkill for the common case but covers
+          # multi-commit pushes (e.g. force pushes, merge queue batches)
+          # without arithmetic on commit counts.
+          fetch-depth: 0
+
+      - name: Find added MDX posts in this push
+        id: detect
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.event.after }}
+        run: |
+          set -euo pipefail
+          # Initial push to a new branch ref has before=000...000 — nothing
+          # to diff against, and the first push of a repo isn't a realistic
+          # syndication trigger anyway.
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+            echo "Initial push (before=$BEFORE_SHA); skipping syndication."
+            echo "files=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # `--diff-filter=A` keeps additions only (modifications and
+          # renames are intentionally excluded — only new posts syndicate).
+          # Filter to .mdx in awk because git pathspecs don't recurse `**`
+          # by default.
+          files=$(git diff --name-status --diff-filter=A "$BEFORE_SHA" "$AFTER_SHA" -- 'src/content/blog' \
+            | awk '$2 ~ /\.mdx?$/ {print $2}')
+          if [ -z "$files" ]; then
+            echo "No new blog posts in this push."
+          else
+            echo "New posts:"
+            echo "$files"
+          fi
+          {
+            echo "files<<EOF"
+            echo "$files"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        if: steps.detect.outputs.files != ''
+        with:
+          node-version: '22'
+
+      - name: Post to Bluesky
+        if: steps.detect.outputs.files != ''
+        env:
+          BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          # Pass via env (never expression-interpolated into the script body)
+          # so a filename containing shell metacharacters can't inject.
+          FILES: ${{ steps.detect.outputs.files }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            echo "::group::Syndicating $file"
+            node scripts/syndicate-bluesky.mjs "$file"
+            echo "::endgroup::"
+          done <<< "$FILES"

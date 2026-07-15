@@ -1,5 +1,6 @@
 [tools]
 node = "22"
+"aqua:casey/just" = "1.56.0"
 
 [env]
 PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAADNX41uDNZXvcMTg"

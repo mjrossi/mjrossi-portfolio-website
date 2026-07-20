@@ -2,7 +2,7 @@
 title: "Deep Dive: Using AI to build the Urbanist Atlas"
 description: "An accounting of how I used Claude Code to build the Urbanist Atlas, and why the engineer behind the keyboard still matters."
 pubDate: 2026-07-20
-tags: ["urbanist-atlas", "software-engineering", "artificial-intelligence"]
+tags: ["urban-mobility", "urbanist-atlas", "artificial-intelligence", "software-engineering", "open-source"]
 ---
 
 ## Upfront Disclaimers
@@ -15,14 +15,57 @@ In a social media ecosystem filled with absolutes and binaries, the intention of
 
 ## AI for the code
 
-{/* DRAFT ME — the "Deep Dive" payoff the title promises. Walk through building the
-    actual software (Go/chi API, React/Vite SPA, the region graph). Where did AI
-    write good code, and where did it fall down? Concrete war stories beat assertions:
-    the region-graph edge cases it kept getting wrong, where it over-abstracted, a
-    bug it confidently shipped that you caught in review. This is what proves the
-    "engineer behind the keyboard still matters" thesis instead of just stating it. */}
+### The Go API
 
-## AI for the data aggregation
+I'm primarily a backend engineer, so I've designed my fair share of APIs, build tools, low level data layers, integrations, etc. This is where I could be the most picky and explicit about how I wanted the code built. It was also my natural starting point, since I wanted the API to drive everything, including the inevitable front end, and future ability to allow users to directly integrate with the API.
+
+I knew I wanted `Go`, but I also wanted to see how Claude would fare, so I began a brainstorming session. My prompt was explicit in ask, but not in tech stack (at first). I directed that I wanted an API that would support the ability to both power a front end website, but also be directly accessible by `curl`. I started with the most simple endpoint, `/lookup`, since I could use that as a simple complete slice of a working bit of functionality. I didn't want to worry about the data quite yet, so I directed it to hard-code `11217` (my zip code) with one organization.
+
+It suggested that I write it all in Node / JavaScript. I disagreed. I'll admit that it was partially out of preference, but I also wanted an API that would scale, use a language that had better multithreading support, and a static typechecker. So...I gave it all of that, and it was at this point I also explicitly said I wanted `Go`. To me, this was the first trap that can burn folks that don't have a software engineering background when they try to vibe code. There is nothing wrong with Node for this task, but there are reasons not to take that first suggestion at face value.
+
+At this stage, it started proposing a plan for Go. There was a lot of back and forth; I was explicit in my input. From this one endpoint, we needed initialization logic, managing the configuration of the application, how and where it was going to be deployed, etc. Could I have just taken its recommendation? Yes. But after thirteen years of writing code, and very recently writing an extremely robust application in Go, I had my own ideas of how I wanted to do this, so I was explicit with the robot in my asks. I split the ask into subagents, acting as a bit of a project manager, product owner, and software architect in one go.
+
+And it delivered! By being extremely detailed in my input, leveraging my knowledge, we ended up with an endpoint and structure of code I was pleased with. Over time, we added more layers, more endpoints, a `just` file and `mise` for managing tooling. If I was unclear or didn't have a strong preference, there was the back and forth, and I'd explicitly push the AI to look at community guidelines on making good choices.
+
+Another area where the human matters -- those community guidelines exist because humans who care about good code quality are out there, and publish their work.
+
+### The React SPA
+
+This is where I knew I was going to run into more difficulty. I _don't_ have strong front end experience. My JavaScript knowledge at the start of this application is basically "jQuery is definitely not a thing anymore, right?". Beyond a few small edits to larger front end framework applications, it was not a strong suit for me.
+
+Neither is design, so I used Claude Design to help draft the look of the front end before writing any code or deciding on any framework. I'd already done an iteration of this on my personal blog and website, so I used that as a starting point. The core principles are the same though: be explicit in your input, push back, review, and eventually the output will be what you're happy with. I was also impressed with the fact it could produce handoff materials to Claude Code to go ahead and implement the front end code, which I definitely took advantage of.
+
+As for the front end itself, I was direct in my initial prompts -- I have a lot of experience as a backend engineer, minimal front end, but have dabbled in HTML, CSS, JavaScript, TypeScript, Node, etc. I leaned much more on the AI, but was explicit that I needed advice. I knew my high-level asks: easy to maintain; no stored state, consuming everything from the API; hosted on Cloudflare; thoroughly tested; and open to community input. It provided a couple of solutions, but ultimately I went with the tried and true React solution.
+
+From here, I built the first iteration of the UI that consumed that single `/lookup` endpoint from before. As with the backend, this single slice was a deliverable and something that showcased a working prototype that could be iterated on over time. And as before, it delivered. I now had a monorepo with two separate but connected pieces: a backend API in Go, and a frontend app in React consuming that Go API. Hurrah!
+
+### Fleshing out more features
+
+Thinking like a product manager was really valuable here, because I've seen how useful it can be to just ship something that works. It doesn't need all the features ready. It doesn't need to be perfect. It just needs to show the basic structure and functionality works. This did it.
+
+From that point on, I could work on each end in parallel, and use the other as a way to validate the contract. Add a new endpoint with a front end to consume, ensure it worked. Make changes on the front end, know that the backend was stable. I directed the AI to write an openapi spec, so we were working with hard contracts that future agents -- and me, and other contributors -- could rely on. I always wanted to ensure that at the end of the day, nobody was going to feel stuck if they didn't have an AI robot to lean on to look at, review, or contribute to this code. To that end, specific documentation passes, tooling passes, thorough and well-written `just` commands, were always done in between new feature work or bugfixes.
+
+Eventually it got to the point where we needed real data to work with.
+
+## AI for the data
+
+### The region graph
+
+Cities are complex. Boundaries aren't always static. This was a fascinating portion of this project because it directly tied into the urban planning portion of the project; what I'm career pivoting into.
+
+I started with the United States -- it's what I know the best, right? I wanted zip codes to be the anchor, but learned quickly that zip codes aren't perfect. Those zip codes need to match to something. I knew about MSAs, but advocacy is local -- 11217 is Brooklyn, but it's also Park Slope, but Park Slope isn't a hard defined border. Brooklyn is NYC, but if you type in 11217, that's also part of the New York - New Jersey - Connecticut MSA. But what if you're in CT but not part of the defined NY Metro?
+
+Just from that paragraph, you can see how complex this was going to get. So...I did a Claude brainstorming session. I said "let's start by modeling New York City, Chicago, and San Francisco." These are places I knew well enough that I knew the brainstorming would be valuable in defining an initial draft, but I could push back if something didn't make sense. I didn't want to just hard code -- that's not going to scale. I didn't want to include national orgs as an editorial decision. So, a directed acyclic graph (DAG) was built.
+
+You can read in thorough detail [here](https://github.com/mjrossi/urbanist-atlas/blob/main/docs/region-graph.md) but for a high level summary:
+
+The core idea is to stop thinking of a location as a fixed set of tiers — city, county, metro, state — and instead model geography as a graph. Every region is a node (a borough, a city, a metro, a state, a transit district, a multi-state coalition), and each node just declares its parents. A postal code anchors to the smallest region I've curated for it, and a lookup walks up the graph from there, collecting every region above it and the advocacy orgs attached to each. That's what makes typing in 11217 return Brooklyn-specific groups, citywide NYC groups, and New York State groups all at once, in the right order. The graph shape is also what lets the messy cases work without special-casing them one by one: NYC's metro spanning three states without leaking New Jersey orgs into a Brooklyn search, Chicago's transit district covering six counties but only one state, or a city-state like Berlin that's technically a Land but functions as a city. And because none of it is hard-coded to the US, the same model already stretches to Canada, with room for Portugal, Germany, and more as I add them.
+
+I ran specific agents to stress-test the model as it was being built. In doing so, odd edge cases were found -- Washington, D.C., for example, which is not a state (but should be...), and often sits right alongside parts of MD and VA. Connecticut, which recently re-architected its metropolitan area boundaries (after the 2020 Census). Handling rural zip codes correctly so they map to their parent state.
+
+Overall, I was extremely proud of the region graph design and this was a great example of using AI along with my own knowledge of cities to build an adaptable data model. I learned a lot working with these data sets.
+
+### Cataloging the organizations
 
 Cataloging hundreds of organizations on my own, across thousands of postal codes in two countries is the sort of task that would have taken weeks or months in the time before AI. The fact that I could do it (along with the rest of this project) in a little over a month of work is remarkable. That said, the data had to be accurate. It had to be verified.
 
@@ -40,30 +83,25 @@ So using the rules outlined above, here is the typical workflow for adding new o
 2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Once that was done, I would review all the orgs myself, and also use a custom-built `just` command that spins up a Docker container with a basic Linux image, connects to a VPN (for safety), and then hits each URL we define and outputs a report if any don't work, return spam / parked domain results, etc. and then manually exclude those orgs.
 3. Prompt: "Do another pass to look for orgs in `<region>`, seeing if we missed any or falsely flagged any that we should exclude based on the criteria." After this completed, I'd do another review step.
 
+### Did it hallucinate?
+
+Yes, occasionally. It didn't make up organizations — I think my input was strong enough to avoid that — but it did guess at URLs (that didn't exist), or provide some metadata that wasn't accurate. Fortunately, the combination of human review and subsequent agent reviews caught these. It was also at this point in the process that I decided to introduce a submission desk, so I could get a report if anyone found anything wrong.
+
 Advocacy is human. Cities are human, and only exist as the incredible, culturally diverse places they are because of the people who live in them. This work is focused on making our cities better places to live. I never forgot that, no matter how many interactions I had with Claude.
 
 Cities are living, breathing organisms, that are unique. No predictive text generator is going to be able to fully understand the specific nuances of a city the way I only can after spending time there, talking to people, listening to their specific stories. So don't rely on AI -- allow and encourage people to chime in, submit feedback, and tell us about their home.
 
-### Did it hallucinate?
-
-{/* DRAFT ME — the obvious reader question for an AI-built directory: did it invent
-    orgs or fake URLs? You describe the review passes and the Docker/VPN link-checker
-    above, but never say whether hallucination actually happened or how often. A candid
-    "yes, here's how I caught it" builds trust and feeds straight into the transparency
-    section below. */}
-
 ## Where AI fell short
 
-{/* DRAFT ME — you promise "where there were shortcomings" up top but never pay it off
-    in a dedicated beat. The honest "here's where it actively hurt me" story is the
-    strongest possible support for the human-in-the-loop thesis. */}
+There were a good number of instances where I had to ask myself: is this really saving me time? There are a lot of loops, a lot of time spent waiting, and reviewing output over and over again often becomes fairly mind-numbing. There's an art and a craft to writing software that gets lost in these loops. And the code it produces is often just average — a model trained on everything tends toward the middle of the distribution.
 
-## The energy and environmental cost
+Despite all the human review I built into the process, not writing the core myself made it hard to fully and accurately know what I was working with — to hold the mental model of every piece in my head the way I do when I write a codebase by hand.
 
-{/* DRAFT ME — you name energy/environmental impact as a concern in the opening, then
-    the post drops it. Given your sustainability values, close the loop: the tool's
-    footprint, your unease about it, and the trade-off you made anyway. Pre-empts the
-    obvious critique. */}
+### The energy and environmental cost
+
+I paid for one month of a Claude Max subscription to do this. That's $100. To say nothing of the fact that many people can't afford that sort of spend, there are a lot of tokens spent on each subagent, each feature. Data centers are going up all over the country to try and meet this demand, for a product that many people can't afford. They aren't reaping the benefits of it, but are dealing with higher energy bills, increased water usage for cooling, and many other negative externalities. The market simply isn't going to correct for that on its own, and it'll be up to us as citizens and governments to step in and ensure that we are scaling this technology in a responsible way.
+
+I had this in the back of my mind when writing the Atlas, and I admit it's a hard trade-off that I didn't have a good answer to.
 
 ## Five lessons from building with AI
 
@@ -87,7 +125,7 @@ There are Claude extensions that can help with this. I quite like [superpowers](
 
 I'll admit that "never" is a strong word here. However, it was pretty rare that I was fully satisfied with the first result that the AI would return to me. It might "work", but perhaps the code wasn't structured well. There were some edge cases or tests missing. Or I realized there would be a better abstraction I could pull out somewhere.
 
-I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" -- or if I saw one explicitly, would just tell the AI what I explicitly wanted. This is where our job as a software engineer shifts a little bit from "write the code" to an architect. We're architecting code that is well tested, well defined, follows the principles of SOLID, YAGNI, and all those other acronyms we know so well. The robot doesn't always do that, so you tell it (see point one: be explicit with your input!)
+I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" -- or if I saw one explicitly, would just tell the AI what I explicitly wanted. This is where our job as a software engineer shifts a little bit from writing the code to architecting it. We're architecting code that is well tested, well defined, follows the principles of SOLID, YAGNI, and all those other acronyms we know so well. The robot doesn't always do that, so you tell it (see point one: be explicit with your input!)
 
 ### Your humanity is still important
 
@@ -99,9 +137,9 @@ It's a predictive text generator. A very, very, very good predictive text genera
 
 ## How you could do this too
 
-{/* DRAFT ME — the open-source, reproducible wrap. The toolchain (Claude Code + which
-    model), the custom `just` link-checker (promote it out of the list item — it's a
-    great detail), the editorial-criteria doc, the repo. Turns testimonial into method. */}
+We've never lived in an era where it is as easy as it is now to take an idea to a working prototype. That is a quite powerful tool, and the hope is that we'll see great ideas come to life that couldn't before. If you want to build your own idea, I hope this blog post provided some inspiration and some useful tips and tricks.
+
+For Claude Code, Opus was the primary model I used, though now Fable exists. I tried to save tokens and energy by having subagents use Haiku or Sonnet for simpler tasks. Having open sourced this code, I strongly encourage you to look at my tooling and `just` file if you want to take any of those ideas, such as the Docker powered link validation.
 
 ## Why transparency is absolutely critical
 
@@ -109,6 +147,6 @@ That last point is why everything is open source. The data, code, and text are a
 
 I encourage people to reach out, submit corrections, tell me about their new advocacy org that they want included. Trust has to be a core value, and trust is built from being open and transparent. This project is a love letter to all my fellow advocates who want to make their cities the best places they can be; hiding behind a robot, or not being forthcoming about the fact that I am using AI to build, operate, and maintain this site would erode the trust that I appreciate is being placed in me from this site.
 
-AI is a tool. It's going to transform a lot of how we all work, and how our society operates in the coming years. If we approach these changes with an open mind, and a focus on humanity and making the world better for all of us, then we can use these tools for good. Unfortunately a lot of powerful people are not doing that, and are only focused on maximizing profit regardless of the destruction caused to people and our planet. We can, and have to, fight that, and look for ways to use technology for good.
+AI is a tool. It's going to transform a lot of how we all work, and how our society operates in the coming years. If we approach these changes with an open mind, and a focus on humanity and making the world better for all of us, then we can use these tools for good. Unfortunately a lot of powerful people are not doing that, and are only focused on maximizing profit regardless of the destruction caused to people and our planet. We can, and have to, fight that, and look for ways to use technology for good. If as a society we can scale this technology appropriately, make it accessible in a democratic and inclusive way, then we're on a good path. I still like to believe that is possible.
 
 The Urbanist Atlas is my small way of trying to do just that.

@@ -10,15 +10,15 @@
 import { writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CSP } from '../src/lib/csp.js';
+import { SECURITY_HEADERS } from '../src/lib/security-headers.js';
 
+// The non-CSP headers come from src/lib/security-headers.js so this file and
+// src/middleware.ts can't drift — same reason the CSP lives in csp.js.
 const HEADERS = `/*
-  Strict-Transport-Security: max-age=31536000; includeSubDomains
   Content-Security-Policy: ${CSP}
-  Cross-Origin-Opener-Policy: same-origin
-  X-Frame-Options: DENY
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
+${Object.entries(SECURITY_HEADERS)
+  .map(([name, value]) => `  ${name}: ${value}`)
+  .join('\n')}
 `;
 
 const outDir = resolve('dist/client');

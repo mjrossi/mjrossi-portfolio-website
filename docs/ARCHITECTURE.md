@@ -4,7 +4,7 @@ Reference for how mjrossi.com is built, deployed, and quality-checked. Read alon
 
 ## Rendering model
 
-Astro 6 with `@astrojs/cloudflare`, configured with `output: 'server'` (`astro.config.mjs`). Every route runs on-demand in the Cloudflare Worker by default; the only routes that prerender are the ones that explicitly opt in via `export const prerender = true` — currently `/404` (Cloudflare needs a static `404.html` for the ASSETS binding to serve) and `/blog/rss.xml` (built from MDX known at build time; no reason to re-render per request). The convention: **anything that doesn't render a page lives under `src/pages/api/*`** and shares the `src/lib/server.ts` helpers.
+Astro 6 with `@astrojs/cloudflare`, configured with `output: 'server'` (`astro.config.mjs`). Every route runs on-demand in the Cloudflare Worker by default; the only route that prerenders is the one that explicitly opts in via `export const prerender = true` — currently just `/404` (Cloudflare needs a static `404.html` for the ASSETS binding to serve). `/blog/rss.xml` renders **on-demand** so that scheduled posts (a future `pubDate`) enter the feed the moment their date passes, with no rebuild — it filters through `getPublishedPosts` at request time just like the blog pages do (see "Scheduled publishing" in CLAUDE.md). The convention: **anything that doesn't render a page lives under `src/pages/api/*`** and shares the `src/lib/server.ts` helpers.
 
 The original example was `/api/contact` (was `/contact` before the `/api/*` convention landed): it returns a 302 to `mailto:hello@mjrossi.com`, keeping the address out of the static HTML.
 
@@ -115,11 +115,15 @@ where `<branch-alias>` is the lowercased branch name with non-alphanumerics coll
 
 ## Smoke tests
 
-One post-build acceptance check: `scripts/smoke.mjs` (`npm run smoke`). No test framework — each assertion targets a regression that would be user-visible, not every class name in the markup.
+Two layers. `npm test` runs `node --test` over `src/**/*.test.js` — currently just `src/lib/schedule.test.js`, covering the scheduled-publishing date predicate (past/future/exact-midnight-UTC boundary). It exists because that logic is time-dependent and cannot be meaningfully exercised by an acceptance check against a corpus of already-published posts.
 
-First it inspects `dist/client/` for static artifacts: the expected assets (`noise.webp`, `profile-avatar.webp`, `favicon.svg`, `resume.pdf`, `og.png`, `404.html`, `sitemap-index.xml`) exist, and the built CSS bundle still pins `--accent: #8f5520`, `--max: 1100px`, has no inline `data:image/svg+xml` URIs, and has no leftover condensed-masthead rules.
+Everything else is one post-build acceptance check: `scripts/smoke.mjs` (`npm run smoke`). No test framework — each assertion targets a regression that would be user-visible, not every class name in the markup.
+
+First it inspects `dist/client/` for static artifacts: the expected assets (`noise.webp`, `profile-avatar.webp`, `favicon.svg`, `resume.pdf`, `og.png`, `404.html`, `sitemap-index.xml`) exist, and the built CSS bundle still pins `--accent: #8f5520`, `--max: 1100px`, has no inline `data:image/svg+xml` URIs, and has no leftover condensed-masthead rules. It also greps two source files for wiring that would fail silently if removed: `fetchWithRetry` in `src/lib/server.ts`, and the `isPublished` call in `src/lib/blog.ts` (the unit tests prove that predicate correct but would stay green if `getPublishedPosts` stopped calling it).
 
 Then it spins up `wrangler dev` once and fetches every on-demand route (`/`, `/work`, `/education`, `/urban-mobility`, `/blog`, one blog post chosen from the index, one tag page chosen from the index, `/blog/rss.xml`). The top-level GETs and the blog chain run in parallel — the wall-time savings are meaningful and `fetchExpectingNon5xx` already retries once on transient workerd 5xx. For every HTML route it asserts: 200 OK, `Cache-Control: public, max-age=3600` (set by `src/middleware.ts`, not per page), the full Broadsheet masthead rendered, the edition line matches `Vol. X · No. Y · Month YYYY`, no condensed-masthead residue, `ContactLinks` rendered twice (nav + footer), and the nav pill marked `active` on the correct link.
+
+For `/blog/rss.xml` it additionally asserts `Cache-Control: max-age=3600` (the route sets this itself — middleware only defaults Cache-Control on HTML), that `X-Content-Type-Options: nosniff` and `Strict-Transport-Security` are present (the feed went on-demand for scheduled publishing, so it no longer inherits `_headers` from the ASSETS binding and depends on middleware applying the security set to non-HTML responses), that every `<pubDate>` parses, and that none is in the future.
 
 The `/api/subscribe` sad paths are driven by a `subscribeCases` table (status-only assertions for the contract) and fanned out via `Promise.all`. Two assertions stay outside the table — the realistic-2.5KB-token payload guard (inequality, longer message) and the privacy-page content checks — but they fetch in parallel too.
 
@@ -134,6 +138,6 @@ If you change a CSS token, a route's chrome, or the navigation contract, expect 
 
 - The design tokens live in one place (`:root` in `src/styles/global.css`). Touch them and the smoke test will likely complain — update `scripts/smoke.mjs` in the same change.
 - The masthead is a single variant that renders everywhere. The name is an `<h1>` on `/` and a link to `/` on subpages.
-- Output mode is `server`, so new HTML routes are on-demand by default — no `prerender` export needed. The only routes that opt back into prerender are `/404` (Cloudflare needs a static `404.html`) and `/blog/rss.xml`. `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response, so individual pages don't need to. New routes still need a smoke assertion in `scripts/smoke.mjs`.
-- Anything that needs to stay current without a rebuild belongs on a non-prerendered route (the default) and inherits the middleware cache header.
+- Output mode is `server`, so new HTML routes are on-demand by default — no `prerender` export needed. The only route that opts back into prerender is `/404` (Cloudflare needs a static `404.html`). `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response, so individual pages don't need to. New routes still need a smoke assertion in `scripts/smoke.mjs`.
+- Anything that needs to stay current without a rebuild belongs on a non-prerendered route (the default) and inherits the middleware cache header. `/blog/rss.xml` is on-demand for exactly this reason — scheduled posts must be able to enter the feed without a redeploy — and because it isn't HTML it sets its own `Cache-Control` (middleware only touches `text/html`).
 - Interior pages reuse `src/components/PageHeader.astro` for the `.page-header` shape. If a new page needs a different header (e.g. embedded RSS link like `/blog`), use a bespoke header rather than inflating `PageHeader`'s prop surface.

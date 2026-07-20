@@ -60,6 +60,20 @@ if (existsSync(serverLibPath)) {
   );
 }
 
+// Guard the scheduled-publishing wiring. src/lib/schedule.test.js proves the
+// predicate is correct, but nothing there would catch getPublishedPosts()
+// simply not calling it — delete the filter and the unit tests stay green
+// while every scheduled post silently publishes. Assert the call site exists.
+const blogLibPath = resolve('src/lib/blog.ts');
+if (existsSync(blogLibPath)) {
+  const blogLib = readFileSync(blogLibPath, 'utf8');
+  check(
+    'src/lib/blog.ts: getPublishedPosts filters via isPublished',
+    /isPublished\s*\(/.test(blogLib) && /import\.meta\.env\.PROD/.test(blogLib),
+    'scheduled-publishing filter missing from getPublishedPosts — future-dated posts would publish early',
+  );
+}
+
 for (const asset of [
   'noise.webp',
   'profile-avatar.webp',
@@ -229,6 +243,44 @@ try {
   // RSS
   check('rss: 200 OK',        rss.res.status === 200, `got ${rss.res.status}`);
   check('rss: has >=1 <item>', (rss.html.match(/<item>/g) || []).length >= 1);
+  // RSS is on-demand (not prerendered), so it sets its own Cache-Control since
+  // middleware only touches text/html responses.
+  check(
+    'rss: Cache-Control max-age=3600',
+    headerContains(rss.res, 'cache-control', 'max-age=3600'),
+    rss.res.headers.get('cache-control') ?? '(none)',
+  );
+  // Going on-demand moved RSS out of the ASSETS binding, so it no longer
+  // inherits dist/client/_headers — middleware must supply the security set
+  // on non-HTML worker responses. Spot-check two; if these are missing the
+  // middleware regressed to HTML-only gating.
+  check(
+    'rss: X-Content-Type-Options nosniff',
+    headerContains(rss.res, 'x-content-type-options', 'nosniff'),
+    rss.res.headers.get('x-content-type-options') ?? '(none)',
+  );
+  check(
+    'rss: Strict-Transport-Security present',
+    headerContains(rss.res, 'strict-transport-security', 'max-age='),
+    rss.res.headers.get('strict-transport-security') ?? '(none)',
+  );
+  // Scheduled-publishing invariant: the production feed must never contain a
+  // post whose pubDate is still in the future. Guards the date filter in
+  // getPublishedPosts() against regressions (this holds for all time, so it
+  // won't rot as fixture dates pass).
+  const rssNow = Date.now();
+  const rssDates = [...rss.html.matchAll(/<pubDate>([^<]+)<\/pubDate>/g)].map((m) =>
+    Date.parse(m[1]),
+  );
+  // Assert parseability separately — filtering NaN out silently would let a
+  // malformed <pubDate> pass the future-date check rather than fail it.
+  check(
+    'rss: every pubDate parses',
+    rssDates.every(Number.isFinite),
+    `${rssDates.filter((t) => !Number.isFinite(t)).length} unparseable pubDate(s)`,
+  );
+  const futureRssItems = rssDates.filter((t) => Number.isFinite(t) && t > rssNow);
+  check('rss: no future-dated items', futureRssItems.length === 0, `${futureRssItems.length} future item(s)`);
 
   // /api/contact — must 302 to mailto: so the address never appears in HTML.
   // fetch() can't follow mailto:, so request with redirect: 'manual'.

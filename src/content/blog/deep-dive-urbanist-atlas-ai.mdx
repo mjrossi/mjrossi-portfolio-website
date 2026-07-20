@@ -1,0 +1,76 @@
+---
+title: "Deep Dive: Using AI to build the Urbanist Atlas"
+description: ""
+pubDate: 2026-07-20
+tags: ["urbanist-atlas", "software engineering", "artificial intelligence"]
+---
+
+## Upfront Disclaimers
+
+Yes, I vibe coded a substantial amount of the Atlas. No, I'm not a diehard AI evangelist or doomer. I try to recognize where AI is helpful (repetitive tasks, extra analysis), and where we should be concerned (energy and environmental impacts).
+
+"OK, so what are you writing here?" would be a valid question to ask.
+
+In a social media ecosystem filled with absolutes and binaries, the intention of this post is to be upfront about how I used Claude Code as a tool to help me write the Atlas. How I used AI to be helpful and effective, where there were shortcomings, and hopefully provide an example of where a modern software engineer can use AI, but where that AI is only as effective as the engineer behind the keyboard.
+
+## Top 5 tips for effective AI usage in code
+
+For anyone who doesn't want to read the entire post, here are my top 5 takeaways for using AI effectively.
+
+### Be VERY explicit with your input
+
+There is a strong difference between "I want to build a directory of safe street organizations" and what I actually used as my starting point, which was something more like this:
+
+"We are going to build a directory of safe street organizations. I want this to be a modular application that can be consumed by a number of consumers. To that, let's build this in three pieces, starting with a simple API. This API will be built in Go. You should default to using standard libraries wherever possible, and ask before importing third party dependencies. Build it with a focus on TDD. Plan a skeleton of what this will look like."
+
+This leads right onto my next point.
+
+### Review, review, and then review again
+
+Once a plan was drafted. I reviewed the plan, pushed back on the plan. Finally, after plenty of back and forth, I let it build. After it was built, I threw another agent with a fresh context to review the code that was generated. After 2-3 rounds of this, that's when I'd do my own code review, leaving feedback and then throw another agent on it to address the feedback.
+
+There are Claude extensions that can help with this. I quite like [superpowers](https://github.com/obra/superpowers). Some folks like [gsd](https://github.com/open-gsd/gsd-core). Regardless of which extension you'll use, what you'll find is that they all try to keep tasks focused, small, and rely on subagents with multiple review steps baked into the process.
+
+### Never take the first result
+
+I'll admit that "never" is a strong word here. However, it was pretty rare that I was fully satisfied with the first result that the AI would return to me. It might "work", but perhaps the code wasn't structured well. There were some edge cases or tests missing. Or I realized there would be a better abstraction I could pull out somewhere.
+
+I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" -- or if I saw one explicitly, would just tell the AI what I explicitly wanted. This is where our job at a software engineer shifts a little bit from "write the code" to an architect. We're architecting code that is well tested, well defined, follows the principles of SOLID, YAGNI, and all those other acronyms we know so well. The robot doesn't always do that, so you tell it (see point one: be explicit with your input!)
+
+### Your humanity is still important
+
+There are certainly some voices out there that want us to believe that humans aren't necessary anymore. AI will do everything! The fact is that these are machines with limitations, that only can operate as effectively as they do because they've been trained essentially on the entirety of human knowledge. They're not creative, they're not actually co-workers, they can make mistakes just like humans can. It's important to remember that. Don't believe me? I think Data from Star Trek: TNG is an extremely well written character that does a good job of showcasing throughout the series the limitations of being an artificial life-form, and why he strived so hard to be human.
+
+### Remember what we're calling AI really is
+
+It's a predictive text generator. A very, very, very good predictive text generator. But it's still a predictive text generator. Don't accept the output as gospel; always verify.
+
+## AI for the data aggregation
+
+Cataloging hundreds of organizations on my own, across thousands of postal codes in two countries is the sort of task that would have taken weeks or months in the time before AI. The fact that I could do it (along with the rest of this project) in a little over a month of work is remarkable. That said, the data had to be accurate. It had to be verified.
+
+The first bit was deciding exactly what organizations I wanted to include, so I defined a set of criteria that was at the forefront of any request to AI (full list [here](https://urbanistatlas.com/about))
+
+1. Geographic focus (the best advocacy happens locally)
+2. Active advocacy (no inactive orgs; some activity within the last 12 months)
+3. On-topic (transit, safe streets, etc.)
+4. Government agencies, consultancies, and non-advocacy orgs are excluded (focus on advocacy)
+5. Housing & YIMBY are excluded (tight focus)
+
+So using the rules outlined above, here is the typical workflow for adding new organizations.
+
+1. Prompt: "Please do a deep dive into organizations that are focused on advocating for safe, sustainable, and human-focused city design and transportation. Ensure that organizations follow the editorial rules defined. Comb through social media presence to determine activity. Ask me if you're unsure about a specific org."
+2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Once that was done, I would review all the orgs myself, and also use a custom-built `just` command that spins up a Docker container with a basic linux image, connects to a VPN (for safety), and then hits each URL we define and outputs a report if any don't work, return spam / parked domain results, etc. and then manually exclude those org.
+3. Prompt: "Do another pass to look for orgs in `<region`>, seeing if we missed any or falsely flagged any that we should exclude based on the criteria." After this would complete, I'll do another review step.
+4. Advocacy is human. Cities are human, and only exist as the incredible, cultural diverse places they are because of the people who live in them. This work is focused on making our cities better places to live. I never forgot that, no matter how many interactions I had with Claude.
+5. Cities are living, breathing organisms, that are unique. No predict text generator is going to be able to fully understand the specific nuances of a city the same way that I can without spending time there, talking to people. So don't rely on AI -- allow people to chime in, submit feedback, tell us about their home.
+
+## Why transparency is absolutely critical
+
+That last point is why everything is open source. The data, code, text, is open source. I'm not seeking any monetary compensation for this project except for a small tip jar that I really encourage folks **not** to throw coins into unless they really really want to (and have already thrown some coins into the jar of their local advocacy orgs first).
+
+I encourage people to reach out, submit corrections, tell me about their new advocacy org that they want included. Trust has to be a core value, and trust is built from being open and transparent. This project is a love letter to all my fellow advocates who want to make their cities the best places they can be; hiding behind a robot, or not being forthcoming about the fact that I am using AI to build, operate, and maintain this site would erode the trust that I appreciate is being placed in me from this site.
+
+AI is a tool. It's going to transform a lot of how we all work, and how our society operates in the coming years. If we approach these changes with an open mind, and a focus on humanity and making the world better for all of us, then we can use these tools for good. Unfortunately a lot of powerful people are not doing that, and are only focused on maximizing profit regardless of the destruction caused to people and our planet. We can, and have to, fight that, and look for ways to use technology for good.
+
+The Urbanist Atlas is my small way of trying to do just that.

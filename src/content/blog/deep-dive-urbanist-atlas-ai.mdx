@@ -13,9 +13,61 @@ Yes, I vibe coded a substantial amount of the Atlas. No, I'm not a diehard AI ev
 
 In a social media ecosystem filled with absolutes and binaries, the intention of this post is to be upfront about how I used Claude Code as a tool to help me write the Atlas. How I used AI to be helpful and effective, where there were shortcomings, and hopefully provide an example of where a modern software engineer can use AI, but where that AI is only as effective as the engineer behind the keyboard.
 
-## Top 5 tips for effective AI usage in code
+## AI for the code
 
-For anyone who doesn't want to read the entire post, here are my top 5 takeaways for using AI effectively.
+{/* DRAFT ME — the "Deep Dive" payoff the title promises. Walk through building the
+    actual software (Go/chi API, React/Vite SPA, the region graph). Where did AI
+    write good code, and where did it fall down? Concrete war stories beat assertions:
+    the region-graph edge cases it kept getting wrong, where it over-abstracted, a
+    bug it confidently shipped that you caught in review. This is what proves the
+    "engineer behind the keyboard still matters" thesis instead of just stating it. */}
+
+## AI for the data aggregation
+
+Cataloging hundreds of organizations on my own, across thousands of postal codes in two countries is the sort of task that would have taken weeks or months in the time before AI. The fact that I could do it (along with the rest of this project) in a little over a month of work is remarkable. That said, the data had to be accurate. It had to be verified.
+
+The first bit was deciding exactly what organizations I wanted to include, so I defined a set of criteria that was at the forefront of any request to AI (full list [here](https://urbanistatlas.com/about)).
+
+1. Geographic focus (the best advocacy happens locally)
+2. Active advocacy (no inactive orgs; some activity within the last 12 months)
+3. On-topic (transit, safe streets, etc.)
+4. Government agencies, consultancies, and non-advocacy orgs are excluded (focus on advocacy)
+5. Housing & YIMBY are excluded (tight focus)
+
+So using the rules outlined above, here is the typical workflow for adding new organizations.
+
+1. Prompt: "Please do a deep dive into organizations that are focused on advocating for safe, sustainable, and human-focused city design and transportation. Ensure that organizations follow the editorial rules defined. Comb through social media presence to determine activity. Ask me if you're unsure about a specific org."
+2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Once that was done, I would review all the orgs myself, and also use a custom-built `just` command that spins up a Docker container with a basic Linux image, connects to a VPN (for safety), and then hits each URL we define and outputs a report if any don't work, return spam / parked domain results, etc. and then manually exclude those orgs.
+3. Prompt: "Do another pass to look for orgs in `<region>`, seeing if we missed any or falsely flagged any that we should exclude based on the criteria." After this completed, I'd do another review step.
+
+Advocacy is human. Cities are human, and only exist as the incredible, culturally diverse places they are because of the people who live in them. This work is focused on making our cities better places to live. I never forgot that, no matter how many interactions I had with Claude.
+
+Cities are living, breathing organisms, that are unique. No predictive text generator is going to be able to fully understand the specific nuances of a city the way I only can after spending time there, talking to people, listening to their specific stories. So don't rely on AI -- allow and encourage people to chime in, submit feedback, and tell us about their home.
+
+### Did it hallucinate?
+
+{/* DRAFT ME — the obvious reader question for an AI-built directory: did it invent
+    orgs or fake URLs? You describe the review passes and the Docker/VPN link-checker
+    above, but never say whether hallucination actually happened or how often. A candid
+    "yes, here's how I caught it" builds trust and feeds straight into the transparency
+    section below. */}
+
+## Where AI fell short
+
+{/* DRAFT ME — you promise "where there were shortcomings" up top but never pay it off
+    in a dedicated beat. The honest "here's where it actively hurt me" story is the
+    strongest possible support for the human-in-the-loop thesis. */}
+
+## The energy and environmental cost
+
+{/* DRAFT ME — you name energy/environmental impact as a concern in the opening, then
+    the post drops it. Given your sustainability values, close the loop: the tool's
+    footprint, your unease about it, and the trade-off you made anyway. Pre-empts the
+    obvious critique. */}
+
+## Five lessons from building with AI
+
+Having walked through the actual work — the code, the data, where it fell short — here are the five takeaways I keep coming back to for using AI effectively.
 
 ### Be VERY explicit with your input
 
@@ -39,37 +91,21 @@ I did multiple passes of simply "look for refactor opportunities" or "look for s
 
 ### Your humanity is still important
 
-There are certainly some voices out there that want us to believe that humans aren't necessary anymore. AI will do everything! The fact is that these are machines with limitations, that only can operate as effectively as they do because they've been trained essentially on the entirety of human knowledge. They're not creative, they're not actually co-workers, they can make mistakes just like humans can. It's important to remember that. Don't believe me? I think Data from Star Trek: TNG is an extremely well written character that does a good job of showcasing throughout the series the limitations of being an artificial life-form, and why he strived so hard to be human.
+There are certainly some voices out there that want us to believe that humans aren't necessary anymore. AI will do everything! The fact is that these are machines with limitations, that only can operate as effectively as they do because they've been trained essentially on the entirety of human knowledge. They're not creative, they're not actually co-workers, they can make mistakes just like humans can. It's important to remember that. Don't believe me? Consider Data from Star Trek: TNG — an extremely well written character. Throughout the series he showcases the limitations of being an artificial life-form, and why he strove so hard to be human.
 
 ### Remember what we're calling AI really is
 
 It's a predictive text generator. A very, very, very good predictive text generator. But it's still a predictive text generator. Don't accept the output as gospel; always verify.
 
-## AI for the data aggregation
+## How you could do this too
 
-Cataloging hundreds of organizations on my own, across thousands of postal codes in two countries is the sort of task that would have taken weeks or months in the time before AI. The fact that I could do it (along with the rest of this project) in a little over a month of work is remarkable. That said, the data had to be accurate. It had to be verified.
-
-The first bit was deciding exactly what organizations I wanted to include, so I defined a set of criteria that was at the forefront of any request to AI (full list [here](https://urbanistatlas.com/about))
-
-1. Geographic focus (the best advocacy happens locally)
-2. Active advocacy (no inactive orgs; some activity within the last 12 months)
-3. On-topic (transit, safe streets, etc.)
-4. Government agencies, consultancies, and non-advocacy orgs are excluded (focus on advocacy)
-5. Housing & YIMBY are excluded (tight focus)
-
-So using the rules outlined above, here is the typical workflow for adding new organizations.
-
-1. Prompt: "Please do a deep dive into organizations that are focused on advocating for safe, sustainable, and human-focused city design and transportation. Ensure that organizations follow the editorial rules defined. Comb through social media presence to determine activity. Ask me if you're unsure about a specific org."
-2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Once that was done, I would review all the orgs myself, and also use a custom-built `just` command that spins up a Docker container with a basic Linux image, connects to a VPN (for safety), and then hits each URL we define and outputs a report if any don't work, return spam / parked domain results, etc. and then manually exclude those org.
-3. Prompt: "Do another pass to look for orgs in `<region>`, seeing if we missed any or falsely flagged any that we should exclude based on the criteria." After this would complete, I'll do another review step.
-
-Advocacy is human. Cities are human, and only exist as the incredible, cultural diverse places they are because of the people who live in them. This work is focused on making our cities better places to live. I never forgot that, no matter how many interactions I had with Claude.
-
-Cities are living, breathing organisms, that are unique. No predictive text generator is going to be able to fully understand the specific nuances of a city the same way that I can't without spending time there, talking to people, listening to their specific stories. So don't rely on AI -- allow and encourage people to chime in, submit feedback, and tell us about their home.
+{/* DRAFT ME — the open-source, reproducible wrap. The toolchain (Claude Code + which
+    model), the custom `just` link-checker (promote it out of the list item — it's a
+    great detail), the editorial-criteria doc, the repo. Turns testimonial into method. */}
 
 ## Why transparency is absolutely critical
 
-That last point is why everything is open source. The data, code, text, is open source. I'm not seeking any monetary compensation for this project except for a small tip jar that I really encourage folks **not** to throw coins into unless they *really* want to (and have already thrown some coins into the jar of their local advocacy orgs first).
+That last point is why everything is open source. The data, code, and text are all open source. I'm not seeking any monetary compensation for this project except for a small tip jar that I really encourage folks **not** to throw coins into unless they *really* want to (and have already thrown some coins into the jar of their local advocacy orgs first).
 
 I encourage people to reach out, submit corrections, tell me about their new advocacy org that they want included. Trust has to be a core value, and trust is built from being open and transparent. This project is a love letter to all my fellow advocates who want to make their cities the best places they can be; hiding behind a robot, or not being forthcoming about the fact that I am using AI to build, operate, and maintain this site would erode the trust that I appreciate is being placed in me from this site.
 

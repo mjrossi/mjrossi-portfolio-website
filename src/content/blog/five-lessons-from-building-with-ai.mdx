@@ -1,0 +1,68 @@
+---
+title: "TODO"
+description: "TODO"
+pubDate: 2026-07-24 # TODO: placeholder — stagger a few days after deep-dive-urbanist-atlas-ai's 2026-07-20
+tags: ["artificial-intelligence"] # TODO: confirm which other tags (urbanist-atlas, urban-mobility, open-source) still apply
+---
+
+{/* TODO: bridging intro — a few sentences picking up from "Deep Dive: Using AI to build the Urbanist Atlas" (/blog/deep-dive-urbanist-atlas-ai), plus a link back to it. */}
+
+## Where AI fell short
+
+There were a good number of instances where I had to ask myself: is this really saving me time? There are a lot of loops, a lot of time spent waiting, and reviewing output over and over again often becomes fairly mind-numbing. There's an art and a craft to writing software that gets lost in these loops. And the code it produces is often just average — a model trained on everything tends toward the middle of the distribution.
+
+Despite all the human review I built into the process, not writing the core myself made it hard to fully and accurately know what I was working with — to hold the mental model of every piece in my head the way I do when I write a codebase by hand.
+
+### The energy and environmental cost
+
+I paid for one month of a Claude Max subscription to do this. That's $100. To say nothing of the fact that many people can't afford that sort of spend, there are a lot of tokens spent on each subagent, each feature. Data centers are going up all over the country to try and meet this demand, for a product that many people can't afford. They aren't reaping the benefits of it, but are dealing with higher energy bills, increased water usage for cooling, and many other negative externalities. The market simply isn't going to correct for that on its own, and it'll be up to us as citizens and governments to step in and ensure that we are scaling this technology in a responsible way.
+
+I had this in the back of my mind when writing the Atlas, and I admit it's a hard trade-off that I didn't have a good answer to.
+
+## Five lessons from building with AI
+
+Having walked through the actual work — the code, the data, where it fell short — here are the five takeaways I keep coming back to for using AI effectively.
+
+### Be *very* explicit with your input
+
+There is a strong difference between "I want to build a directory of safe street organizations" and what I actually used as my starting point, which was something more like this:
+
+"We are going to build a directory of safe street organizations. I want this to be a modular application that can be consumed by a number of consumers. To that, let's build this in three pieces, starting with a simple API. This API will be built in Go. You should default to using standard libraries wherever possible, and ask before importing third party dependencies. Build it with a focus on TDD. Plan a skeleton of what this will look like."
+
+This leads right onto my next point.
+
+### Review, review, and then review again
+
+Once a plan was drafted, I reviewed the plan, pushed back on the plan. Finally, after plenty of back and forth, I let it build. After it was built, I threw another agent with a fresh context to review the code that was generated. After 2-3 rounds of this, that's when I'd do my own code review, leaving feedback and then throw another agent on it to address the feedback.
+
+There are Claude extensions that can help with this. I quite like [superpowers](https://github.com/obra/superpowers). Some folks like [gsd](https://github.com/open-gsd/gsd-core). Regardless of which extension you'll use, what you'll find is that they all try to keep tasks focused, small, and rely on subagents with multiple review steps baked into the process.
+
+### Never take the first result
+
+I'll admit that "never" is a strong word here. However, it was pretty rare that I was fully satisfied with the first result that the AI would return to me. It might "work," but perhaps the code wasn't structured well. There were some edge cases or tests missing. Or I realized there would be a better abstraction I could pull out somewhere.
+
+I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" — or if I saw one explicitly, would just tell the AI what I explicitly wanted. This is where our job as a software engineer shifts a little bit from writing the code to architecting it. We're architecting code that is well tested, well defined, follows the principles of SOLID, YAGNI, and all those other acronyms we know so well. The robot doesn't always do that, so you tell it (see point one: be explicit with your input!)
+
+### Your humanity is still important
+
+There are certainly some voices out there that want us to believe that humans aren't necessary anymore. AI will do everything! The fact is that these are machines with limitations, that only can operate as effectively as they do because they've been trained essentially on the entirety of human knowledge. They're not creative, they're not actually co-workers, they can make mistakes just like humans can. It's important to remember that. Don't believe me? Consider Data from Star Trek: TNG — an extremely well-written character. Throughout the series he showcases the limitations of being an artificial life-form, and why he strove so hard to be human.
+
+### Remember what we're calling AI really is
+
+It's a predictive text generator. A very, very, very good predictive text generator. But it's still a predictive text generator. Don't accept the output as gospel; always verify.
+
+## How you could do this too
+
+We've never lived in an era where it is as easy as it is now to take an idea to a working prototype. That is a quite powerful tool, and the hope is that we'll see great ideas come to life that couldn't before. If you want to build your own idea, I hope this blog post provided some inspiration and some useful tips and tricks.
+
+For Claude Code, Opus was the primary model I used, though now Fable exists. I tried to save tokens and energy by having subagents use Haiku or Sonnet for simpler tasks. Having open sourced this code, I strongly encourage you to look at my tooling and `just` file if you want to take any of those ideas, such as the Docker powered link validation.
+
+## Why transparency is absolutely critical
+
+That last point is why everything is open source. The data, code, and text are all open source. I'm not seeking any monetary compensation for this project except for a small tip jar that I really encourage folks **not** to throw coins into unless they *really* want to (and have already thrown some coins into the jar of their local advocacy orgs first).
+
+I encourage people to reach out, submit corrections, tell me about their new advocacy org that they want included. Trust has to be a core value, and trust is built from being open and transparent. This project is a love letter to all my fellow advocates who want to make their cities the best places they can be; hiding behind a robot, or not being forthcoming about the fact that I am using AI to build, operate, and maintain this site would erode the trust that I appreciate is being placed in me from this site.
+
+AI is a tool. It's going to transform a lot of how we all work, and how our society operates in the coming years. If we approach these changes with an open mind, and a focus on humanity and making the world better for all of us, then we can use these tools for good. Unfortunately a lot of powerful people are not doing that, and are only focused on maximizing profit regardless of the destruction caused to people and our planet. We can, and have to, fight that, and look for ways to use technology for good. If as a society we can scale this technology appropriately, make it accessible in a democratic and inclusive way, then we're on a good path. I still like to believe that is possible.
+
+The Urbanist Atlas is my small way of trying to do just that.

@@ -1,8 +1,8 @@
 ---
 title: "Deep Dive: Using AI to build the Urbanist Atlas"
-description: ""
+description: "An accounting of how I used Claude Code to build the Urbanist Atlas, and why the engineer behind the keyboard still matters."
 pubDate: 2026-07-20
-tags: ["urbanist-atlas", "software engineering", "artificial intelligence"]
+tags: ["urbanist-atlas", "software-engineering", "artificial-intelligence"]
 ---
 
 ## Upfront Disclaimers
@@ -27,7 +27,7 @@ This leads right onto my next point.
 
 ### Review, review, and then review again
 
-Once a plan was drafted. I reviewed the plan, pushed back on the plan. Finally, after plenty of back and forth, I let it build. After it was built, I threw another agent with a fresh context to review the code that was generated. After 2-3 rounds of this, that's when I'd do my own code review, leaving feedback and then throw another agent on it to address the feedback.
+Once a plan was drafted, I reviewed the plan, pushed back on the plan. Finally, after plenty of back and forth, I let it build. After it was built, I threw another agent with a fresh context to review the code that was generated. After 2-3 rounds of this, that's when I'd do my own code review, leaving feedback and then throw another agent on it to address the feedback.
 
 There are Claude extensions that can help with this. I quite like [superpowers](https://github.com/obra/superpowers). Some folks like [gsd](https://github.com/open-gsd/gsd-core). Regardless of which extension you'll use, what you'll find is that they all try to keep tasks focused, small, and rely on subagents with multiple review steps baked into the process.
 
@@ -35,7 +35,7 @@ There are Claude extensions that can help with this. I quite like [superpowers](
 
 I'll admit that "never" is a strong word here. However, it was pretty rare that I was fully satisfied with the first result that the AI would return to me. It might "work", but perhaps the code wasn't structured well. There were some edge cases or tests missing. Or I realized there would be a better abstraction I could pull out somewhere.
 
-I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" -- or if I saw one explicitly, would just tell the AI what I explicitly wanted. This is where our job at a software engineer shifts a little bit from "write the code" to an architect. We're architecting code that is well tested, well defined, follows the principles of SOLID, YAGNI, and all those other acronyms we know so well. The robot doesn't always do that, so you tell it (see point one: be explicit with your input!)
+I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" -- or if I saw one explicitly, would just tell the AI what I explicitly wanted. This is where our job as a software engineer shifts a little bit from "write the code" to an architect. We're architecting code that is well tested, well defined, follows the principles of SOLID, YAGNI, and all those other acronyms we know so well. The robot doesn't always do that, so you tell it (see point one: be explicit with your input!)
 
 ### Your humanity is still important
 
@@ -60,14 +60,16 @@ The first bit was deciding exactly what organizations I wanted to include, so I 
 So using the rules outlined above, here is the typical workflow for adding new organizations.
 
 1. Prompt: "Please do a deep dive into organizations that are focused on advocating for safe, sustainable, and human-focused city design and transportation. Ensure that organizations follow the editorial rules defined. Comb through social media presence to determine activity. Ask me if you're unsure about a specific org."
-2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Once that was done, I would review all the orgs myself, and also use a custom-built `just` command that spins up a Docker container with a basic linux image, connects to a VPN (for safety), and then hits each URL we define and outputs a report if any don't work, return spam / parked domain results, etc. and then manually exclude those org.
-3. Prompt: "Do another pass to look for orgs in `<region`>, seeing if we missed any or falsely flagged any that we should exclude based on the criteria." After this would complete, I'll do another review step.
-4. Advocacy is human. Cities are human, and only exist as the incredible, cultural diverse places they are because of the people who live in them. This work is focused on making our cities better places to live. I never forgot that, no matter how many interactions I had with Claude.
-5. Cities are living, breathing organisms, that are unique. No predict text generator is going to be able to fully understand the specific nuances of a city the same way that I can without spending time there, talking to people. So don't rely on AI -- allow people to chime in, submit feedback, tell us about their home.
+2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Once that was done, I would review all the orgs myself, and also use a custom-built `just` command that spins up a Docker container with a basic Linux image, connects to a VPN (for safety), and then hits each URL we define and outputs a report if any don't work, return spam / parked domain results, etc. and then manually exclude those org.
+3. Prompt: "Do another pass to look for orgs in `<region>`, seeing if we missed any or falsely flagged any that we should exclude based on the criteria." After this would complete, I'll do another review step.
+
+Advocacy is human. Cities are human, and only exist as the incredible, cultural diverse places they are because of the people who live in them. This work is focused on making our cities better places to live. I never forgot that, no matter how many interactions I had with Claude.
+
+Cities are living, breathing organisms, that are unique. No predict text generator is going to be able to fully understand the specific nuances of a city the same way that I can without spending time there, talking to people. So don't rely on AI -- allow people to chime in, submit feedback, tell us about their home.
 
 ## Why transparency is absolutely critical
 
-That last point is why everything is open source. The data, code, text, is open source. I'm not seeking any monetary compensation for this project except for a small tip jar that I really encourage folks **not** to throw coins into unless they really really want to (and have already thrown some coins into the jar of their local advocacy orgs first).
+That last point is why everything is open source. The data, code, text, is open source. I'm not seeking any monetary compensation for this project except for a small tip jar that I really encourage folks **not** to throw coins into unless they *really* want to (and have already thrown some coins into the jar of their local advocacy orgs first).
 
 I encourage people to reach out, submit corrections, tell me about their new advocacy org that they want included. Trust has to be a core value, and trust is built from being open and transparent. This project is a love letter to all my fellow advocates who want to make their cities the best places they can be; hiding behind a robot, or not being forthcoming about the fact that I am using AI to build, operate, and maintain this site would erode the trust that I appreciate is being placed in me from this site.
 

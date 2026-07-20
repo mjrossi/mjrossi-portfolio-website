@@ -1,5 +1,6 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import { readingTime } from './readingTime.ts';
+import { isPublished } from './schedule.js';
 
 export type Post = CollectionEntry<'blog'>;
 
@@ -22,8 +23,10 @@ export async function getPublishedPosts(): Promise<Post[]> {
   // In dev (`astro dev`) future posts stay visible so the author can preview
   // them. `import.meta.env.PROD` is inlined by Vite at build, so this is a
   // compile-time constant in the deployed worker, not a runtime env lookup.
+  // The predicate lives in schedule.js so it can be unit-tested without
+  // astro:content — see src/lib/schedule.test.js.
   const visible = import.meta.env.PROD
-    ? posts.filter((post) => post.data.pubDate.valueOf() <= Date.now())
+    ? posts.filter((post) => isPublished(post.data.pubDate))
     : posts;
   return visible.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 }

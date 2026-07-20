@@ -115,11 +115,15 @@ where `<branch-alias>` is the lowercased branch name with non-alphanumerics coll
 
 ## Smoke tests
 
-One post-build acceptance check: `scripts/smoke.mjs` (`npm run smoke`). No test framework — each assertion targets a regression that would be user-visible, not every class name in the markup.
+Two layers. `npm test` runs `node --test` over `src/**/*.test.js` — currently just `src/lib/schedule.test.js`, covering the scheduled-publishing date predicate (past/future/exact-midnight-UTC boundary). It exists because that logic is time-dependent and cannot be meaningfully exercised by an acceptance check against a corpus of already-published posts.
 
-First it inspects `dist/client/` for static artifacts: the expected assets (`noise.webp`, `profile-avatar.webp`, `favicon.svg`, `resume.pdf`, `og.png`, `404.html`, `sitemap-index.xml`) exist, and the built CSS bundle still pins `--accent: #8f5520`, `--max: 1100px`, has no inline `data:image/svg+xml` URIs, and has no leftover condensed-masthead rules.
+Everything else is one post-build acceptance check: `scripts/smoke.mjs` (`npm run smoke`). No test framework — each assertion targets a regression that would be user-visible, not every class name in the markup.
+
+First it inspects `dist/client/` for static artifacts: the expected assets (`noise.webp`, `profile-avatar.webp`, `favicon.svg`, `resume.pdf`, `og.png`, `404.html`, `sitemap-index.xml`) exist, and the built CSS bundle still pins `--accent: #8f5520`, `--max: 1100px`, has no inline `data:image/svg+xml` URIs, and has no leftover condensed-masthead rules. It also greps two source files for wiring that would fail silently if removed: `fetchWithRetry` in `src/lib/server.ts`, and the `isPublished` call in `src/lib/blog.ts` (the unit tests prove that predicate correct but would stay green if `getPublishedPosts` stopped calling it).
 
 Then it spins up `wrangler dev` once and fetches every on-demand route (`/`, `/work`, `/education`, `/urban-mobility`, `/blog`, one blog post chosen from the index, one tag page chosen from the index, `/blog/rss.xml`). The top-level GETs and the blog chain run in parallel — the wall-time savings are meaningful and `fetchExpectingNon5xx` already retries once on transient workerd 5xx. For every HTML route it asserts: 200 OK, `Cache-Control: public, max-age=3600` (set by `src/middleware.ts`, not per page), the full Broadsheet masthead rendered, the edition line matches `Vol. X · No. Y · Month YYYY`, no condensed-masthead residue, `ContactLinks` rendered twice (nav + footer), and the nav pill marked `active` on the correct link.
+
+For `/blog/rss.xml` it additionally asserts `Cache-Control: max-age=3600` (the route sets this itself — middleware only defaults Cache-Control on HTML), that `X-Content-Type-Options: nosniff` and `Strict-Transport-Security` are present (the feed went on-demand for scheduled publishing, so it no longer inherits `_headers` from the ASSETS binding and depends on middleware applying the security set to non-HTML responses), that every `<pubDate>` parses, and that none is in the future.
 
 The `/api/subscribe` sad paths are driven by a `subscribeCases` table (status-only assertions for the contract) and fanned out via `Promise.all`. Two assertions stay outside the table — the realistic-2.5KB-token payload guard (inequality, longer message) and the privacy-page content checks — but they fetch in parallel too.
 

@@ -4,7 +4,7 @@ Reference for how mjrossi.com is built, deployed, and quality-checked. Read alon
 
 ## Rendering model
 
-Astro 6 with `@astrojs/cloudflare`, configured with `output: 'server'` (`astro.config.mjs`). Every route runs on-demand in the Cloudflare Worker by default; the only routes that prerender are the ones that explicitly opt in via `export const prerender = true` — currently `/404` (Cloudflare needs a static `404.html` for the ASSETS binding to serve) and `/blog/rss.xml` (built from MDX known at build time; no reason to re-render per request). The convention: **anything that doesn't render a page lives under `src/pages/api/*`** and shares the `src/lib/server.ts` helpers.
+Astro 6 with `@astrojs/cloudflare`, configured with `output: 'server'` (`astro.config.mjs`). Every route runs on-demand in the Cloudflare Worker by default; the only route that prerenders is the one that explicitly opts in via `export const prerender = true` — currently just `/404` (Cloudflare needs a static `404.html` for the ASSETS binding to serve). `/blog/rss.xml` renders **on-demand** so that scheduled posts (a future `pubDate`) enter the feed the moment their date passes, with no rebuild — it filters through `getPublishedPosts` at request time just like the blog pages do (see "Scheduled publishing" in CLAUDE.md). The convention: **anything that doesn't render a page lives under `src/pages/api/*`** and shares the `src/lib/server.ts` helpers.
 
 The original example was `/api/contact` (was `/contact` before the `/api/*` convention landed): it returns a 302 to `mailto:hello@mjrossi.com`, keeping the address out of the static HTML.
 
@@ -134,6 +134,6 @@ If you change a CSS token, a route's chrome, or the navigation contract, expect 
 
 - The design tokens live in one place (`:root` in `src/styles/global.css`). Touch them and the smoke test will likely complain — update `scripts/smoke.mjs` in the same change.
 - The masthead is a single variant that renders everywhere. The name is an `<h1>` on `/` and a link to `/` on subpages.
-- Output mode is `server`, so new HTML routes are on-demand by default — no `prerender` export needed. The only routes that opt back into prerender are `/404` (Cloudflare needs a static `404.html`) and `/blog/rss.xml`. `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response, so individual pages don't need to. New routes still need a smoke assertion in `scripts/smoke.mjs`.
-- Anything that needs to stay current without a rebuild belongs on a non-prerendered route (the default) and inherits the middleware cache header.
+- Output mode is `server`, so new HTML routes are on-demand by default — no `prerender` export needed. The only route that opts back into prerender is `/404` (Cloudflare needs a static `404.html`). `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response, so individual pages don't need to. New routes still need a smoke assertion in `scripts/smoke.mjs`.
+- Anything that needs to stay current without a rebuild belongs on a non-prerendered route (the default) and inherits the middleware cache header. `/blog/rss.xml` is on-demand for exactly this reason — scheduled posts must be able to enter the feed without a redeploy — and because it isn't HTML it sets its own `Cache-Control` (middleware only touches `text/html`).
 - Interior pages reuse `src/components/PageHeader.astro` for the `.page-header` shape. If a new page needs a different header (e.g. embedded RSS link like `/blog`), use a bespoke header rather than inflating `PageHeader`'s prop surface.

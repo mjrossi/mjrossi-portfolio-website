@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository. For the full architecture, 
 
 ## Stack
 
-Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece of client JS (the `/blog` newsletter form — see "Newsletter" below). `output: 'server'` — every route runs in the Cloudflare worker by default; `/404` and `/blog/rss.xml` opt back into static via `export const prerender = true`. `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response so the edge cache absorbs traffic while the dynamic edition line refreshes hourly. Build output: `dist/client/` (assets, served via the `ASSETS` binding in `wrangler.jsonc`) plus the server bundle in `dist/server/` that Wrangler deploys as the worker. Node 22 (pinned in `mise.toml`).
+Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece of client JS (the `/blog` newsletter form — see "Newsletter" below). `output: 'server'` — every route runs in the Cloudflare worker by default; only `/404` opts back into static via `export const prerender = true`. `/blog/rss.xml` is intentionally on-demand (not prerendered) so scheduled posts can enter the feed at request time — see "Blog". `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response so the edge cache absorbs traffic while the dynamic edition line refreshes hourly. Build output: `dist/client/` (assets, served via the `ASSETS` binding in `wrangler.jsonc`) plus the server bundle in `dist/server/` that Wrangler deploys as the worker. Node 22 (pinned in `mise.toml`).
 
 **Server endpoint convention:** anything that doesn't render a page (redirects, JSON APIs) lives under `src/pages/api/*`. All endpoints share `src/lib/server.ts` for security headers, env access, JSON parsing, and error responses.
 
@@ -17,14 +17,14 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece 
 - `src/components/NewsletterSignup.astro` — newspaper-style email signup form. Rendered **only** in `src/pages/blog/index.astro` — this is the single carve-out from the no-client-JS rule. Loads Cloudflare Turnstile + a hoisted submit handler. Owns its own scoped `<style>` block (the `.newsletter-*` rules live with the component, not in `global.css`). Smoke asserts the form is present on `/blog` and absent on `/` (regression guard against accidental lifts into shared chrome).
 - `src/components/PageHeader.astro` — shared interior-page header (`<h1>` + optional description + default slot for `.page-meta`). Used by `/work`, `/education`, `/urban-mobility`, `/privacy`, and `/blog/tag/[tag]`. `/blog` keeps its custom `.blog-header` since the RSS-link variant doesn't fit the prop shape.
 - `src/components/PostTags.astro` — `<p class="post-tags">` chip list, rendered twice by `BlogPost.astro` (header and footer). Single source of truth for the tag-list markup.
-- `src/pages/*.astro` — one file per route. Pages: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/blog`, `/privacy`, `/404`. Output mode is `server`, so every page runs on-demand by default; `/404` and `/blog/rss.xml` opt back into static via `export const prerender = true`. `Cache-Control: public, max-age=3600` is applied centrally by `src/middleware.ts`, not per-page.
+- `src/pages/*.astro` — one file per route. Pages: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/blog`, `/privacy`, `/404`. Output mode is `server`, so every page runs on-demand by default; only `/404` opts back into static via `export const prerender = true` (`/blog/rss.xml` renders on-demand so scheduled posts surface without a rebuild). `Cache-Control: public, max-age=3600` is applied centrally by `src/middleware.ts`, not per-page.
 - `src/pages/api/contact.ts` — on-demand redirect. `GET /api/contact` returns 302 to `mailto:hello@mjrossi.com` so the address never appears in static HTML. Cloudflare's `_redirects` rejects `mailto:` destinations and the deploy is a Worker with Static Assets (not classic Pages), so `functions/` is unavailable.
 - `src/pages/api/subscribe.ts` — on-demand POST endpoint. Receives `{ email, turnstileToken, company }` from the newsletter form, verifies the Turnstile token, forwards to Buttondown (default double-opt-in; passes `ip_address` so Buttondown's firewall can geo/reputation-score the request and avoid false-positive blocks). Treats already-subscribed as success to avoid leaking the subscriber list; surfaces other Buttondown 400s as `upstream_rejected` so the client falls back to the "email me to add you manually" message. Uses helpers from `src/lib/server.ts`.
 - `src/lib/server.ts` — shared `/api/*` plumbing: `securityHeaders`, `getEnv()`, `parseJson()`, `jsonOk()`, `jsonError()`, `methodNotAllowed()`. The single source of truth for server-endpoint conventions.
 - `src/env.d.ts` — types for Cloudflare runtime `Env` (`BUTTONDOWN_API_KEY`, `TURNSTILE_SECRET_KEY`) and Astro `ImportMetaEnv` (`PUBLIC_TURNSTILE_SITE_KEY`).
 - `src/content.config.ts` — Zod schema for blog post frontmatter (single source of truth for required/optional fields and tag validation).
 - `src/content/blog/<slug>.mdx` — one file per post (or `<slug>/index.mdx` when colocating images).
-- `src/lib/blog.ts` — `getPublishedPosts`, `getAllTags`, `getPostsByTag`, plus the `dateFormatter` / `isoDate` / `postReadingTime` helpers used by `BlogPostEntry.astro`. The single boundary between content source and rendering — a future D1 migration swaps only this module.
+- `src/lib/blog.ts` — `getPublishedPosts`, `getAllTags`, `getPostsByTag`, plus the `dateFormatter` / `isoDate` / `postReadingTime` helpers used by `BlogPostEntry.astro`. The single boundary between content source and rendering — a future D1 migration swaps only this module. `getPublishedPosts` also enforces scheduled publishing: in production (`import.meta.env.PROD`) it hides any post whose `pubDate` is in the future; in dev those posts stay visible for preview. Because index, tag, and post routes all flow through it, that one filter gates every surface (RSS included, via the on-demand feed).
 - `src/lib/edition.ts` — `toRoman(n)` and `editionLine(now?)` for the masthead "Vol. X · No. Y · Month YYYY" line. Imported by `Base.astro` and rebuilt on every on-demand render so the line stays current without a scheduled rebuild.
 - `src/layouts/BlogPost.astro` — post chrome (title, byline, tags, optional cover, back link).
 - `src/pages/blog/index.astro`, `src/pages/blog/[...slug].astro`, `src/pages/blog/tag/[tag].astro`, `src/pages/blog/rss.xml.ts` — list, post, per-tag, and RSS routes.
@@ -73,7 +73,7 @@ Driven by Astro Content Collections + MDX. Posts are markdown, published via `gi
 - `src/pages/blog/index.astro` — list of posts
 - `src/pages/blog/[...slug].astro` — individual posts (slug = filename)
 - `src/pages/blog/tag/[tag].astro` — per-tag listings at `/blog/tag/<tag>`
-- `src/pages/blog/rss.xml.ts` — RSS feed at `/blog/rss.xml`
+- `src/pages/blog/rss.xml.ts` — RSS feed at `/blog/rss.xml`. On-demand (not prerendered) so scheduled posts enter the feed once their `pubDate` passes, with no rebuild; sets its own `Cache-Control: public, max-age=3600` since middleware only adds cache headers to HTML responses.
 - `src/components/Figure.astro` — opt-in component for inline images with a visible caption. Import it at the top of an `.mdx` post (`import Figure from '../../../components/Figure.astro';`) plus an ESM image import for each photo, then use `<Figure src={...} alt="..." caption="..." />`. Plain markdown `![alt](src)` still works for images that don't need a caption.
 
 ### Frontmatter
@@ -82,7 +82,7 @@ Driven by Astro Content Collections + MDX. Posts are markdown, published via `gi
 ---
 title: "Post title"
 description: "One-line summary — used on list, OG, RSS"
-pubDate: 2026-05-10
+pubDate: 2026-05-10        # a FUTURE date schedules the post — see below
 updatedDate: 2026-05-12   # optional
 tags: ["urban-mobility", "transit"]  # optional, must be kebab-case
 cover:                     # optional
@@ -92,7 +92,9 @@ cover:                     # optional
 ---
 ```
 
-Invalid frontmatter fails the build. Committing a post publishes it — there is no draft flag or scheduled-publish mechanism. Use a git branch if a post isn't ready to ship.
+Invalid frontmatter fails the build. Committing a post with a past or present `pubDate` publishes it immediately.
+
+**Scheduled publishing.** A post with a **future `pubDate`** can be merged to `main` and stays hidden in production — from the blog index, tag pages, its direct URL (which 404s), and the RSS feed — until that date passes, at which point it appears everywhere automatically with no rebuild or redeploy. This works because every one of those surfaces flows through `getPublishedPosts` (which filters future posts in production), and both the pages and the RSS feed are on-demand, so they re-evaluate "now" on each request. `pubDate` is a date, so the boundary is midnight UTC on that day. Future posts stay **visible in local `npm run dev`** for preview; note that `npm run preview` builds in production mode and therefore hides them exactly like production. There is no separate draft flag — a future date *is* the scheduling mechanism; use a git branch only if a post isn't ready to ship at all.
 
 ### Publishing
 

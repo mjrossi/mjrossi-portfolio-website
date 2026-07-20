@@ -229,6 +229,22 @@ try {
   // RSS
   check('rss: 200 OK',        rss.res.status === 200, `got ${rss.res.status}`);
   check('rss: has >=1 <item>', (rss.html.match(/<item>/g) || []).length >= 1);
+  // RSS is on-demand (not prerendered), so it sets its own Cache-Control since
+  // middleware only touches text/html responses.
+  check(
+    'rss: Cache-Control max-age=3600',
+    headerContains(rss.res, 'cache-control', 'max-age=3600'),
+    rss.res.headers.get('cache-control') ?? '(none)',
+  );
+  // Scheduled-publishing invariant: the production feed must never contain a
+  // post whose pubDate is still in the future. Guards the date filter in
+  // getPublishedPosts() against regressions (this holds for all time, so it
+  // won't rot as fixture dates pass).
+  const rssNow = Date.now();
+  const futureRssItems = [...rss.html.matchAll(/<pubDate>([^<]+)<\/pubDate>/g)]
+    .map((m) => Date.parse(m[1]))
+    .filter((t) => Number.isFinite(t) && t > rssNow);
+  check('rss: no future-dated items', futureRssItems.length === 0, `${futureRssItems.length} future item(s)`);
 
   // /api/contact — must 302 to mailto: so the address never appears in HTML.
   // fetch() can't follow mailto:, so request with redirect: 'manual'.

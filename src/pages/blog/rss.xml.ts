@@ -2,13 +2,17 @@ import rss from '@astrojs/rss';
 import type { APIContext } from 'astro';
 import { getPublishedPosts } from '../../lib/blog.ts';
 
-export const prerender = true;
+// On-demand (not prerendered): the feed is rebuilt per request so that
+// scheduled posts (future pubDate) enter it automatically once their date
+// passes — no redeploy needed — which keeps Buttondown's RSS-to-email and
+// syndication pipeline working for scheduled publishing. `getPublishedPosts`
+// applies the date filter in production.
 
 export async function GET(context: APIContext) {
   const posts = await getPublishedPosts();
   const site = context.site ?? new URL('https://mjrossi.com');
 
-  return rss({
+  const response = await rss({
     title: 'The Urbanist Lexicon',
     description: 'A record of systems, movement, and the transition from bits to bricks.',
     site,
@@ -24,4 +28,10 @@ export async function GET(context: APIContext) {
       `<atom:link href="${new URL('/blog/rss.xml', site).href}" rel="self" type="application/rss+xml" />`,
     ].join(''),
   });
+
+  // Middleware only sets Cache-Control on text/html responses, so set it
+  // explicitly here to match the site's 1-hour edge-cache posture and keep
+  // worker invocations cheap (a scheduled post still surfaces within the TTL).
+  response.headers.set('Cache-Control', 'public, max-age=3600');
+  return response;
 }

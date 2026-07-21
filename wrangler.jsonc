@@ -2,6 +2,25 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "mjrossi-portfolio-website",
   "compatibility_date": "2026-04-17",
+
+  // Disable the Worker's own `<name>.<subdomain>.workers.dev` alias. It is on
+  // by default and serves PRODUCTION on a hostname derivable from this repo,
+  // which `isPreviewHost` would otherwise treat as a preview and hand every
+  // scheduled draft to — RSS included. src/lib/preview.js excludes the alias
+  // in code as well; this is defence in depth, not a substitute.
+  "workers_dev": false,
+
+  // Per-branch preview URLs (`<alias>-<name>.<subdomain>.workers.dev`) are a
+  // SEPARATE setting, and this must stay explicit. `preview_urls` defaults to
+  // false in the config schema, and when it is absent from this file wrangler
+  // resolves it from server-side state at deploy time — it warns that "your
+  // 'preview_urls' setting is not in your Wrangler file" and then tracks the
+  // workers.dev route status, which the line above just turned off. Leaving it
+  // implicit therefore risks a deploy that silently kills both the host-based
+  // preview unlock (src/lib/preview.js) and .github/workflows/lighthouse.yml,
+  // which audits every PR at that hostname. wrangler warns about the
+  // false+true pairing but honours it.
+  "preview_urls": true,
   "observability": {
     "enabled": true
   },

@@ -729,6 +729,19 @@ em {
   user-select: none;
 }
 
+/* Marks a post that is not yet published. Only ever rendered where a
+   scheduled post is visible at all — a *.workers.dev preview deploy or a
+   signed preview link — so it never appears on the live site. */
+.post-scheduled {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0.05rem 0.4rem;
+  white-space: nowrap;
+}
+
 .post-entry-title {
   font-family: var(--font-serif);
   font-size: 1.2rem;

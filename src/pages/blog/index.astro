@@ -4,7 +4,7 @@ import BlogPostEntry from '../../components/BlogPostEntry.astro';
 import NewsletterSignup from '../../components/NewsletterSignup.astro';
 import { getPublishedPosts } from '../../lib/blog.ts';
 
-const posts = await getPublishedPosts();
+const posts = await getPublishedPosts({ showScheduled: Astro.locals.showScheduled });
 const postCountLabel = `${posts.length} post${posts.length === 1 ? '' : 's'}`;
 ---
 

@@ -5,13 +5,14 @@ import PageHeader from '../../../components/PageHeader.astro';
 import { getAllTags, getPostsByTag } from '../../../lib/blog.ts';
 
 const { tag } = Astro.params;
-const tags = await getAllTags();
+const query = { showScheduled: Astro.locals.showScheduled };
+const tags = await getAllTags(query);
 
 if (!tag || !tags.includes(tag)) {
   return new Response('Not Found', { status: 404 });
 }
 
-const posts = await getPostsByTag(tag);
+const posts = await getPostsByTag(tag, query);
 ---
 
 <Base

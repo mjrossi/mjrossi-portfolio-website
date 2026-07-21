@@ -9,7 +9,10 @@ import { getPublishedPosts } from '../../lib/blog.ts';
 // applies the date filter in production.
 
 export async function GET(context: APIContext) {
-  const posts = await getPublishedPosts();
+  // Only the host-based unlock reaches the feed. Signed preview links are
+  // scoped to a single post's own URL and deliberately cannot inject a draft
+  // here — this feed is what triggers Buttondown's email and social fan-out.
+  const posts = await getPublishedPosts({ showScheduled: context.locals.showScheduled });
   const site = context.site ?? new URL('https://mjrossi.com');
 
   const response = await rss({

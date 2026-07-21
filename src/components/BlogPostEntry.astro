@@ -1,14 +1,22 @@
 ---
 import { dateFormatter, isoDate, postReadingTime, type Post } from '../lib/blog.ts';
+import { isPublished } from '../lib/schedule.js';
 
 interface Props {
   post: Post;
 }
 
 const { post } = Astro.props;
+
+// Keyed off isPublished rather than the preview flag, so the badge is correct
+// by construction: it can only ever appear on a post that isn't live yet.
+const scheduled = !isPublished(post.data.pubDate);
 ---
 <article class="post-entry">
   <div class="post-entry-meta">
+    {scheduled && (
+      <span class="post-scheduled">Scheduled · {dateFormatter.format(post.data.pubDate)}</span>
+    )}
     <time datetime={isoDate(post.data.pubDate)}>
       {dateFormatter.format(post.data.pubDate)}
     </time>

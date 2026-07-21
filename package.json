@@ -8,6 +8,7 @@
     "smoke": "node scripts/smoke.mjs",
     "test": "node --test 'src/**/*.test.js'",
     "preview": "npm run build && wrangler dev",
+    "preview-link": "node scripts/preview-link.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {

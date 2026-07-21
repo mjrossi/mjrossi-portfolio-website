@@ -7,11 +7,30 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { request as httpRequest } from 'node:http';
+import { signPreviewToken, WORKER_NAME } from '../src/lib/preview.js';
+import { readDevVar } from './dev-vars.mjs';
 
 const DIST = resolve('dist/client');
 const PORT = Number(process.env.SMOKE_PORT ?? 8788);
 const BASE = `http://127.0.0.1:${PORT}`;
 const READY_TIMEOUT_MS = 30_000;
+
+// The permanently-future-dated post in src/content/blog/. Everything in the
+// scheduled-post matrix below keys off it.
+const FIXTURE_SLUG = 'smoke-scheduled-fixture';
+const FIXTURE_TAG = 'smoke-fixture';
+
+// Sign with whatever key the worker will actually hold. wrangler dev reads
+// .dev.vars and that wins over --var, so a developer with a real key there
+// would otherwise see the positive-path assertions fail locally while CI
+// (no .dev.vars) passed — the worst kind of flake. Mirror the precedence,
+// using the same parser scripts/preview-link.mjs signs with so quoting can't
+// drift between them.
+const devVarsKey = readDevVar('PREVIEW_SIGNING_KEY');
+const PREVIEW_KEY = devVarsKey ?? 'smoke-only-preview-signing-key';
+// Only inject a key when .dev.vars didn't supply one.
+const PREVIEW_KEY_ARGS = devVarsKey ? [] : ['--var', `PREVIEW_SIGNING_KEY:${PREVIEW_KEY}`];
 
 const fails = [];
 let passes = 0;
@@ -32,6 +51,13 @@ function occurrences(haystack, needle) {
     i += needle.length;
   }
   return n;
+}
+
+// Strip // and /* */ comments so source-grep assertions match real code.
+// Without this, a comment *explaining* that an identifier is deliberately
+// absent trips the very check asserting its absence.
+function stripComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
 // Substring-match a response header. Returns false for missing headers so
@@ -69,8 +95,66 @@ if (existsSync(blogLibPath)) {
   const blogLib = readFileSync(blogLibPath, 'utf8');
   check(
     'src/lib/blog.ts: getPublishedPosts filters via isPublished',
-    /isPublished\s*\(/.test(blogLib) && /import\.meta\.env\.PROD/.test(blogLib),
+    /isPublished\s*\(/.test(blogLib) && /showScheduled/.test(blogLib),
     'scheduled-publishing filter missing from getPublishedPosts — future-dated posts would publish early',
+  );
+}
+
+// Same reasoning for the scoped preview unlock: src/lib/preview.test.js proves
+// the signature and expiry logic, but dropping the previewSlug branch from the
+// post route would break every signed link with all tests still green.
+const postRoutePath = resolve('src/pages/blog/[...slug].astro');
+if (existsSync(postRoutePath)) {
+  // Comments stripped so the route's own explanatory comment can't satisfy
+  // this on its own — the identifier has to appear in real code.
+  const postRoute = stripComments(readFileSync(postRoutePath, 'utf8'));
+  check(
+    'blog post route: honours previewSlug',
+    /previewSlug/.test(postRoute),
+    'scoped preview unlock missing from [...slug].astro — signed preview links would 404',
+  );
+}
+
+// The preview unlock must never widen beyond the post's own URL. If
+// previewSlug ever reaches the listing helpers, a shared preview link could
+// inject an unpublished post into the RSS feed — which is what triggers
+// Buttondown's email and social syndication. Assert it stays out.
+// Comments are stripped first: both files *document* why previewSlug is
+// absent, and that prose would otherwise trip the check asserting its absence.
+const blogLibSource = existsSync(blogLibPath) ? stripComments(readFileSync(blogLibPath, 'utf8')) : '';
+check(
+  'src/lib/blog.ts: previewSlug does NOT reach the listing helpers',
+  !/previewSlug/.test(blogLibSource),
+  'previewSlug leaked into blog.ts — a signed preview link could reach the index/tags/RSS',
+);
+const rssRoutePath = resolve('src/pages/blog/rss.xml.ts');
+if (existsSync(rssRoutePath)) {
+  check(
+    'rss route: previewSlug does NOT reach the feed',
+    !/previewSlug/.test(stripComments(readFileSync(rssRoutePath, 'utf8'))),
+    'previewSlug leaked into the RSS route — a preview link could trigger syndication',
+  );
+}
+
+// isPreviewHost tells the production workers.dev alias apart from a preview
+// one purely by comparing the first hostname label to WORKER_NAME. If the
+// Worker were renamed in wrangler.jsonc without updating preview.js, that
+// comparison would stop matching and the live site's own alias would start
+// serving every scheduled draft, RSS included. Same drift-prevention rationale
+// as the shared csp.js / security-headers.js modules.
+const wranglerConfig = resolve('wrangler.jsonc');
+if (existsSync(wranglerConfig)) {
+  const raw = readFileSync(wranglerConfig, 'utf8');
+  const configuredName = stripComments(raw).match(/"name"\s*:\s*"([^"]+)"/)?.[1];
+  check(
+    'preview.js WORKER_NAME matches wrangler.jsonc name',
+    configuredName === WORKER_NAME,
+    `wrangler.jsonc name=${configuredName ?? '(none)'} vs preview.js WORKER_NAME=${WORKER_NAME}`,
+  );
+  check(
+    'wrangler.jsonc disables the production workers.dev alias',
+    /"workers_dev"\s*:\s*false/.test(stripComments(raw)),
+    'workers_dev is not set to false — the production alias would expose scheduled drafts',
   );
 }
 
@@ -180,7 +264,10 @@ function assertSharedChrome(label, res, html, activeHref) {
 
 const wrangler = spawn(
   'npx',
-  ['wrangler', 'dev', '--port', String(PORT), '--ip', '127.0.0.1', '--log-level', 'warn'],
+  [
+    'wrangler', 'dev', '--port', String(PORT), '--ip', '127.0.0.1', '--log-level', 'warn',
+    ...PREVIEW_KEY_ARGS,
+  ],
   { stdio: ['ignore', 'ignore', 'inherit'] },
 );
 
@@ -281,6 +368,209 @@ try {
   );
   const futureRssItems = rssDates.filter((t) => Number.isFinite(t) && t > rssNow);
   check('rss: no future-dated items', futureRssItems.length === 0, `${futureRssItems.length} future item(s)`);
+
+  // Preview unlock must fail closed. 127.0.0.1 is not a preview host (that's
+  // deliberate — it keeps every assertion above on the production code path),
+  // and no key can produce this signature, so a garbage token must change
+  // nothing at all. If either guard regressed, the response would flip to
+  // no-store and start carrying X-Robots-Tag.
+  const bogus = await fetch(`${BASE}/blog?preview=some-draft.9999999999.deadbeef`);
+  const bogusHtml = await bogus.text();
+  check('preview: invalid token still 200', bogus.status === 200, `got ${bogus.status}`);
+  check(
+    'preview: invalid token does not disable caching',
+    headerContains(bogus, 'cache-control', 'max-age=3600'),
+    bogus.headers.get('cache-control') ?? '(none)',
+  );
+  check(
+    'preview: invalid token reveals no scheduled post',
+    !bogusHtml.includes('post-scheduled'),
+    'a Scheduled badge rendered for an unsigned token',
+  );
+  // A malformed token must not 500 the route either — verifyPreviewToken
+  // swallows every parse failure and returns null.
+  const malformed = await fetch(`${BASE}/blog?preview=%2E%2E%2F..%2Fetc`);
+  check('preview: malformed token does not error', malformed.status === 200, `got ${malformed.status}`);
+
+  // ── Scheduled-post matrix ──────────────────────────
+  // The source-greps above prove previewSlug never reaches blog.ts or the RSS
+  // route, but a leak introduced in index.astro or tag/[tag].astro would slip
+  // past every one of them. These four cases close that gap against a real
+  // future-dated post, over HTTP, on the production code path (127.0.0.1 is
+  // deliberately not a preview host).
+  const fixtureExp = Math.floor(Date.now() / 1000) + 3600;
+  const fixtureToken = await signPreviewToken(FIXTURE_SLUG, fixtureExp, PREVIEW_KEY);
+  const q = `preview=${encodeURIComponent(fixtureToken)}`;
+
+  // 1. Locked: hidden everywhere, 404 at its own URL.
+  const [lockedIndex, lockedTag, lockedRss, lockedPost] = await Promise.all([
+    fetch(`${BASE}/blog`).then((r) => r.text()),
+    fetch(`${BASE}/blog/tag/${FIXTURE_TAG}`),
+    fetch(`${BASE}/blog/rss.xml`).then((r) => r.text()),
+    fetch(`${BASE}/blog/${FIXTURE_SLUG}/`),
+  ]);
+  check('scheduled: fixture absent from /blog', !lockedIndex.includes(FIXTURE_SLUG));
+  check('scheduled: fixture absent from RSS', !lockedRss.includes(FIXTURE_SLUG));
+  check('scheduled: fixture URL 404s', lockedPost.status === 404, `got ${lockedPost.status}`);
+  // getAllTags only sees published posts, so the tag page must not exist.
+  check('scheduled: fixture-only tag page 404s', lockedTag.status === 404, `got ${lockedTag.status}`);
+
+  // 2. Unlocked with a valid token — the post's OWN url only.
+  const unlocked = await fetch(`${BASE}/blog/${FIXTURE_SLUG}/?${q}`);
+  const unlockedHtml = await unlocked.text();
+  check('preview: valid token opens the scheduled post', unlocked.status === 200, `got ${unlocked.status}`);
+  check('preview: unlocked post shows the Scheduled badge', unlockedHtml.includes('post-scheduled'));
+  check(
+    'preview: unlocked post is no-store',
+    headerContains(unlocked, 'cache-control', 'no-store'),
+    unlocked.headers.get('cache-control') ?? '(none)',
+  );
+  check(
+    'preview: unlocked post is noindex',
+    headerContains(unlocked, 'x-robots-tag', 'noindex'),
+    unlocked.headers.get('x-robots-tag') ?? '(none)',
+  );
+
+  // 3. THE load-bearing direction: that same valid token must not widen the
+  // listing surfaces. RSS is the one that matters most — it drives Buttondown's
+  // email and the LinkedIn/Bluesky fan-out, so a link handed to a reviewer
+  // reaching it would publish the post for real.
+  const [tokenIndex, tokenRss] = await Promise.all([
+    fetch(`${BASE}/blog?${q}`).then((r) => r.text()),
+    fetch(`${BASE}/blog/rss.xml?${q}`).then((r) => r.text()),
+  ]);
+  check(
+    'preview: valid token does NOT add the post to /blog',
+    !tokenIndex.includes(FIXTURE_SLUG),
+    'a signed preview link widened the blog index',
+  );
+  check(
+    'preview: valid token does NOT add the post to RSS',
+    !tokenRss.includes(FIXTURE_SLUG),
+    'a signed preview link reached the feed — this would trigger email + social syndication',
+  );
+
+  // 4. A token minted for one slug must not open a DIFFERENT post's URL.
+  // The slug is inside the signed payload, and [...slug].astro compares
+  // previewSlug to the post it is rendering — this asserts that comparison
+  // over HTTP. src/lib/preview.test.js covers slug *tampering* (which breaks
+  // the signature); this covers the case the signature can't catch on its own,
+  // a perfectly valid token presented at the wrong URL.
+  //
+  // Deliberately NOT written as "valid token, some already-published post,
+  // expect 200": that passes with or without a token, so it can never fail
+  // for the reason it claims to test.
+  const wrongSlugToken = await signPreviewToken('some-other-draft', fixtureExp, PREVIEW_KEY);
+  const wrongSlug = await fetch(`${BASE}/blog/${FIXTURE_SLUG}/?preview=${encodeURIComponent(wrongSlugToken)}`);
+  check(
+    'preview: a token minted for another slug does not open the fixture',
+    wrongSlug.status === 404,
+    `got ${wrongSlug.status} — a signed token unlocked a post it was not minted for`,
+  );
+
+  // An expired token must 404 the post exactly like no token at all.
+  const expiredToken = await signPreviewToken(FIXTURE_SLUG, Math.floor(Date.now() / 1000) - 60, PREVIEW_KEY);
+  const expired = await fetch(`${BASE}/blog/${FIXTURE_SLUG}/?preview=${encodeURIComponent(expiredToken)}`);
+  check('preview: expired token 404s the scheduled post', expired.status === 404, `got ${expired.status}`);
+
+  // ── Host-based unlock (both directions) ────────────
+  // isPreviewHost is unit-tested as a pure function, and everything above runs
+  // on 127.0.0.1 (deliberately not a preview host). Neither proves the signal
+  // is actually WIRED UP: revert a call site to getPublishedPosts() with no
+  // argument and the whole suite stays green while PR previews silently stop
+  // showing drafts. Fail-closed, so not a leak — but a dead feature nobody
+  // would notice. These requests set Host so the worker sees a preview
+  // hostname, which is also a live demonstration of the caveat in CLAUDE.md:
+  // the unlock's strength is Cloudflare's routing, not this code.
+  // NOTE: this cannot use fetch(). Node's fetch (undici) silently overwrites
+  // the Host header with the URL's origin, so `headers: { host }` is dropped
+  // and every assertion below would test 127.0.0.1 again — the negative ones
+  // would still pass, which is precisely how a broken version of this test
+  // looks healthy. node:http sends what it is given.
+  const asHost = (path, hostname) =>
+    new Promise((ok, fail) => {
+      const req = httpRequest(
+        { host: '127.0.0.1', port: PORT, path, method: 'GET', headers: { Host: hostname } },
+        (res) => {
+          let body = '';
+          res.setEncoding('utf8');
+          res.on('data', (c) => (body += c));
+          // Minimal fetch-Response shape so these read like the rest of the file.
+          res.on('end', () =>
+            ok({
+              status: res.statusCode,
+              headers: {
+                get: (n) => {
+                  const v = res.headers[n.toLowerCase()];
+                  return Array.isArray(v) ? v.join(', ') : (v ?? null);
+                },
+              },
+              text: async () => body,
+            }),
+          );
+        },
+      );
+      req.on('error', fail);
+      req.end();
+    });
+
+  const PREVIEW_HOST = `smoke-${WORKER_NAME}.example.workers.dev`;
+  const [previewIndex, previewRss, previewPost] = await Promise.all([
+    asHost('/blog', PREVIEW_HOST),
+    asHost('/blog/rss.xml', PREVIEW_HOST),
+    asHost(`/blog/${FIXTURE_SLUG}/`, PREVIEW_HOST),
+  ]);
+  const previewIndexHtml = await previewIndex.text();
+  check(
+    'preview host: reveals the scheduled fixture on /blog',
+    previewIndexHtml.includes(FIXTURE_SLUG),
+    'a *.workers.dev preview host did not show the scheduled post — the showScheduled wiring may be broken',
+  );
+  check(
+    'preview host: /blog is no-store',
+    headerContains(previewIndex, 'cache-control', 'no-store'),
+    previewIndex.headers.get('cache-control') ?? '(none)',
+  );
+  check(
+    'preview host: /blog is noindex',
+    headerContains(previewIndex, 'x-robots-tag', 'noindex'),
+    previewIndex.headers.get('x-robots-tag') ?? '(none)',
+  );
+  check('preview host: fixture URL 200s', previewPost.status === 200, `got ${previewPost.status}`);
+  check(
+    'preview host: RSS includes the scheduled fixture',
+    (await previewRss.text()).includes(FIXTURE_SLUG),
+    'the host unlock is meant to widen RSS too (unlike a signed link)',
+  );
+  check(
+    'preview host: RSS is no-store',
+    headerContains(previewRss, 'cache-control', 'no-store'),
+    previewRss.headers.get('cache-control') ?? '(none)',
+  );
+
+  // The negative twin: the Worker's OWN workers.dev alias serves production on
+  // a hostname anyone can derive from this repo, so it must NOT unlock. Only
+  // proven at the unit level until now.
+  const PROD_ALIAS_HOST = `${WORKER_NAME}.example.workers.dev`;
+  const [aliasIndex, aliasRss] = await Promise.all([
+    asHost('/blog', PROD_ALIAS_HOST),
+    asHost('/blog/rss.xml', PROD_ALIAS_HOST),
+  ]);
+  check(
+    'production workers.dev alias: does NOT reveal the fixture on /blog',
+    !(await aliasIndex.text()).includes(FIXTURE_SLUG),
+    'the production alias unlocked scheduled drafts — isPreviewHost regressed',
+  );
+  check(
+    'production workers.dev alias: does NOT reveal the fixture in RSS',
+    !(await aliasRss.text()).includes(FIXTURE_SLUG),
+    'the production alias leaked a draft into the feed — this would trigger syndication',
+  );
+  check(
+    'production workers.dev alias: still cacheable',
+    headerContains(aliasIndex, 'cache-control', 'max-age=3600'),
+    aliasIndex.headers.get('cache-control') ?? '(none)',
+  );
 
   // /api/contact — must 302 to mailto: so the address never appears in HTML.
   // fetch() can't follow mailto:, so request with redirect: 'manual'.

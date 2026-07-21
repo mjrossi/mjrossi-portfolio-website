@@ -37,3 +37,28 @@
 
 BUTTONDOWN_API_KEY=your-buttondown-api-key
 TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+
+# PREVIEW_SIGNING_KEY signs the expiring links that reveal a scheduled post
+# before its pubDate (see CLAUDE.md → "Scheduled publishing"). Generate with:
+#   openssl rand -hex 32
+# and in production:
+#   wrangler secret put PREVIEW_SIGNING_KEY
+#
+# NOTE — this one bends the rule described above. The other two secrets are
+# read only by wrangler; this one is ALSO read from this file by
+# scripts/preview-link.mjs running on the host, because HMAC requires the
+# minting side and the verifying side to share a key. It is the only such
+# case. It is a signing key for unpublished blog drafts, not a credential for
+# anything external, so the blast radius of the exception is small.
+#
+# Optional: if unset, the worker rejects every preview link and only the
+# *.workers.dev host unlock remains. Nothing else breaks — so this is left
+# EMPTY on purpose.
+#
+# Unlike the two placeholders above (a Turnstile test secret that only pairs
+# with the test site key, and a Buttondown key that 401s), a signing key
+# placeholder would be fully FUNCTIONAL: whatever string ships here works, and
+# everyone who copied this file would share one key that is public in git.
+# Anyone could then mint a valid preview link for any slug. Generate your own:
+#   openssl rand -hex 32
+PREVIEW_SIGNING_KEY=

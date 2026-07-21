@@ -24,7 +24,7 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece 
 - `src/env.d.ts` — types for Cloudflare runtime `Env` (`BUTTONDOWN_API_KEY`, `TURNSTILE_SECRET_KEY`) and Astro `ImportMetaEnv` (`PUBLIC_TURNSTILE_SITE_KEY`).
 - `src/content.config.ts` — Zod schema for blog post frontmatter (single source of truth for required/optional fields and tag validation).
 - `src/content/blog/<slug>.mdx` — one file per post (or `<slug>/index.mdx` when colocating images).
-- `src/lib/blog.ts` — `getPublishedPosts`, `getAllTags`, `getPostsByTag`, plus the `dateFormatter` / `isoDate` / `postReadingTime` helpers used by `BlogPostEntry.astro`. The single boundary between content source and rendering — a future D1 migration swaps only this module. `getPublishedPosts` also enforces scheduled publishing: in production (`import.meta.env.PROD`) it hides any post whose `pubDate` is in the future; in dev those posts stay visible for preview. Because index, tag, and post routes all flow through it, that one filter gates every surface (RSS included, via the on-demand feed).
+- `src/lib/blog.ts` — `getPublishedPosts`, `getAllTags`, `getPostsByTag`, plus the `dateFormatter` / `isoDate` / `postReadingTime` helpers used by `BlogPostEntry.astro`. The single boundary between content source and rendering — a future D1 migration swaps only this module. `getPublishedPosts` also enforces scheduled publishing: in production (`import.meta.env.PROD`) it hides any post whose `pubDate` is in the future; in dev those posts stay visible for preview. Because index, tag, and post routes all flow through it, that one filter gates every surface (RSS included, via the on-demand feed). All three helpers take an optional `{ showScheduled }` — passed from `Astro.locals` so `*.workers.dev` preview deploys show drafts — defaulting to hidden so a call site that forgets it fails closed. The per-post signed-link unlock is deliberately *not* threaded through here; see "Previewing a scheduled post".
 - `src/lib/edition.ts` — `toRoman(n)` and `editionLine(now?)` for the masthead "Vol. X · No. Y · Month YYYY" line. Imported by `Base.astro` and rebuilt on every on-demand render so the line stays current without a scheduled rebuild.
 - `src/layouts/BlogPost.astro` — post chrome (title, byline, tags, optional cover, back link).
 - `src/pages/blog/index.astro`, `src/pages/blog/[...slug].astro`, `src/pages/blog/tag/[tag].astro`, `src/pages/blog/rss.xml.ts` — list, post, per-tag, and RSS routes.
@@ -32,8 +32,11 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece 
 - `astro.config.mjs` — Cloudflare adapter, MDX integration (for the blog), sitemap integration, Astro `Font` integration for Inter / Fraunces / Source Serif 4.
 - `wrangler.jsonc` — Worker config; `ASSETS` binding points at `dist/client`.
 - `src/lib/schedule.js` — `isPublished(pubDate, now?)`, the scheduled-publishing predicate. Plain JS (like `csp.js`) so `node --test` can import it without `astro:content`. Unit-tested in `src/lib/schedule.test.js`; see "Scheduled publishing" under Blog.
+- `src/lib/preview.js` — the two scheduled-post preview unlocks: `isPreviewHost(hostname)` (`*.workers.dev` branch/version hosts → show drafts, but **not** the Worker's own production alias) and `signPreviewToken` / `verifyPreviewToken` (signed, expiring, single-post links). Also exports `WORKER_NAME`, which must stay equal to `name` in `wrangler.jsonc` — smoke asserts it. Plain JS on `globalThis.crypto.subtle`, so the same module runs in the worker, under `node --test`, and in `scripts/preview-link.mjs` — the code that mints links is the code that verifies them. Unit-tested in `src/lib/preview.test.js`; see "Previewing a scheduled post".
+- `scripts/preview-link.mjs` — mints a signed preview link (`npm run preview-link -- <slug> [--hours N] [--host URL]`). Reads `PREVIEW_SIGNING_KEY` from the environment or `.dev.vars`; validates the slug against real content before signing. URL on stdout, metadata on stderr.
+- `scripts/dev-vars.mjs` — `readDevVar(name)`, the one `.dev.vars` parser shared by `preview-link.mjs` and `smoke.mjs`. Both sign preview tokens that the worker must then verify, so they have to agree byte-for-byte on quoting: if one strips surrounding quotes and the other doesn't, `PREVIEW_SIGNING_KEY="…"` makes smoke sign with a different key than wrangler injects, and the positive-path preview assertions fail locally while CI (which has no `.dev.vars`) passes. Same anti-drift rationale as `csp.js` / `security-headers.js`.
 - `src/lib/security-headers.js` — `SECURITY_HEADERS`, the canonical non-CSP header set (HSTS, COOP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy). Imported by `src/middleware.ts` and `scripts/gen-headers.mjs` so the worker and the static `_headers` file can't drift. Same split-source rationale as `csp.js`.
-- `src/middleware.ts` — applies `SECURITY_HEADERS` to **every** worker response (set-if-absent, so a route that chose a stricter value keeps it — `/api/*` sends `Referrer-Policy: no-referrer` and `Cache-Control: no-store`), then adds `Content-Security-Policy` and the default `Cache-Control: public, max-age=3600` to HTML responses only. Routes can override Cache-Control by setting it before middleware runs (e.g. prerendered `/404` emits `max-age=0` from Astro and middleware leaves it alone). `_headers` rules only apply to static asset responses served by the Cloudflare ASSETS binding; on-demand routes bypass that file, so middleware is the single source of truth for their headers. The all-responses scope matters for `/blog/rss.xml`, which went on-demand for scheduled publishing and would otherwise ship with no security headers at all.
+- `src/middleware.ts` — applies `SECURITY_HEADERS` to **every** worker response (set-if-absent, so a route that chose a stricter value keeps it — `/api/*` sends `Referrer-Policy: no-referrer` and `Cache-Control: no-store`), then adds `Content-Security-Policy` and the default `Cache-Control: public, max-age=3600` to HTML responses only. Routes can override Cache-Control by setting it before middleware runs (e.g. prerendered `/404` emits `max-age=0` from Astro and middleware leaves it alone). `_headers` rules only apply to static asset responses served by the Cloudflare ASSETS binding; on-demand routes bypass that file, so middleware is the single source of truth for their headers. The all-responses scope matters for `/blog/rss.xml`, which went on-demand for scheduled publishing and would otherwise ship with no security headers at all. Middleware also resolves the two scheduled-post preview unlocks *before* the route runs, handing them to routes as `locals.showScheduled` / `locals.previewSlug`, and — when either is active — **overrides** `Cache-Control` to `no-store` and sets `X-Robots-Tag: noindex, nofollow`. That override is the single exception to the set-if-absent rule above, because the values it replaces (`max-age=3600`, and the RSS route's own header) are exactly what would cache a draft.
 - `dist/client/_headers` — **generated**, not checked in. `scripts/gen-headers.mjs` writes it during `npm run build` from `src/lib/csp.js` + `src/lib/security-headers.js`, so the static-asset header set can't drift from what middleware applies to worker responses. Applies only to assets served by the Cloudflare ASSETS binding.
 - `public/scripts/newsletter.js` — the only client-side JS on the site. Served as a static asset (not bundled by Astro) so it loads as an external module from `/scripts/newsletter.js` and works under the strict `script-src 'self'` CSP. Imported only by `src/components/NewsletterSignup.astro`.
 - `public/.assetsignore` — keeps worker artifacts out of the static asset binding.
@@ -105,6 +108,60 @@ Two caveats worth knowing before scheduling a timed launch:
 
 The filter predicate lives in `src/lib/schedule.js` (plain JS, no `astro:content` import) and is unit-tested in `src/lib/schedule.test.js` via `npm test`. `smoke.mjs` separately asserts that `getPublishedPosts` still *calls* it — the unit tests alone would stay green if the filter were dropped from the call site.
 
+#### Previewing a scheduled post
+
+Two unlocks, both resolved in `src/middleware.ts` and both **fail-closed** (an unrecognised host with no valid signature hides drafts, exactly as production does). The predicates live in `src/lib/preview.js` — plain JS, same rationale as `schedule.js`, using `globalThis.crypto.subtle` so one module serves the worker, `node --test`, and the minting script.
+
+**1. PR preview deploys — automatic.** Any request to a `*.workers.dev` **branch/version** hostname reveals *every* scheduled post, across the index, tag pages, post URLs, and RSS. Push a branch, open the Cloudflare preview URL, and your drafts are there. No secret and no flag — but see the dashboard caveat below, which is load-bearing.
+
+The host check is an allowlist with two exclusions, both of which matter:
+
+- Anchored on the leading dot, so `evil-workers.dev` does **not** match.
+- **The Worker's own production alias does not match.** Cloudflare enables `<worker-name>.<subdomain>.workers.dev` by default, and it serves *production*. The subdomain is not a secret — it's committed in `.github/workflows/lighthouse.yml`. Left unhandled, that hostname would hand every scheduled draft, RSS included, to anyone who read this repo, with no token at all — defeating the whole point of scoping signed links. `isPreviewHost` therefore rejects a hostname whose first label is exactly `WORKER_NAME`, **and** `wrangler.jsonc` sets `"workers_dev": false` to turn the alias off. `smoke.mjs` asserts both halves, including that `WORKER_NAME` still matches `name` in `wrangler.jsonc` — a rename that broke the pairing would silently re-open the hole.
+
+**`preview_urls` must stay pinned to `true` in `wrangler.jsonc`, and this is not decoration.** Per-branch preview URLs are a separate setting from `workers_dev`, but they are not independent of it by default: `preview_urls` defaults to **false** in wrangler's config schema, and when the key is absent from the file wrangler resolves it from server-side state at deploy time — it warns that "your `preview_urls` setting is not in your Wrangler file" and then tracks the workers.dev route status, which `"workers_dev": false` just turned off. Left implicit, a deploy could therefore disable the very hostnames this unlock runs on **and** break `.github/workflows/lighthouse.yml`, which audits every PR at `<alias>-<name>.<subdomain>.workers.dev`. Both would fail at once and look like a Cloudflare outage rather than a config change. wrangler warns about the `workers_dev: false` + `preview_urls: true` pairing but honours it.
+
+`localhost` and `127.0.0.1` are deliberately **excluded** — that keeps `npm run preview` and `npm run smoke` on the real production code path, which is what makes smoke's "no future-dated RSS items" assertion meaningful. Use `npm run dev` to preview drafts locally.
+
+Host-based authorization is the weakest primitive here by construction: `context.url.hostname` comes from the request, so the unlock's strength is Cloudflare's routing, not this code. That is an acceptable trade for hiding drafts. Do not extend the pattern to anything that matters more.
+
+**2. Signed expiring links — for the production domain.** Reveals **one** post, on any host:
+
+```sh
+npm run preview-link -- my-draft                          # 48h, mjrossi.com
+npm run preview-link -- my-draft --hours 4
+npm run preview-link -- my-draft --host http://127.0.0.1:8788
+# → https://mjrossi.com/blog/my-draft/?preview=my-draft.1784634245.74ad2a0d…
+```
+
+The URL goes to stdout and the metadata to stderr, so it pipes cleanly. The script refuses to mint a link for a slug with no matching file — a typo would otherwise produce a valid-looking link that 404s.
+
+**Signed links are scoped to the post's own URL and nothing else.** They do not add the draft to `/blog`, tag pages, or `/blog/rss.xml`. That is deliberate and load-bearing: the RSS feed is what triggers Buttondown's email and LinkedIn/Bluesky fan-out, so a link you hand to a reviewer must not be able to reach it. `getPublishedPosts` therefore takes only a boolean `showScheduled`; the per-slug signal (`Astro.locals.previewSlug`) is read solely by `src/pages/blog/[...slug].astro`.
+
+`smoke.mjs` guards this two ways, because neither alone is sufficient:
+
+- **Source greps** assert the post route still honours `previewSlug` and that the identifier has **not** leaked into `blog.ts` or the RSS route. Treat these as *diagnostics, not coverage*: the live matrix below strictly dominates them on the surfaces they check, and a leak written directly into `index.astro` or `tag/[tag].astro` passes all of them. What they buy is a fast, pre-`wrangler` failure that names the exact file and invariant — without them the same bug surfaces 90 seconds later as "a signed preview link reached the feed" with no pointer to where.
+- **A live matrix** against `src/content/blog/smoke-scheduled-fixture.mdx`, a permanently future-dated fixture post (`pubDate: 2099-01-01`). Over HTTP it asserts the post is absent from `/blog` and RSS and 404s at its own URL with no token; that a valid signed token opens its own URL with `no-store` + `noindex`; that a validly-signed token minted for a *different* slug still 404s the fixture (the case a signature check alone cannot catch); and — the direction the source greps cannot see — that the **same valid token still leaves it absent from `/blog` and `/blog/rss.xml`**. The fixture exists because every real post is past-dated, so without it there is nothing for a leak to expose and the suite stays green through the bug.
+- **Both directions of the host unlock**, by setting a `Host` header on requests to the local worker. A `smoke-<worker-name>.example.workers.dev` host must reveal the fixture on `/blog`, its own URL, *and* RSS (the host unlock is broader than a signed link by design) with `no-store` + `noindex`; the bare `<worker-name>.example.workers.dev` production alias must reveal nothing and stay cacheable. The positive direction is the one that matters operationally — `isPreviewHost` is a well-unit-tested pure function, but nothing else proves it is still *wired* to the routes, and a dropped `showScheduled` argument fails closed and would otherwise go unnoticed.
+
+The fixture is visible in `npm run dev` and on `*.workers.dev` previews. That is expected — both surfaces show scheduled posts on purpose.
+
+The token is `<slug>.<exp>.<hmac>`; the slug is inside the signed payload, so a link minted for one draft cannot be edited to open another. Verification uses `crypto.subtle.verify` (constant-time) and checks the signature *before* expiry.
+
+Any response with either unlock active gets `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`, **overriding** whatever was set. This is the one place middleware overrides rather than setting-if-absent — a cached or indexed draft is precisely the failure being avoided.
+
+Setup:
+
+```sh
+openssl rand -hex 32                      # generate
+# → .dev.vars as PREVIEW_SIGNING_KEY (also read by scripts/preview-link.mjs)
+wrangler secret put PREVIEW_SIGNING_KEY   # same value, production
+```
+
+If `PREVIEW_SIGNING_KEY` is unset the worker rejects every link and only the `*.workers.dev` unlock remains — nothing else breaks.
+
+Wherever a scheduled post is visible, it carries a `Scheduled · <date>` badge (`.post-scheduled`). The badge keys off `isPublished`, not the preview flag, so it can only ever appear on a post that isn't live.
+
 ### Publishing
 
 1. Create `src/content/blog/my-post.mdx` with frontmatter + body.
@@ -124,6 +181,7 @@ The blog index has an email signup form (`src/components/NewsletterSignup.astro`
 | `PUBLIC_TURNSTILE_SITE_KEY` | Astro build (`import.meta.env`) — baked into HTML | `mise.toml` `[env]` (commits the real production site key — it's public by design). `mise.development.toml` overrides with the always-passes test key when `MISE_ENV=development` (recommended local shell setting). `mise.ci.toml` does the same when `MISE_ENV=ci` (set in `build.yml`). `mise.local.toml` (gitignored) can override anything for machine-specific testing. |
 | `BUTTONDOWN_API_KEY` | Worker runtime (`import { env } from 'cloudflare:workers'`) | `.dev.vars` locally; `wrangler secret put` in production |
 | `TURNSTILE_SECRET_KEY` | Worker runtime (`import { env } from 'cloudflare:workers'`) | `.dev.vars` locally; `wrangler secret put` in production |
+| `PREVIEW_SIGNING_KEY` | Worker runtime, **and** `scripts/preview-link.mjs` on the host | `.dev.vars` locally; `wrangler secret put` in production. Optional — unset means preview links are rejected and only the `*.workers.dev` unlock works. See "Previewing a scheduled post". |
 
 For Cloudflare Workers Builds to pick up `mise.toml`'s `[env]` block, the **build command** in the dashboard must activate mise — `mise install && mise exec -- npm run build` (rather than the default `npm run build`). Cloudflare reads `[tools]` automatically but does not auto-activate `[env]`.
 
@@ -159,6 +217,8 @@ These are two separate ownership layers; **no variable appears in both files, no
 - **wrangler → `.dev.vars` → Worker runtime.** Wrangler dev reads `.dev.vars` at startup and injects the values into the Worker's `env` binding namespace. These never reach shell env, the browser, or any other tool's `process.env`. In production, `wrangler secret put` replaces `.dev.vars` (encrypted at rest in Cloudflare's secret store).
 
 That separation is intentional: keeping worker secrets out of shell env means only wrangler can see them — a small but real defense-in-depth boundary that we don't want to collapse just to centralise into one file. "Prefer mise where possible" means mise is the default for shell-level vars; wrangler's `.dev.vars` exists because runtime secrets belong to wrangler's contract, not because we're doubling up.
+
+**One documented exception.** `PREVIEW_SIGNING_KEY` lives in `.dev.vars` like the others, but `scripts/preview-link.mjs` also reads it directly from that file when minting a link. HMAC has no way around this — the signing side and the verifying side must hold the same key, and the signing side is a local script. The exception is deliberately narrow: it's a signing key for unpublished blog drafts, not a credential for any external service, so the cost of the leak-surface it adds is small. Don't generalise from it — `BUTTONDOWN_API_KEY` and `TURNSTILE_SECRET_KEY` stay wrangler-only.
 
 ### Local development workflow
 

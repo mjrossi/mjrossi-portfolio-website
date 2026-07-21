@@ -23,5 +23,10 @@ jobs:
         # format. Single source of truth = mise.ci.toml + mise.toml.
         run: mise env --shell=bash | sed -E 's/^export ([^=]+)="?([^"]*)"?$/\1=\2/' >> "$GITHUB_ENV"
       - run: npm ci
+      # Unit tests before the build: they are the only proof the preview-token
+      # HMAC and the scheduled-publishing predicate are correct. smoke can
+      # assert the wiring exists but cannot verify the crypto, so without this
+      # step that logic ships ungated.
+      - run: npm test
       - run: npm run build
       - run: npm run smoke

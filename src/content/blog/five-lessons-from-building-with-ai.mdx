@@ -5,7 +5,7 @@ pubDate: 2026-08-11
 tags: ["urban-mobility", "urbanist-atlas", "artificial-intelligence", "software-engineering", "open-source"]
 ---
 
-Over the last two posts I wrote about the thought process behind the Urbanist Atlas: [the code](/blog/i-used-ai-to-build-the-urbanist-atlas/) — the Go API and the React frontend — and then [the data](/blog/the-data-was-the-hard-part/), where modeling cities and verifying organizations turned out to be the harder half. This is the third and last part, ending on my five primary takeaways and a note about transparency.
+Over the last two posts I wrote about the thought process behind the Urbanist Atlas: [the code](/blog/i-used-ai-to-build-the-urbanist-atlas/) — the Go API and the React frontend — and then [the data](/blog/the-data-was-the-hard-part/), where modeling cities and verifying organizations turned out to be the harder half. This is the third and last part: where AI genuinely fell short, what the month cost in money and energy, my five primary takeaways, and a note about transparency.
 
 ## Where AI fell short
 
@@ -35,7 +35,9 @@ There is a strong difference between "I want to build a directory of safe street
 
 Every clause in there is doing work. TDD is test-driven development — you write the failing test first, then the code that satisfies it — and asking for it up front meant tests existed from the first commit instead of being bolted on months later, when nobody wants to write them. Naming the standard library as the default is what kept the dependency list short. None of that happens if the prompt is one sentence long.
 
-This leads directly to my next point.
+That prompt names Go, and the first post covered how it got there: I left the stack open, Claude suggested Node, and I turned it down because I had specific reasons — static typing, a straightforward concurrency model, a language I'd shipped a production application in recently. So being explicit isn't only about getting better output. It's about doing that thinking first, so there's something concrete to hold the model's answer against. If you can't say why you want something, you'll take whatever you're handed.
+
+Being explicit gets you a better first draft. It doesn't get you a finished one.
 
 ### Never take the first result
 
@@ -43,11 +45,21 @@ I'll admit that "never" is a strong word here. However, it was pretty rare that 
 
 I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" — or, if I spotted a specific issue, I'd just tell the AI what I wanted. This is where our job as a software engineer shifts a little bit from writing the code to architecting it. We're architecting code that is well tested, well defined, maintainable, and appropriately simple — the ideas behind acronyms like SOLID and YAGNI ("you aren't gonna need it"), which mostly boil down to building the thing you actually need, and building it so the next person can change it without fear. Claude doesn't always land there on its own, so you say so (see point one: be explicit with your input!)
 
+The region graph from the last post is the clearest case of this. I seeded that brainstorming session with New York, Chicago, and San Francisco specifically because I knew those three places well enough to push back on a bad answer, and the multi-parent graph is what came out of the pushing — not what came back first. Tiers are the obvious way to model where somewhere is: a city inside a county inside a metro inside a state. They're also wrong, in a way you only catch if you already know that Park Slope has no border to look up and that Chicagoland crosses a state line.
+
+That's iteration — working the same problem with the same tool until the answer is actually good. It's necessary. It also isn't quite enough on its own, because everything inside that loop is still being judged by the thing that produced it.
+
 ### Review, review, and then review again
+
+Fresh context is what does the real work here. An agent that just spent an hour building something is carrying every assumption it made along the way, and it'll usually grade its work against those assumptions instead of against reality.
 
 Once a plan was drafted, I reviewed it and pushed back. Finally, after plenty of back and forth, I let it build. After it was built, I threw another agent with a fresh context to review the code that was generated. After 2 or 3 rounds of this, I'd do my own code review, leaving feedback, doing manual security analysis, and then throw another agent on it to address the feedback.
 
+The polygon function from the last post is why I kept doing this even when it felt like overkill. That code ran. It didn't crash, it didn't throw, it returned a number, and the number was entirely plausible — a few postal codes just quietly resolved to the wrong metro. No amount of iterating would have surfaced that, because there was nothing there to look wrong. What catches a bug like that is something with no stake in the answer being right: a fresh agent, a deterministic regeneration that diffs against what's committed, or a person reading it slowly.
+
 There are open-source extensions for Claude Code that formalize this kind of loop, so you don't have to hold the whole process in your head. I used [Superpowers](https://github.com/obra/superpowers), which packages workflows like brainstorming, planning, and code review into skills the agent reaches for on its own. [GSD](https://github.com/open-gsd/gsd-core) is another project in the same spirit, built more around planning work in phases; I haven't used it myself, so treat that as a pointer rather than a recommendation. The specific tool is less important than the shape: focused tasks, small scopes, and a review done by something that didn't write the code in the first place.
+
+Those first three lessons are mostly about how to work the tool. The last two are about what the tool is, and about what you shouldn't hand it no matter how well the first three are going.
 
 ### Remember what AI actually is
 
@@ -59,11 +71,17 @@ So the practical version is: before you start reviewing, ask which parts of what
 
 ### Your humanity is still important
 
-The fact is that these are machines with limitations, operating as effectively as they do in part because they've been trained on an enormous corpus of human-created knowledge. It's important not to anthropomorphize them. They can make mistakes, just like the humans whose work they learned from. Don't believe me? Consider Data from Star Trek: The Next Generation. Data is an extremely capable artificial life-form, but the character is compelling precisely because the series explores what he doesn't understand about being human.
+The fact is that these are machines with limitations, operating as effectively as they do in part because they've been trained on an enormous corpus of human-created knowledge. It's important not to anthropomorphize them. They can make mistakes, just like the humans whose work they learned from.
 
-## How you could do this too
+The mistakes aren't really the point, though. The six inclusion criteria from the last post are — local focus, active advocacy, transit or safe streets, no government agencies, no consultancies, no housing. Nothing in any training corpus could have decided that housing and YIMBY work, a neighboring movement and a friendly one, sits outside the Atlas's scope. Nothing could have decided that a group other people still write about, but that hasn't posted in two years, isn't one I can confidently send someone to. Those aren't really correctness questions with a right answer waiting to be retrieved. They're decisions about what the directory is for, and who it owes something to. A model can apply criteria like those very well. Someone still has to have chosen them, and be willing to defend the choice.
 
-It's never been easier to take an idea to a working prototype. That's an incredibly powerful tool, and the hope is that we'll see great ideas come to life that couldn't before. If you want to build your own idea, I hope this blog post provided some inspiration and some useful tips and tricks.
+Don't believe me? Consider Data from Star Trek: The Next Generation. Data is an extremely capable artificial life-form, but the character is compelling precisely because the series explores what he doesn't understand about being human.
+
+## If you want to try something like this
+
+It's never been easier to take an idea to a working prototype. That's an incredibly powerful tool, and the hope is that we'll see great ideas come to life that couldn't before. If you want to build your own idea, I hope this series was useful.
+
+I'd be wary of anyone handing you a process to copy, mine included. The specific shape of this project came out of what I already had — thirteen years of backend work, almost no frontend, and a subject I care about enough to argue with a model about. Yours will come out of something different. What transfers is probably smaller than the stack: say what you want precisely enough that you could disagree with the answer, don't stop at the first thing that works, and get something other than the author to check it. Where you know the domain, I'd delegate hard and review fast. Where you don't, slow down — that's where a plausible answer gets expensive.
 
 Beyond the model choices I mentioned earlier, the tooling is all there to borrow. Since the code is open source, I'd encourage you to look at my `just` file if you want to take any of it — like the containerized link validation that checks every organization's website through a VPN and flags the dead ones.
 

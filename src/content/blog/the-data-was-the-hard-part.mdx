@@ -36,7 +36,13 @@ The same graph shape is what lets messier cases work without special-casing each
 
 <RegionGraphChicago />
 
-None of it is hard-coded to the US, either. Canada gets the same graph, tuned to its own geography: postal codes anchor at the FSA (Forward Sortation Area, the smallest boundary Canada publishes) matched to its CMA (census metropolitan area: Canada's rough equivalent of an MSA) by a spatial overlap of the two boundary shapes, since Canada has no county layer to lean on the way the US does. Ottawa-Gatineau, which straddles Ontario and Quebec, reuses the same cross-border shape I built for NYC and Chicago: a stateless umbrella metro with one region per province underneath it, so a Gatineau postal code resolves to Quebec and never leaks into Ontario's results. I also modeled Portugal as a stress test, to see whether the graph held up against an administrative geography that nobody designed with the US or Canada in mind. Lisbon's metro area multi-parents into two separate EU statistical regions (NUTS-II, the mid-level tier the EU uses to carve up member states for reporting) — structurally the same problem as Brooklyn having two parents. Madeira needed the reverse: as an autonomous region it sits parallel to that tier rather than beneath it, with no parent at all. That data isn't live — it exists to validate the model, not to ship — and Portugal stays out of the API's default country list until the editorial coverage is ready. Germany is the next one I've sketched but haven't built. The design doc works Berlin through as a test case, a city-state that's technically a _Land_ (German for federal state) but functions like a city. Whether that holds up is a problem for whenever I get there.
+None of it is hard-coded to the US, either. Canada gets the same graph, tuned to its own geography: postal codes anchor at the FSA (Forward Sortation Area, the smallest boundary Canada publishes) matched to its CMA (census metropolitan area: Canada's rough equivalent of an MSA) by a spatial overlap of the two boundary shapes, since Canada has no county layer to lean on the way the US does.
+
+Ottawa-Gatineau, which straddles Ontario and Quebec, reuses the same cross-border shape I built for NYC and Chicago: a stateless umbrella metro with one region per province underneath it, so a Gatineau postal code resolves to Quebec and never leaks into Ontario's results.
+
+I also modeled Portugal as a stress test, to see whether the graph held up against an administrative geography that nobody designed with the US or Canada in mind. Lisbon's metro area multi-parents into two separate EU statistical regions (NUTS-II, the mid-level tier the EU uses to carve up member states for reporting) — structurally the same problem as Brooklyn having two parents. Madeira needed the reverse: as an autonomous region it sits parallel to that tier rather than beneath it, with no parent at all. That data isn't live — it exists to validate the model, not to ship — and Portugal stays out of the API's default country list until the editorial coverage is ready.
+
+Germany is the next one I've sketched but haven't built. The design doc works Berlin through as a test case, a city-state that's technically a _Land_ (German for federal state) but functions like a city. Whether that holds up is a problem for whenever I get there.
 
 I was extremely proud of the region graph design — a great example of using AI alongside my own knowledge of cities to build an adaptable data model. But designing the shape was only half the job. The graph still had to be *built*, out of real government data, and that's where the genuinely hard problems were waiting.
 
@@ -66,6 +72,8 @@ The first bit was deciding exactly what organizations I wanted to include, so I 
 4. Government agencies are excluded — DOTs, transit boards, and their subsidiaries
 5. Consultancies are excluded — advocacy has to be the primary product, not consulting
 6. Housing & YIMBY are excluded — a neighboring movement, but a tighter scope keeps local search useful
+
+Those six rules look like an implementation detail. They're closer to the definition of the Atlas itself — the line between what belongs in it and what doesn't, and therefore what the whole thing is *for*. Every one of them is a call I had to make before any amount of AI research was worth anything.
 
 In practice I hold "active" to a harder line than that list states: something visible on the organization's own site or social presence within the last 12 months. External press alone doesn't clear the bar. A group that other people still write about but that hasn't posted in two years isn't one I can confidently send someone to.
 

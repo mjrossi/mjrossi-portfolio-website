@@ -14,6 +14,7 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece 
 - `src/components/ContactLinks.astro` — inline-SVG icon row (GitHub, LinkedIn, `/api/contact` email, Bluesky). Rendered twice per page (nav + footer); the smoke tests assert both occurrences.
 - `src/components/BlogPostEntry.astro` — shared `<article class="post-entry">` card used by `blog/index.astro` and `blog/tag/[tag].astro`.
 - `src/components/Figure.astro` — `<figure>` wrapper around `astro:assets` `<Image>` with an optional `<figcaption>`. Imported in `.mdx` posts when an inline image needs a visible caption separate from its `alt`.
+- `src/components/diagrams/*.astro` — per-post explanatory diagrams as hand-authored **inline SVG**. Not site chrome; each is imported by exactly one `.mdx` post. Hand-authored rather than generated because the no-client-JS rule plus `script-src 'self'` rules out running mermaid in the browser, and pre-rendering it would mean a Puppeteer dev dependency and a house style that fights the Broadsheet palette. They emit their own `<figure class="post-figure post-diagram">` and reuse the existing `.post-figure` / `figcaption` rules — they do **not** go through `Figure.astro`, which requires `ImageMetadata`. Shared styling (`.post-diagram`, `.dg-*`) lives in `global.css`. See "Diagrams in posts" under Blog.
 - `src/components/NewsletterSignup.astro` — newspaper-style email signup form. Rendered **only** in `src/pages/blog/index.astro` — this is the single carve-out from the no-client-JS rule. Loads Cloudflare Turnstile + a hoisted submit handler. Owns its own scoped `<style>` block (the `.newsletter-*` rules live with the component, not in `global.css`). Smoke asserts the form is present on `/blog` and absent on `/` (regression guard against accidental lifts into shared chrome).
 - `src/components/PageHeader.astro` — shared interior-page header (`<h1>` + optional description + default slot for `.page-meta`). Used by `/work`, `/education`, `/urban-mobility`, `/privacy`, and `/blog/tag/[tag]`. `/blog` keeps its custom `.blog-header` since the RSS-link variant doesn't fit the prop shape.
 - `src/components/PostTags.astro` — `<p class="post-tags">` chip list, rendered twice by `BlogPost.astro` (header and footer). Single source of truth for the tag-list markup.
@@ -80,6 +81,23 @@ Driven by Astro Content Collections + MDX. Posts are markdown, published via `gi
 - `src/pages/blog/tag/[tag].astro` — per-tag listings at `/blog/tag/<tag>`
 - `src/pages/blog/rss.xml.ts` — RSS feed at `/blog/rss.xml`. On-demand (not prerendered) so scheduled posts enter the feed once their `pubDate` passes, with no rebuild; sets its own `Cache-Control: public, max-age=3600` since middleware only adds cache headers to HTML responses.
 - `src/components/Figure.astro` — opt-in component for inline images with a visible caption. Import it at the top of an `.mdx` post (`import Figure from '../../../components/Figure.astro';`) plus an ESM image import for each photo, then use `<Figure src={...} alt="..." caption="..." />`. Plain markdown `![alt](src)` still works for images that don't need a caption.
+
+### Diagrams in posts
+
+When a post needs a diagram rather than a photograph, it goes in `src/components/diagrams/` as an `.astro` component emitting **hand-authored inline SVG**, imported by that one post. Two exist today, both in `the-data-was-the-hard-part.mdx`: `RegionGraphNYC.astro` and `RegionGraphChicago.astro`.
+
+Inline SVG rather than a rendered image, for reasons that are unlikely to change:
+
+- **Mermaid can't run here.** The Atlas repo draws these same shapes in mermaid, but the site ships no client JS outside the newsletter carve-out and `script-src 'self'` would block it anyway. Pre-rendering mermaid to a file means a Puppeteer/Chromium dev dependency and a visual style that fights the Broadsheet palette.
+- **It inherits the design system.** The SVG uses `.dg-*` classes defined in `global.css`, so nodes, rules, and type resolve to `--bg2`, `--border`, `--accent`, `--accent-rule`, `--muted`, `--font-ui` — the same tokens as the rest of the page, with nothing to re-sync if the palette moves.
+- Sharp at any zoom, no image weight, and the graph is readable by a screen reader via `role="img"` + `<title>` + `<desc>`.
+
+Conventions worth keeping:
+
+- **Transcribe from shipped data, not from prose or design docs.** Both diagrams were built against `api/seed/*.toml` in the Atlas repo, and the header comment in each component records the exact `parents = [...]` lines it encodes. The design doc's mermaid contains at least one node (`dupage`) that isn't in the shipped seed. Anything drawn from a doc instead of the data will eventually contradict the product.
+- **Don't draw an edge the code doesn't walk.** `rollup_states` is browse-only and is deliberately absent from both diagrams — drawing it would assert exactly the relationship the diagram exists to rule out.
+- **Marker and `aria-labelledby` IDs must be unique per page.** Two diagrams render in the same post, so IDs are prefixed (`dg-nyc-*`, `dg-chi-*`).
+- **Wide diagrams scroll, they don't shrink.** `.post-diagram` is an `overflow-x: auto` box and the SVG carries `min-width: 460px`, so on a narrow screen the diagram scrolls inside its own container while the page body never scrolls sideways. Below that floor the labels stop being legible, so scrolling is the better trade. Verify with a real narrow column — headless Chrome clamps its layout viewport to ~500px, so a 390px `--window-size` screenshot shows a cropped 500px layout and looks like a bug that isn't there.
 
 ### Frontmatter
 

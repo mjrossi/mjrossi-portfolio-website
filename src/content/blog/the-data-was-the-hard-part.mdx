@@ -5,6 +5,9 @@ pubDate: 2026-08-04
 tags: ["urban-mobility", "urbanist-atlas", "data-modeling", "artificial-intelligence"]
 ---
 
+import RegionGraphNYC from '../../components/diagrams/RegionGraphNYC.astro';
+import RegionGraphChicago from '../../components/diagrams/RegionGraphChicago.astro';
+
 This is the second of three posts about building [the Urbanist Atlas](https://urbanistatlas.com) with Claude Code. [The first](/blog/i-used-ai-to-build-the-urbanist-atlas/) covered the code — the Go API, the React frontend, and the moment I turned down Claude's first architectural recommendation because I had reasons I could articulate. It ended on a warning: the danger isn't that AI makes a bad choice, it's that it makes a plausible one you don't know enough to question.
 
 This post is where that stopped being a warning and started costing me time. The data is where I knew the most, cared the most, and caught the most.
@@ -27,7 +30,11 @@ That asymmetry is the whole trick. Brooklyn reaches New York State by its own di
 
 What a Brooklyn search doesn't return is New Jersey's *own* advocacy groups. Bike JC, the New Jersey Bike & Walk Coalition, Trenton Cycling Revolution — those hang off the New Jersey state node, and New Jersey is not an ancestor of Brooklyn, so they never surface. That's the line the graph is drawing: a regional organization whose work genuinely covers you is worth showing, another state's neighborhood cycling group is not. Parent New York State under the metro instead, and that distinction collapses.
 
+<RegionGraphNYC />
+
 The same graph shape is what lets messier cases work without special-casing each one. Chicago is the clearest example of why the tiers refuse to line up. Chicagoland spills across the state line into northwest Indiana, and the Census metro area is officially an Illinois-Indiana one. But the RTA — the transit district that actually funds the trains and buses — stops dead at the Illinois border, covering Cook County plus five collar counties and nothing else. Those are two different shapes drawn over roughly the same place, so they're two different nodes rather than one fudged tier. A search from the Loop picks up both. A search from Gary, Indiana picks up the metro and Indiana's groups, but never the RTA and never Illinois — which is right, because an Indiana rider has no say in an Illinois transit agency.
+
+<RegionGraphChicago />
 
 None of it is hard-coded to the US, either. Canada gets the same graph, tuned to its own geography: postal codes anchor at the FSA (Forward Sortation Area, the smallest boundary Canada publishes) matched to its CMA (census metropolitan area: Canada's rough equivalent of an MSA) by a spatial overlap of the two boundary shapes, since Canada has no county layer to lean on the way the US does. Ottawa-Gatineau, which straddles Ontario and Quebec, reuses the same cross-border shape I built for NYC and Chicago: a stateless umbrella metro with one region per province underneath it, so a Gatineau postal code resolves to Quebec and never leaks into Ontario's results. I also modeled Portugal as a stress test, to see whether the graph held up against an administrative geography that nobody designed with the US or Canada in mind. Lisbon's metro area multi-parents into two separate EU statistical regions (NUTS-II, the mid-level tier the EU uses to carve up member states for reporting) — structurally the same problem as Brooklyn having two parents. Madeira needed the reverse: as an autonomous region it sits parallel to that tier rather than beneath it, with no parent at all. That data isn't live — it exists to validate the model, not to ship — and Portugal stays out of the API's default country list until the editorial coverage is ready. Germany is the next one I've sketched but haven't built. The design doc works Berlin through as a test case, a city-state that's technically a _Land_ (German for federal state) but functions like a city. Whether that holds up is a problem for whenever I get there.
 

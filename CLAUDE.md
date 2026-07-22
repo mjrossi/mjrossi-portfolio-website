@@ -84,7 +84,7 @@ Driven by Astro Content Collections + MDX. Posts are markdown, published via `gi
 
 ### Diagrams in posts
 
-When a post needs a diagram rather than a photograph, it goes in `src/components/diagrams/` as an `.astro` component emitting **hand-authored inline SVG**, imported by that one post. Two exist today, both in `the-data-was-the-hard-part.mdx`: `RegionGraphNYC.astro` and `RegionGraphChicago.astro`.
+When a post needs a diagram rather than a photograph, it goes in `src/components/diagrams/` as an `.astro` component emitting **hand-authored inline SVG**, imported by that one post. Three exist today, all in `the-data-was-the-hard-part.mdx`: `RegionGraphNYC.astro`, `RegionGraphChicago.astro`, and `PolygonHoleArea.astro`.
 
 Inline SVG rather than a rendered image, for reasons that are unlikely to change:
 
@@ -94,9 +94,10 @@ Inline SVG rather than a rendered image, for reasons that are unlikely to change
 
 Conventions worth keeping:
 
-- **Transcribe from shipped data, not from prose or design docs.** Both diagrams were built against `api/seed/*.toml` in the Atlas repo, and the header comment in each component records the exact `parents = [...]` lines it encodes. The design doc's mermaid contains at least one node (`dupage`) that isn't in the shipped seed. Anything drawn from a doc instead of the data will eventually contradict the product.
-- **Don't draw an edge the code doesn't walk.** `rollup_states` is browse-only and is deliberately absent from both diagrams — drawing it would assert exactly the relationship the diagram exists to rule out.
-- **Marker and `aria-labelledby` IDs must be unique per page.** Two diagrams render in the same post, so IDs are prefixed (`dg-nyc-*`, `dg-chi-*`).
+- **Transcribe from shipped data, not from prose or design docs.** The two region graphs were built against `api/seed/*.toml` in the Atlas repo, and the header comment in each component records the exact `parents = [...]` lines it encodes. The design doc's mermaid contains at least one node (`dupage`) that isn't in the shipped seed. Anything drawn from a doc instead of the data will eventually contradict the product.
+- **A diagram of an algorithm cites the function, not the seed.** `PolygonHoleArea.astro` is the one diagram with no TOML behind it — it illustrates `polygonArea` / `nestingDepth` in `api/internal/etl/ca/geom.go`, and its header comment records the depth-parity rule it encodes. Where possible make the drawing enforce the claim rather than restate it: that shape is a single `<path>` with `fill-rule="evenodd"`, so the browser fills it by the same rule the ETL measures it by and the picture can't silently drift from the prose.
+- **Don't draw an edge the code doesn't walk.** `rollup_states` is browse-only and is deliberately absent from both region graphs — drawing it would assert exactly the relationship the diagram exists to rule out.
+- **Marker and `aria-labelledby` IDs must be unique per page.** Three diagrams render in the same post, so IDs are prefixed (`dg-nyc-*`, `dg-chi-*`, `dg-area-*`).
 - **Wide diagrams scroll, they don't shrink.** `.post-diagram` is an `overflow-x: auto` box and the SVG carries `min-width: 460px`, so on a narrow screen the diagram scrolls inside its own container while the page body never scrolls sideways. Below that floor the labels stop being legible, so scrolling is the better trade. Verify with a real narrow column — headless Chrome clamps its layout viewport to ~500px, so a 390px `--window-size` screenshot shows a cropped 500px layout and looks like a bug that isn't there.
 
 ### Frontmatter

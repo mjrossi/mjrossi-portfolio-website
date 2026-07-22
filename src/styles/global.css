@@ -1134,6 +1134,41 @@ em {
   fill: var(--accent);
 }
 
+/* Polygon-area diagram. .dg-poly is one path carrying every outline and drawn
+   with fill-rule="evenodd", so the browser fills it by the same rule the ETL
+   measures it by — holes stay unfilled without being drawn separately. */
+.dg-poly {
+  fill: var(--bg2);
+  stroke: none;
+}
+
+.dg-ring {
+  fill: none;
+  stroke: var(--accent-rule);
+  stroke-width: 1.5;
+}
+
+/* The hole — the outline whose sign the winding got wrong. */
+.dg-ring--hole {
+  stroke: var(--accent);
+}
+
+.dg-wind {
+  stroke: var(--accent-rule);
+  stroke-width: 1.25;
+}
+
+.dg-row {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  fill: var(--text);
+  text-anchor: start;
+}
+
+.dg-call--start {
+  text-anchor: start;
+}
+
 .post-body hr {
   border: none;
   border-top: 1px solid var(--accent-rule);

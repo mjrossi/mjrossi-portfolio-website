@@ -7,6 +7,7 @@ tags: ["urban-mobility", "urbanist-atlas", "data-modeling", "artificial-intellig
 
 import RegionGraphNYC from '../../components/diagrams/RegionGraphNYC.astro';
 import RegionGraphChicago from '../../components/diagrams/RegionGraphChicago.astro';
+import PolygonHoleArea from '../../components/diagrams/PolygonHoleArea.astro';
 
 This is the second of three posts about building [the Urbanist Atlas](https://urbanistatlas.com) with Claude Code. [The first](/blog/i-used-ai-to-build-the-urbanist-atlas/) covered the code — the Go API, the React frontend, and the moment I turned down Claude's first architectural recommendation because I had reasons I could articulate. It ended on a warning: the danger isn't that AI makes a bad choice, it's that it makes a plausible one you don't know enough to question.
 
@@ -54,11 +55,21 @@ I was insistent on one property here: the generator had to be deterministic. Sam
 
 Which is how Connecticut turned into a puzzle. Two of the federal datasets I was combining were different vintages of the same geography — the Census Bureau had swapped the state's counties for new planning regions in 2022, and only one of the two files had caught up. Neither was wrong. They just disagreed about what year it was, and the join between them returned nothing rather than failing loudly, stranding hundreds of ZIP codes at the state line instead of their actual metro until I wrote a pass to reconcile the two.
 
-The Canadian side broke differently. Matching each FSA to the CMA it overlaps most, the way I described above, sounds like a lookup but isn't — it means actually computing the area of a polygon, in code, without a geospatial library. The obvious implementation is to add up the signed areas of the shape's outlines. That's wrong, and wrong in a way nothing tells you about: the library handing over those shapes makes no guarantee about which direction a hole is drawn in, so a hole's area gets *added* to the total instead of subtracted. Nothing crashes. Nothing throws an error. A handful of postal codes just quietly resolve to the wrong metro.
+The Canadian side broke differently. Matching each FSA to the CMA it overlaps most, the way I described above, sounds like a lookup but isn't — it's really a measurement: clip the FSA's boundary against the metro's, then measure how much shape is left over. A library does the clipping. Nothing in it measures area — that part I had to write.
 
-I caught that one, and then Claude and I fixed it together — you work out whether an outline is a hole by counting how many other outlines it sits inside. Odd means it's a hole and comes off the total; even means it's solid and gets added.
+The obvious way to measure it is the shoelace formula — you walk each outline of the shape in order and total up the area it sweeps out. It has a property that looks like a gift: walk an outline backwards and its area comes out negative. So if every hole is drawn in the opposite direction from the boundary around it, the holes subtract themselves and you never have to think about them.
 
-That one function is the argument of this whole post in miniature. The AI wrote plausible geometry code very fast. Plausible is not the same thing as correct, and the only thing standing between the two was a person reading it.
+And that is exactly the assumption that breaks. It only holds if holes are reliably drawn backwards, and the clipping library makes no such promise — it hands back the outlines in whatever order it traced them, each drawn in whichever direction the algorithm happened to go. When a hole comes back drawn the same way as the boundary around it, its area gets *added* to the total instead of subtracted. Nothing crashes. Nothing throws an error. The number just comes back too big — and that number is what decides which metro an FSA belongs to.
+
+Nothing had actually landed wrong in the shipped data by the time I caught it in review. But nothing in the run would have told me if it had.
+
+So Claude and I fixed it together, by throwing out the drawing direction entirely and reading the nesting instead: for each outline, count how many of the other outlines it sits inside. An odd number means it's a hole, so its area comes off the total; an even number — including none at all — means it's solid, so it gets added. Which way it was drawn never enters into it.
+
+<PolygonHoleArea />
+
+That fix then had its own plausible-looking bug. To ask whether one outline sits inside another, you need a point that's definitely inside the first, and the obvious candidate — one of its corners — is exactly the wrong choice, because two outlines in a clipped shape can meet at a corner. A later review pass caught it on a test polygon: area 9,200, measured 10,800. The hole had been counted as solid.
+
+That one function is the argument of this whole post in miniature. The AI wrote plausible geometry code very fast — and then wrote a plausible fix for it. Plausible is not the same thing as correct, and the only thing standing between the two was someone actually reading the code: me on the first bug, a later review pass on the second.
 
 ## Cataloging the organizations
 

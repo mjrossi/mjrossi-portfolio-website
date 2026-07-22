@@ -9,7 +9,7 @@ Over the last two posts I wrote about the thought process behind the Urbanist At
 
 ## Where AI fell short
 
-There were a good number of instances where I had to ask myself: is this really saving me time? There are a lot of loops, a lot of time spent waiting, and reviewing output over and over again often becomes fairly mind-numbing. Some of these shortcomings were limitations of the models themselves. Others were limitations of the workflow they created. There's an art and a craft to writing software, and I found that some of it gets harder to access when you're spending your time reviewing generated code instead of building the mental model yourself. The code it produces can often be just average; a model trained on a vast corpus of existing code tends toward the familiar, not necessarily the best solution for your particular problem.
+There were a good number of instances where I had to ask myself: is this really saving me time? There are a lot of loops, a lot of time spent waiting, and reviewing output over and over again often becomes fairly mind-numbing. Some of these shortcomings were limitations of the models themselves. Others were limitations of the workflow they created. There's an art and a craft to writing software, and I found that some of it gets harder to access when you're spending your time reviewing generated code instead of building the mental model yourself. The code these models produce can often be just average; something trained on a vast corpus of existing code tends toward the familiar, not necessarily the best solution for your particular problem.
 
 Despite all the human review I built into the process, not writing the code myself made it hard to fully and accurately know what I was working with. When I write code, the act of writing it forces me to construct a mental model. When AI writes it, I have to construct that mental model through review.
 
@@ -18,6 +18,10 @@ Despite all the human review I built into the process, not writing the code myse
 I paid for one month of a Claude Max subscription to do this. That's $100. To say nothing of the fact that many people can't afford that sort of spend, there are a lot of tokens spent on each subagent, each feature. Data centers are expanding rapidly to meet increased demand. The communities hosting that infrastructure can face increased pressure on electricity, water, and other resources, while many people still can't afford to use the technology driving that demand. They may not be the primary beneficiaries of the technology, while still bearing some of its negative externalities. I don't think the market alone is guaranteed to account for all of those externalities, and I think citizens and governments will need to decide what responsible scaling looks like.
 
 I had this in the back of my mind when writing the Atlas, and I admit it's a hard trade-off that I didn't have a good answer to.
+
+I did make some deliberate choices not to reach for the biggest hammer by default. Opus was my primary model, but simpler subagent work — a documentation pass, a formatting cleanup, a first read of a diff — went to Haiku or Sonnet instead. I tried to keep agents few and tightly scoped rather than spawning a swarm just because I could, and to batch review passes instead of re-running them every time I changed my mind.
+
+I want to be honest about the limits of that, though: I never measured any of it. I can't tell you what it saved, because I don't know. It was restraint by instinct rather than by instrumentation, which is a weaker answer than the question deserves.
 
 ## Five lessons from building with AI
 
@@ -29,33 +33,39 @@ There is a strong difference between "I want to build a directory of safe street
 
 "We are going to build a directory of safe-streets and urban advocacy organizations. I want this to be a modular application that can be consumed by a number of consumers. To start, let's build this in three pieces, starting with a simple API. This API will be built in Go. You should default to using standard libraries wherever possible, and ask before importing third party dependencies. Build it with a focus on TDD. Plan a skeleton of what this will look like."
 
+Every clause in there is doing work. TDD is test-driven development — you write the failing test first, then the code that satisfies it — and asking for it up front meant tests existed from the first commit instead of being bolted on months later, when nobody wants to write them. Naming the standard library as the default is what kept the dependency list short. None of that happens if the prompt is one sentence long.
+
 This leads directly to my next point.
 
 ### Never take the first result
 
 I'll admit that "never" is a strong word here. However, it was pretty rare that I was fully satisfied with the first result that the AI would return to me. It might "work," but perhaps the code wasn't structured well. There were some edge cases or tests missing. Or I realized there would be a better abstraction I could pull out somewhere.
 
-I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" — or, if I spotted a specific issue, I'd just tell the AI what I wanted. This is where our job as a software engineer shifts a little bit from writing the code to architecting it. We're architecting code that is well tested, well defined, maintainable, and appropriately simple—the principles behind SOLID, YAGNI, and all those other acronyms we know so well. The model doesn't always do that, so you tell it (see point one: be explicit with your input!)
+I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" — or, if I spotted a specific issue, I'd just tell the AI what I wanted. This is where our job as a software engineer shifts a little bit from writing the code to architecting it. We're architecting code that is well tested, well defined, maintainable, and appropriately simple — the ideas behind acronyms like SOLID and YAGNI ("you aren't gonna need it"), which mostly boil down to building the thing you actually need, and building it so the next person can change it without fear. Claude doesn't always land there on its own, so you say so (see point one: be explicit with your input!)
 
 ### Review, review, and then review again
 
 Once a plan was drafted, I reviewed it and pushed back. Finally, after plenty of back and forth, I let it build. After it was built, I threw another agent with a fresh context to review the code that was generated. After 2 or 3 rounds of this, I'd do my own code review, leaving feedback, doing manual security analysis, and then throw another agent on it to address the feedback.
 
-There are Claude extensions that can help with this. I used [Superpowers](https://github.com/obra/superpowers), while others like [GSD](https://github.com/open-gsd/gsd-core). The specific tool matters less than the pattern: focused tasks, small scopes, and independent review.
+There are open-source extensions for Claude Code that formalize this kind of loop, so you don't have to hold the whole process in your head. I used [Superpowers](https://github.com/obra/superpowers), which packages workflows like brainstorming, planning, and code review into skills the agent reaches for on its own. [GSD](https://github.com/open-gsd/gsd-core) is another project in the same spirit, built more around planning work in phases; I haven't used it myself, so treat that as a pointer rather than a recommendation. The specific tool is less important than the shape: focused tasks, small scopes, and a review done by something that didn't write the code in the first place.
 
 ### Remember what AI actually is
 
-At its core, it's still generating predictions based on patterns learned from data. A very, very, very good predictive system, but still a system that can be wrong. Don't accept the output as gospel; always verify.
+At its core, it's a system generating predictions from patterns in an enormous body of existing work. That isn't a knock — it's a very, very good one. But it tells you something useful about *where* to aim the reviewing from the last two lessons, which is what makes this more than "check the output."
+
+A system that predicts the most likely answer is strongest exactly where your problem is ordinary, and weakest exactly where your problem is strange. Every genuinely hard thing in this project sat at the strange end: a ZIP code whose neighborhood has no legal boundary, two federal datasets that disagree about what year it is, a polygon with a hole in it. Claude handled the ordinary parts of the Atlas faster and more thoroughly than I would have alone. The parts that were specific to *this* project are where I had to slow down.
+
+So the practical version is: before you start reviewing, ask which parts of what you're building are unusual. That's your list. That's where it'll be confidently, plausibly wrong.
 
 ### Your humanity is still important
 
-The fact is that these are machines with limitations, operating as effectively as they do in part because they've been trained on an enormous corpus of human-created knowledge. It's important not to anthropomorphize these systems. They're machines with limitations, and they can make mistakes just like humans can. Don't believe me? Consider Data from Star Trek: TNG. Data is an extremely capable artificial life-form, but the character is compelling precisely because the series explores what he doesn't understand about being human.
+The fact is that these are machines with limitations, operating as effectively as they do in part because they've been trained on an enormous corpus of human-created knowledge. It's important not to anthropomorphize them. They can make mistakes, just like the humans whose work they learned from. Don't believe me? Consider Data from Star Trek: The Next Generation. Data is an extremely capable artificial life-form, but the character is compelling precisely because the series explores what he doesn't understand about being human.
 
 ## How you could do this too
 
-We've never lived in an era where it is as easy as it is now to take an idea to a working prototype. That's an incredibly powerful tool, and the hope is that we'll see great ideas come to life that couldn't before. If you want to build your own idea, I hope this blog post provided some inspiration and some useful tips and tricks.
+It's never been easier to take an idea to a working prototype. That's an incredibly powerful tool, and the hope is that we'll see great ideas come to life that couldn't before. If you want to build your own idea, I hope this blog post provided some inspiration and some useful tips and tricks.
 
-I also tried to be deliberate about resource use: Anthropic's `Opus` model was my primary model, but I used `Haiku` or `Sonnet` for simpler subagent tasks rather than defaulting to the most capable model for everything. Since the code is open source, I strongly encourage you to look at my tooling and `just` file if you want to take any of those ideas, such as the Docker-powered link validation.
+Beyond the model choices I mentioned earlier, the tooling is all there to borrow. Since the code is open source, I'd encourage you to look at my `just` file if you want to take any of it — like the containerized link validation that checks every organization's website through a VPN and flags the dead ones.
 
 ## Why transparency is absolutely critical
 

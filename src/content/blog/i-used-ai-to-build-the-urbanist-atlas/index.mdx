@@ -1,8 +1,8 @@
 ---
 title: "I Used AI to Build the Urbanist Atlas. Here's Why the Human Eye is Imperative."
-description: "An accounting of how I used Claude Code to build the Urbanist Atlas, and why the engineer behind the keyboard kept the driver's seat."
-pubDate: 2026-07-23
-tags: ["urban-mobility", "urbanist-atlas", "software-engineering", "data-modeling", "artificial-intelligence"]
+description: "How I used Claude Code to build the Urbanist Atlas — the Go API, the React frontend, and why the engineer behind the keyboard kept the driver's seat."
+pubDate: 2026-07-28
+tags: ["urban-mobility", "urbanist-atlas", "software-engineering", "artificial-intelligence"]
 ---
 
 import Figure from '../../../components/Figure.astro';
@@ -12,7 +12,7 @@ This post has been stewing for the last month, in-between all of the aspects tha
 
 <Figure src={lisbon_mini_buses} alt="A typical Lisbon building, pink, with two KARSAN e-Jest mini public transit buses stopped in front" caption="Two KARSAN e-Jest mini buses, part of the carris bus fleet in Lisbon, Portugal." />
 
-[The Urbanist Atlas](https://urbanistatlas.com) — a directory of local safe-streets and transit advocacy organizations, searchable by ZIP or postal code — has been live for about six weeks now, which feels like enough time to reflect on what worked, what didn't, and where I still had to step in instead of letting Claude run on its own. That six weeks of reflection became a two-part series: this first post is the technical one, walking through how I used Claude Code as my "coding assistant" while greenfielding the project. The second post picks up where this one leaves off, with tips and broader, non-technical thoughts about AI.
+[The Urbanist Atlas](https://urbanistatlas.com) — a directory of local safe-streets and transit advocacy organizations, searchable by ZIP or postal code — has been live for about six weeks now, which feels like enough time to reflect on what worked, what didn't, and where I still had to step in instead of letting Claude run on its own. That six weeks of reflection became a three-part series. This first post covers the code: how I used Claude Code as my "coding assistant" while greenfielding the project. The second covers the data — modeling cities as a graph, generating that graph from federal datasets, and cataloging the organizations. The third steps back, with tips and broader, non-technical thoughts about AI.
 
 ## Upfront disclaimers
 
@@ -32,11 +32,11 @@ I knew I wanted Go, but I also wanted to see how Claude would fare, so I began a
 
 It suggested that I write it all in Node / JavaScript. I disagreed. That was partially my preference, but I also had specific technical reasons: I wanted static typing, a straightforward concurrency model, and, practically, a language I'd already written a robust production application in recently. Node would have worked fine here too; that's not the point. The point is I had reasons, and I could articulate them. To me, this was the first trap that can burn folks who don't have a software engineering background when they try to vibe code: the danger isn't that AI will make a bad choice, it's that it'll make a perfectly plausible one you don't know enough to question.
 
-At this stage, Claude started proposing a plan for Go. There was a lot of back and forth; I was explicit in my input. From this one endpoint, we needed to manage the initialization logic, the application configuration, and how and where it was going to be deployed, etc. Could I have just taken its recommendation? Yes. But after thirteen years of writing code, and very recently writing an extremely robust application in Go, I had my own ideas of how I wanted to do this, so I stayed just as explicit with Claude about the rest. Rather than hand all of that — initialization, configuration, deployment — to a single pass, I acted as a bit of a project manager, product owner, and software architect in one go, and split the work across three of Claude Code's subagents: one focused purely on the endpoint and API design, another on deployment and tooling (the `just` file and `mise` config that show up below), and a third whose only job was to review the first two against idiomatic Go and Go community convention.
+At this stage, Claude started proposing a plan for Go. There was a lot of back and forth; I was explicit in my input. From this one endpoint, we needed to write the initialization logic, manage the application configuration, and settle the deployment target. Could I have just taken its recommendation? Yes. But after thirteen years of writing code, and very recently writing an extremely robust application in Go, I had my own ideas of how I wanted to do this, so I stayed just as explicit with Claude about the rest. Rather than hand all of that — initialization, configuration, deployment — to a single pass, I acted as a bit of a project manager, product owner, and software architect in one go, and split the work across three of Claude Code's subagents: one focused purely on the endpoint and API design, another on deployment and tooling (the `just` file and `mise` config that show up below), and a third whose only job was to review the first two against idiomatic Go and Go community convention.
 
 And Claude delivered! By being extremely detailed in my input, leveraging my knowledge, we ended up with an endpoint and structure of code I was pleased with. Over time, Claude and I added more layers, more endpoints, a `just` file and `mise` for managing tooling. If I was unclear or didn't have a strong preference, there was the back and forth, and I'd explicitly push the AI to look at community guidelines on making good choices.
 
-Another area where the human matters — those community guidelines exist because humans who care about good code quality are out there, and publish their work.
+That's another place the human shows up in this story — those community guidelines exist because people who care about good code quality wrote them down and published them.
 
 ### The React SPA
 
@@ -56,58 +56,12 @@ Thinking like a product manager was really valuable here, because I've seen how 
 
 From that point on, I could work on the backend and frontend in parallel, using each side to validate the other. Add a new endpoint with a frontend to consume, ensure it worked. Make changes on the frontend, know that the backend was stable. I directed Claude to write an OpenAPI spec, so we were working with hard contracts that future agents — and me, and other contributors — could rely on. I always wanted to ensure that at the end of the day, nobody was going to feel stuck if they didn't have an AI robot to lean on to look at, review, or contribute to this code. To that end, specific documentation passes, tooling passes, thorough and well-written `just` commands, were always done in between new feature work or bugfixes.
 
-Eventually it got to the point where we needed real data to work with.
+That parallel work also settled how the two halves ship, which turned out not to be symmetric at all. The React app deploys to Cloudflare as static assets. The Go API runs on a single Fly.io machine — and "single" is load-bearing, not a cost decision. The submissions database is SQLite, which allows exactly one writer, and the queue that opens pull requests (more on that in the next post) lives inside the process itself. Scaling that machine horizontally wouldn't just be wasteful; it would quietly break both. The region data, meanwhile, is compiled directly into the Go binary, so changing the dataset means deploying the API rather than migrating a database.
 
-## AI for the data
+### Where that leaves the code
 
-### The region graph
+Looking back at this half of the project, the pattern is consistent: Claude was fast and genuinely good, and every place it saved me real time was a place where I could already tell a good answer from a plausible one. I turned down Node for Go because I had thirteen years of reasons. I split the work across subagents because I knew what the roles were. I pushed back on the first draft because I knew what "well structured" looked like. None of that is the AI being weak — it's the AI being exactly as effective as the person directing it.
 
-Cities are complex, and their boundaries aren't always static — which is exactly the kind of complexity the Atlas needed to model to connect a postal code to the right advocacy groups. This was a fascinating portion of this project because it directly tied into the urban planning field, the very thing I'm pivoting my career into.
+Which brings back the trap from earlier. The danger isn't that AI makes a bad choice. It's that it makes a perfectly plausible one you don't know enough to question. In the code, I mostly knew enough.
 
-I started with the United States, where I'm from — as they say, "write what you know." I wanted ZIP codes to be the anchor for looking up advocacy groups, but learned quickly that ZIP codes are a useful starting point for a search, not themselves the editorial unit I could rely on to anchor a key data model against. I knew about Metropolitan Statistical Areas (MSAs), but advocacy is local — 11217 is Brooklyn, but it's also Park Slope, but Park Slope isn't a hard defined border. Brooklyn is NYC, but if you type in 11217, that's also part of the New York - New Jersey - Connecticut MSA. But what if you're in CT but not part of the defined NY Metro?
-
-Just from that paragraph, you can see how complex this was going to get: I needed a way to represent geographic relationships that aren't strictly hierarchical. So I did a Claude brainstorming session. I said "let's start by modeling New York City, Chicago, and San Francisco." These are places I knew well enough that I knew the brainstorming would be valuable in defining an initial draft, but I could push back if something didn't make sense. I didn't want to just hard code — that's not going to scale. I didn't want to include national organizations as an editorial decision. So, Claude and I built a directed acyclic graph (DAG).
-
-You can read in thorough detail [here](https://github.com/mjrossi/urbanist-atlas/blob/main/docs/region-graph.md) but for a high level summary:
-
-The core idea is to stop thinking of a location as a fixed set of tiers — city, county, metro, state — and instead model geography as a graph. Every region is a node (a borough, a city, a metro, a state, a transit district, a multi-state coalition), and each node just declares its parents. A postal code (ZIP code in the US, postal code elsewhere) anchors to the smallest region I've curated for it, and a lookup walks up the graph from there, collecting every region above it and the advocacy orgs attached to each.
-
-That's what makes 11217 resolve the way it does: it anchors to Park Slope, which has Brooklyn as a parent, which has both NYC and New York State as parents, which in turn has the New York-New Jersey-Connecticut metro above it. One lookup walks that whole chain and returns Park Slope groups, citywide NYC groups, and New York State groups together, in the right order — without New Jersey orgs leaking into a Brooklyn search just because they share a metro.
-
-The same graph shape is what lets messier cases work without special-casing each one: Chicago's transit district covers six counties but only one state, and a city-state like Berlin is technically a _Land_ (German for federal state) but functions as a city. None of it is hard-coded to the US, either. Canada gets the same graph, tuned to its own geography: postal codes anchor at the FSA — the three-character Forward Sortation Area, the smallest boundary Canada publishes — matched to its CMA (Canada's rough equivalent of an MSA) by a spatial overlap of the two boundary shapes, since Canada has no county layer to lean on the way the US does. Ottawa-Gatineau, which straddles Ontario and Quebec, reuses the same cross-border shape I built for NYC and Chicago: a stateless umbrella metro with one region per province underneath it, so a Gatineau ZIP resolves to Quebec and never leaks into Ontario's results. I also modeled Portugal — Lisboa's multi-parent metro area, Madeira as an autonomous region with no NUTS-II parent — as a stress test of the graph against an admin geography that isn't US or Canadian. That data isn't live: it exists to validate the model, not (yet) to ship, and it's excluded from the API's default country list until the editorial coverage is ready. Germany's next, whenever that happens.
-
-I ran specific agents to stress-test the model as it was being built, and that surfaced some genuinely hard edge cases. Washington, D.C. isn't a state — it's a city-state whose one metro spans three jurisdictions (D.C., Maryland, and Virginia), so it needed its own local/regional split rather than folding into a state-based hierarchy. Connecticut was a different kind of puzzle: in 2022 the Census Bureau retired the state's eight counties in favor of nine new planning regions as county-equivalents, and two of the federal datasets I was combining were different vintages of that same geography — one already keyed to the new planning regions, one still keyed to the legacy counties. That mismatch meant hundreds of Connecticut ZIP codes were falling through to the bare state node instead of resolving to their actual metro (Bridgeport-Stamford, Hartford, New Haven), until I added a reconciliation pass to bridge the two. And rural ZIP codes needed to correctly fall back to their parent state when no finer region applied.
-
-Overall, I was extremely proud of the region graph design and this was a great example of using AI along with my own knowledge of cities to build an adaptable data model. I learned a lot working with these data sets.
-
-### Cataloging the organizations
-
-Cataloging 236 organizations on my own, across tens of thousands of postal codes in two countries, is the sort of task that would have taken weeks or months in the time before AI. The fact that I could do it (along with the rest of this project) in a little over a month of work is remarkable. That said, the data had to be accurate. It had to be verified.
-
-The first bit was deciding exactly what organizations I wanted to include, so I defined a set of criteria that was at the forefront of any request to AI (full list [here](https://urbanistatlas.com/about)).
-
-1. Geographic focus (the best advocacy happens locally)
-2. Active advocacy (no inactive orgs; some activity within the last 12 months)
-3. On-topic (transit, safe streets, etc.)
-4. Government agencies, consultancies, and non-advocacy orgs are excluded (focus on advocacy)
-5. Housing & YIMBY are excluded (tight focus)
-
-So using the rules outlined above, here is the typical workflow for adding new organizations.
-
-1. Prompt: "Please do a deep dive into organizations that are focused on advocating for safe, sustainable, and human-focused city design and transportation. Ensure that organizations follow the editorial rules defined. Review social media presence to determine activity. Ask me if you're unsure about a specific org."
-2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Once that was done, I would review all the orgs myself, and also run a custom-built `just verify-org-urls` command that spins up an Alpine Linux container routed through a WireGuard VPN tunnel, hits every URL in the dataset, and flags anything dead, redirected off-domain, or squatted by a parked-domain page, then manually exclude any orgs whose site or social presence couldn't be verified.
-3. Prompt: "Do another pass to look for orgs in `<region>`, seeing if we missed any or falsely flagged any that we should exclude based on the criteria." After this completed, I'd do another review step.
-
-AI was genuinely good at the first half of that loop — casting a wide net and surfacing candidates I wouldn't have found on my own. It was never the authority on whether an organization actually belonged in the Atlas, though. That call, and the verification behind it, will always be mine.
-
-### Did Claude hallucinate?
-
-Yes, occasionally. I didn't encounter organizations that appeared to be entirely fabricated, but it did guess at URLs (that didn't exist), or provide some metadata that wasn't accurate. Fortunately, the combination of human review and subsequent agent reviews caught these. This is the distinction that mattered throughout the whole cataloging effort: AI-assisted research isn't the same thing as AI-verified research. The model was good at breadth and discovery; verification still required deterministic tooling and a human actually looking. It was also at this point in the process that I decided to introduce a submission desk: when a moderator approves a visitor-submitted correction or new org, a worker automatically opens a GitHub pull request appending it to the dataset, so I review a diff instead of a raw report.
-
-Advocacy is human. Cities are human, and only exist as the incredible, culturally diverse places they are because of the people who live in them. This work is focused on making our cities better places to live. I never forgot that, no matter how many interactions I had with Claude.
-
-### Closing thoughts
-
-Cities aren't static — they're made and remade every day by the people living in them, in ways no dataset fully captures. No AI, predictive text generator, or any one individual is going to be able to fully understand the specific nuances of a city. One learns and understands a city by talking to its people, listening to their specific stories. A city is its people.
-
-Use AI, and use it aggressively where it makes you faster. But don't let it stand in for your own eyes, ears, and the community of humans who call a city their home.
+Eventually it got to the point where we needed real data to work with, and that's where the trap actually sprang. Cities don't fit neatly into hierarchies, government datasets disagree with each other about what year it is, and an organization that doesn't exist looks exactly like one that does until you check. That's the next post.

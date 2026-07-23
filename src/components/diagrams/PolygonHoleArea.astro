@@ -14,8 +14,18 @@
 // the browser fills it by the same rule the ETL measures it by — the picture
 // and the code agree by construction rather than by my redrawing them to match.
 //
-// A and B are drawn wound the SAME direction on purpose: that is the bug the
-// passage describes, and the reason winding can't be the signal.
+// The three outlines are cast as a real, recognisable case: an FSA on the
+// Ontario side of the cross-province Ottawa-Gatineau CMA (the metro the post
+// already introduces earlier), the Ottawa River as the water inside it, and a
+// real island in that river (Victoria / Chaudière). This is a SCHEMATIC of that
+// geometry, NOT a traced StatsCan boundary — see the caption. It is here only
+// to make the even-odd rule concrete; the picture is still a stylised shape.
+//
+// Two things a future editor must NOT "fix":
+//   - Land and river are drawn wound the SAME direction on purpose: that is the
+//     bug the passage describes, and the reason winding can't be the signal.
+//   - The Ontario/Quebec split is decided by PRUID (province code), NOT by this
+//     area math. It is deliberately out of frame; do not add a province line.
 //
 // Styles live in global.css (.post-diagram, .dg-*) per the one-stylesheet rule.
 // Marker and aria IDs are prefixed dg-area-* — three diagrams share this page.
@@ -28,16 +38,17 @@
     aria-labelledby="dg-area-title dg-area-desc"
     class="dg"
   >
-    <title id="dg-area-title">Measuring an overlap shape by nesting depth</title>
+    <title id="dg-area-title">Measuring an FSA's overlap near the Ottawa River by nesting depth</title>
     <desc id="dg-area-desc">
-      On the left, an irregular overlap shape made of three nested outlines:
-      A, the outer boundary; B, a hole inside A; and C, an island inside B.
-      Arrows on A and B show both are drawn in the same direction, so the
-      direction an outline is drawn in cannot distinguish a hole from a
-      boundary. On the right, the rule that does work: A sits inside zero
-      other outlines, an even number, so its area is added. B sits inside one
-      outline, an odd number, so its area is subtracted. C sits inside two,
-      an even number, so its area is added.
+      On the left, a schematic overlap shape near the Ottawa River: an outer land
+      boundary — an FSA on the Ontario side of the Ottawa-Gatineau metro — with
+      the Ottawa River as a water body inside it and Victoria Island in the river.
+      Arrows on the land and the river show both outlines are drawn in the same
+      direction, so the direction an outline is drawn in cannot distinguish a
+      hole from a boundary. On the right, the rule that does work: the land sits
+      inside zero other outlines, an even number, so its area is added; the river
+      sits inside one outline, an odd number, so its area is subtracted; the
+      island sits inside two, an even number, so its area is added.
     </desc>
 
     <defs>
@@ -55,13 +66,14 @@
     </defs>
 
     {/* ---- the overlap shape: one path, three subpaths, even-odd fill ----
-         Rendered by the browser exactly as polygonArea sums it. */}
+         Rendered by the browser exactly as polygonArea sums it: land filled,
+         river left as an unfilled hole, island filled back in. */}
     <path
       class="dg-poly"
       fill-rule="evenodd"
       d="M 55 305 L 40 195 L 85 110 L 165 62 L 285 60 L 360 105 L 385 195 L 355 285 L 265 335 L 145 330 Z
-         M 130 240 L 118 172 L 165 128 L 250 122 L 300 170 L 288 245 L 205 275 Z
-         M 185 225 L 178 190 L 210 172 L 245 195 L 232 232 Z"
+         M 108 175 L 140 132 L 185 118 L 240 128 L 295 165 L 322 215 L 300 250 L 250 258 L 195 240 L 145 212 Z
+         M 192 205 L 188 172 L 222 160 L 250 180 L 238 208 Z"
     />
 
     {/* ---- each outline stroked separately so it can be pointed at ---- */}
@@ -71,69 +83,58 @@
     />
     <path
       class="dg-ring dg-ring--hole"
-      d="M 130 240 L 118 172 L 165 128 L 250 122 L 300 170 L 288 245 L 205 275 Z"
+      d="M 108 175 L 140 132 L 185 118 L 240 128 L 295 165 L 322 215 L 300 250 L 250 258 L 195 240 L 145 212 Z"
     />
     <path
       class="dg-ring"
-      d="M 185 225 L 178 190 L 210 172 L 245 195 L 232 232 Z"
+      d="M 192 205 L 188 172 L 222 160 L 250 180 L 238 208 Z"
     />
 
-    {/* ---- winding arrows: A and B point the same way, which is the point ---- */}
+    {/* ---- winding arrows: land and river point the same way, which is the point ---- */}
     <g class="dg-wind" fill="none" marker-end="url(#dg-area-arrow)">
-      <path d="M 195 61.5 H 250" />
-      <path d="M 180 127 L 232 123" />
+      <path d="M 197 61 L 250 60" />
+      <path d="M 150 128 L 205 120" />
     </g>
 
-    {/* ---- outline badges ---- */}
-    <g>
-      <circle cx="40" cy="195" r="11" class="dg-node" />
-      <text x="40" y="200" class="dg-label">A</text>
-    </g>
-    <g>
-      <circle cx="118" cy="172" r="11" class="dg-node" />
-      <text x="118" y="177" class="dg-label">B</text>
-    </g>
-    <g>
-      <circle cx="178" cy="190" r="11" class="dg-node" />
-      <text x="178" y="195" class="dg-label">C</text>
-    </g>
+    {/* ---- role labels, sitting on the region each names ---- */}
+    <text x="328" y="135" class="dg-sub">land</text>
+    <text x="222" y="230" class="dg-sub">Ottawa River</text>
+    <text x="210" y="150" class="dg-sub">Victoria Island</text>
 
     <text x="212" y="372" class="dg-note">
-      A and B are wound the same way — direction can't tell them apart
+      The land and the river are wound the same way — direction can't tell them apart
     </text>
 
     {/* ---- the rule that does work ---- */}
-    <text x="425" y="78" class="dg-note dg-note--start">
+    <text x="396" y="86" class="dg-note dg-note--start">
       so instead, count what each one sits inside:
     </text>
 
     <g>
-      <circle cx="440" cy="120" r="11" class="dg-node" />
-      <text x="440" y="125" class="dg-label">A</text>
-      <text x="462" y="116" class="dg-row">inside 0 outlines</text>
-      <text x="462" y="133" class="dg-call dg-call--start">even → added</text>
+      <circle cx="404" cy="120" r="5" class="dg-node" />
+      <text x="418" y="124" class="dg-row">land — inside 0 outlines</text>
+      <text x="418" y="142" class="dg-call dg-call--start">even → added</text>
     </g>
 
     <g>
-      <circle cx="440" cy="195" r="11" class="dg-node dg-node--anchor" />
-      <text x="440" y="200" class="dg-label">B</text>
-      <text x="462" y="191" class="dg-row">inside 1 outline — A</text>
-      <text x="462" y="208" class="dg-call dg-call--start">odd → subtracted</text>
+      <circle cx="404" cy="192" r="5" class="dg-node dg-node--anchor" />
+      <text x="418" y="196" class="dg-row">Ottawa River — inside 1 (the land)</text>
+      <text x="418" y="214" class="dg-call dg-call--start">odd → subtracted</text>
     </g>
 
     <g>
-      <circle cx="440" cy="270" r="11" class="dg-node" />
-      <text x="440" y="275" class="dg-label">C</text>
-      <text x="462" y="266" class="dg-row">inside 2 outlines — A and B</text>
-      <text x="462" y="283" class="dg-call dg-call--start">even → added</text>
+      <circle cx="404" cy="264" r="5" class="dg-node" />
+      <text x="418" y="268" class="dg-row">Victoria Island — inside 2 (land + river)</text>
+      <text x="418" y="286" class="dg-call dg-call--start">even → added</text>
     </g>
   </svg>
 
   <figcaption>
     The shape on the left is drawn as a single path under the even-odd rule, so
-    the browser fills it the same way the pipeline measures it: A is solid, B is
-    the hole inside A, C is an island inside B. Counting nesting rather than
-    reading winding direction is what makes the answer independent of how the
-    clipping library happened to draw each outline.
+    the browser fills it the same way the pipeline measures it: the land is
+    solid, the Ottawa River is the hole inside it, and Victoria Island fills
+    back in. It's a schematic near the river, not a traced boundary —
+    counting nesting rather than reading winding direction is what makes the
+    answer independent of how the clipping library happened to draw each outline.
   </figcaption>
 </figure>

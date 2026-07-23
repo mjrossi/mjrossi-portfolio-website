@@ -63,7 +63,7 @@ And that is exactly the assumption that breaks. It only holds if holes are relia
 
 Nothing had actually landed wrong in the shipped data by the time I caught it in review. But nothing in the run would have told me if it had.
 
-So Claude and I fixed it together, by throwing out the drawing direction entirely and reading the nesting instead: for each outline, count how many of the other outlines it sits inside. An odd number means it's a hole, so its area comes off the total; an even number — including none at all — means it's solid, so it gets added. Which way it was drawn never enters into it.
+So Claude and I fixed it together, by throwing out the drawing direction entirely and reading the nesting instead: for each outline, count how many of the other outlines it sits inside. An odd number means it's a hole, so its area comes off the total; an even number — including none at all — means it's solid, so it gets added. Which way it was drawn never enters into it. The picture below makes it concrete with a shape the Canadian data really produces — an FSA along the Ottawa River, the same Ottawa-Gatineau metro from earlier, where the river reads as a hole to subtract and an island in it reads back as solid ground to add.
 
 <PolygonHoleArea />
 

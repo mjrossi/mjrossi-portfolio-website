@@ -57,7 +57,7 @@ Which is how Connecticut turned into a puzzle. Two of the federal datasets I was
 
 The Canadian side broke differently. Matching each FSA to the CMA it overlaps most, the way I described above, sounds like a lookup but isn't — it's really a measurement: clip the FSA's boundary against the metro's, then measure how much shape is left over. A library does the clipping. Nothing in it measures area — that part I had to write.
 
-The obvious way to measure it is the shoelace formula — you walk each outline of the shape in order and total up the area it sweeps out. It has a property that looks like a gift: walk an outline backwards and its area comes out negative. So if every hole is drawn in the opposite direction from the boundary around it, the holes subtract themselves and you never have to think about them.
+The problem sounds simple: take a clipped geographic shape and calculate how much area it contains. The obvious way to measure it is the shoelace formula — you walk each outline of the shape in order and total up the area it sweeps out. It has a property that looks like a gift: walk an outline backwards and its area comes out negative. So if every hole is drawn in the opposite direction from the boundary around it, the holes subtract themselves and you never have to think about them.
 
 And that is exactly the assumption that breaks. It only holds if holes are reliably drawn backwards, and the clipping library makes no such promise — it hands back the outlines in whatever order it traced them, each drawn in whichever direction the algorithm happened to go. When a hole comes back drawn the same way as the boundary around it, its area gets *added* to the total instead of subtracted. Nothing crashes. Nothing throws an error. The number just comes back too big — and that number is what decides which metro an FSA belongs to.
 
@@ -73,7 +73,7 @@ That one function is the argument of this whole post in miniature. The AI wrote 
 
 ## Cataloging the organizations
 
-Cataloging 236 organizations on my own, across tens of thousands of postal codes in two countries, is the sort of task that would have taken weeks or months in the time before AI. The fact that I could do it (along with the rest of this project) in a little over a month of work is remarkable. That said, the data had to be accurate. It had to be verified.
+Cataloging 236 organizations myself, across tens of thousands of postal codes in two countries, is the sort of task that would have taken weeks or months in the time before AI. The fact that I could do it (along with the rest of this project) in a little over a month of work is remarkable. That said, the data had to be accurate. It had to be verified.
 
 The first bit was deciding exactly what organizations I wanted to include, so I defined a set of criteria that was at the forefront of any request to AI (full list [here](https://urbanistatlas.com/about)).
 
@@ -91,7 +91,7 @@ In practice I hold "active" to a harder line than that list states: something vi
 So using the rules outlined above, here is the typical workflow for adding new organizations.
 
 1. Prompt: "Please do a deep dive into organizations that are focused on advocating for safe, sustainable, and human-focused city design and transportation. Ensure that organizations follow the editorial rules defined. Review social media presence to determine activity. Ask me if you're unsure about a specific org."
-2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Once that was done, I would review all the orgs myself, and also run a custom-built `just verify-org-urls` command that spins up an Alpine Linux container routed through a WireGuard VPN tunnel, hits every URL in the dataset, and flags anything dead, redirected off-domain, or squatted by a parked-domain page, then manually exclude any orgs whose site or social presence couldn't be verified.
+2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Once that was done, I would review all the orgs myself, and also run a custom-built `just verify-org-urls` command that spins up an Alpine Linux container routed through a WireGuard VPN tunnel, hits every URL in the dataset, and flags anything dead, redirected off-domain, or squatted by a parked-domain page, then manually exclude any orgs whose site or social presence couldn't be verified. This is deliberately boring, deterministic tooling: rather than asking an AI whether a URL looks valid, I ask a machine to check whether it actually resolves.
 3. Prompt: "Do another pass to look for orgs in `<region>`, seeing if we missed any or falsely flagged any that we should exclude based on the criteria." After this completed, I'd do another review step.
 
 AI was genuinely good at the first half of that loop — casting a wide net and surfacing candidates I wouldn't have found on my own. It was never the authority on whether an organization actually belonged in the Atlas, though. That call, and the verification behind it, will always be mine.

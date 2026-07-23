@@ -72,9 +72,9 @@ npm run preview    # build + wrangler dev (run on every on-demand route)
 npm run deploy     # build + wrangler deploy (manual)
 ```
 
-In normal operation production deploys run automatically via Cloudflare Workers Builds on push to `main`. PR branches get preview deploys at `<branch>-<project>.workers.dev`.
+In normal operation production deploys run automatically via Cloudflare Workers Builds on push to `main` (`wrangler deploy` → the production Worker). PR branches deploy to an **isolated preview Worker** (`env.preview` in `wrangler.jsonc` → `mjrossi-portfolio-website-preview`) via the non-production deploy command `wrangler versions upload --env preview`, so branch code never lands on production. Preview URLs are `<branch>-mjrossi-portfolio-website-preview.link00seven.workers.dev`. This isolation exists because a dashboard secret edit redeploys the Worker's latest uploaded version — before the split, editing a secret mid-feature promoted branch code to `mjrossi.com`.
 
-**Preview deploys currently share production secrets.** A subscription submitted via a preview URL goes to the production Buttondown account. For a personal portfolio this is acceptable (preview URLs are `noindex`'d, traffic is low). `wrangler.jsonc` carries a commented scaffold for isolating preview into its own environment if that ever changes — runtime secrets would then be set with `wrangler secret put X --env preview`.
+**Preview secrets mirror production.** They're set with `wrangler secret put X --env preview` using the same values as production, so a subscription submitted via a preview URL still goes to the production Buttondown account. For a personal portfolio this is acceptable (preview URLs are `noindex`'d, traffic is low); give the preview env a separate Buttondown key to isolate that too.
 
 ## Newsletter setup (one-time)
 

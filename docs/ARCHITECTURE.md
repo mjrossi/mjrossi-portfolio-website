@@ -96,10 +96,10 @@ The local files (`mise.local.toml`, `.dev.vars`) are gitignored with committed `
 
 ## Deployment
 
-Production deploys run automatically via Cloudflare Workers Builds connected to GitHub on push to `main`. PR branches get preview deploys at:
+Production deploys run automatically via Cloudflare Workers Builds connected to GitHub on push to `main` (`npx wrangler deploy` → the production Worker `mjrossi-portfolio-website`). PR branches deploy to an **isolated preview Worker** (`env.preview` in `wrangler.jsonc` → `mjrossi-portfolio-website-preview`) via the non-production deploy command `npx wrangler versions upload --env preview`, so branch code never lands on the production Worker. Preview deploys are reached at:
 
 ```
-https://<branch-alias>-mjrossi-portfolio-website.link00seven.workers.dev
+https://<branch-alias>-mjrossi-portfolio-website-preview.link00seven.workers.dev
 ```
 
 where `<branch-alias>` is the lowercased branch name with non-alphanumerics collapsed to dashes (the alias-construction logic in `.github/workflows/lighthouse.yml` mirrors Cloudflare's). Manual deploys: `npm run deploy` (`astro build && wrangler deploy`). Local preview against the worker: `npm run preview` (`astro build && wrangler dev`) — this is the only way to exercise `/` or the `/api/*` endpoints locally; `astro dev` doesn't run the worker.

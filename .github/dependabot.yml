@@ -17,6 +17,14 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # wrangler 4.111.0 removed the `legacy_env` config field, but
+      # @astrojs/cloudflare (through 14.x, the latest) still injects
+      # `legacy_env: true` into the generated dist/server/wrangler.json, so
+      # newer wrangler hard-errors on `dev`/`deploy`. Hold at 4.110.x until the
+      # adapter stops emitting it (likely @astrojs/cloudflare 15).
+      - dependency-name: "wrangler"
+        versions: [">=4.111.0"]
 
   - package-ecosystem: github-actions
     directory: /

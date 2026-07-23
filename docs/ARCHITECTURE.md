@@ -96,7 +96,7 @@ The local files (`mise.local.toml`, `.dev.vars`) are gitignored with committed `
 
 ## Deployment
 
-Production deploys run automatically via Cloudflare Workers Builds connected to GitHub on push to `main` (`npx wrangler deploy` → the production Worker `mjrossi-portfolio-website`). PR branches deploy to an **isolated preview Worker** (`env.preview` in `wrangler.jsonc` → `mjrossi-portfolio-website-preview`) via the non-production deploy command `npx wrangler versions upload --env preview`, so branch code never lands on the production Worker. Preview deploys are reached at:
+Production deploys run automatically via Cloudflare Workers Builds connected to GitHub on push to `main` (`npx wrangler deploy` → the production Worker `mjrossi-portfolio-website`). PR branches deploy to an **isolated preview Worker** (`env.preview` in `wrangler.jsonc` → `mjrossi-portfolio-website-preview`), so branch code never lands on the production Worker. The environment is chosen at **build** time — under `@astrojs/cloudflare` v14 the adapter regenerates the wrangler config and strips the `env` block, so a branch-conditional build command sets `CLOUDFLARE_ENV=preview` on non-`main` branches, and the non-production deploy command is a plain `npx wrangler versions upload` (no `--env`). See `wrangler.jsonc` for the exact commands. Preview deploys are reached at:
 
 ```
 https://<branch-alias>-mjrossi-portfolio-website-preview.link00seven.workers.dev

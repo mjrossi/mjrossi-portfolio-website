@@ -35,39 +35,53 @@
 
   // ── Preview environment isolation ───────────────────────────
   // Branch/PR builds deploy to a SEPARATE Worker
-  // (`mjrossi-portfolio-website-preview`, auto-derived as
-  // `<name>-<env>`), never to production. This is a deploy-target
-  // firewall, not just secret hygiene: because branch versions no
-  // longer land on the production Worker, a secret edit in the
-  // Cloudflare dashboard — which redeploys the Worker's LATEST
-  // uploaded version — can only ever re-promote `main`. Before this
-  // split, a mid-feature secret edit promoted branch code to
+  // (`mjrossi-portfolio-website-preview`), never to production. This
+  // is a deploy-target firewall, not just secret hygiene: because
+  // branch versions no longer land on the production Worker, a secret
+  // edit in the Cloudflare dashboard — which redeploys the Worker's
+  // LATEST uploaded version — can only ever re-promote `main`. Before
+  // this split, a mid-feature secret edit promoted branch code to
   // mjrossi.com.
+  //
+  // HOW THE ENV IS SELECTED — READ THIS BEFORE TOUCHING THE DEPLOY
+  // COMMANDS. Under @astrojs/cloudflare v14 (Astro 6) the adapter
+  // owns the wrangler config: `astro build` regenerates
+  // `dist/server/wrangler.json` and STRIPS this `env` block. So
+  // `wrangler deploy --env preview` at deploy time does NOTHING — the
+  // env is already baked. The Cloudflare Vite plugin instead selects
+  // the environment at BUILD time from the `CLOUDFLARE_ENV` variable:
+  // `CLOUDFLARE_ENV=preview astro build` bakes name/ workers_dev/
+  // preview_urls from `env.preview` below into the generated config,
+  // and a plain `wrangler versions upload` (no --env) then ships it to
+  // the preview Worker.
   //
   // Load-bearing operator config (NOT expressed here — set in the
   // Cloudflare dashboard → Workers → Settings → Build):
+  //   • Build command is branch-conditional — preview only on
+  //     non-`main` (WORKERS_CI_BRANCH is injected by Workers Builds):
+  //       mise install && mise exec -- sh -c 'if [ "$WORKERS_CI_BRANCH" = "main" ]; \
+  //         then npm run build; else CLOUDFLARE_ENV=preview npm run build; fi'
   //   • Production deploy command stays `npx wrangler deploy`.
-  //   • Non-production deploy command must be
-  //     `npx wrangler versions upload --env preview`.
-  // `versions upload` (not `deploy`) preserves the per-branch
-  // preview URL `<alias>-mjrossi-portfolio-website-preview.<sub>.workers.dev`,
+  //   • Non-production deploy command is a PLAIN `npx wrangler
+  //     versions upload` (NO `--env` — the build already chose the env).
+  // `versions upload` (not `deploy`) preserves the per-branch preview
+  // URL `<alias>-mjrossi-portfolio-website-preview.<sub>.workers.dev`,
   // which .github/workflows/lighthouse.yml audits and isPreviewHost
-  // (src/lib/preview.js) unlocks. The env's secrets are set
-  // separately and mirror production:
+  // (src/lib/preview.js) unlocks. The preview Worker's secrets are set
+  // separately and mirror production (its SESSION KV namespace is
+  // auto-provisioned by the Workers Builds token on first deploy):
   //     wrangler secret put BUTTONDOWN_API_KEY   --env preview
   //     wrangler secret put TURNSTILE_SECRET_KEY --env preview
   //     wrangler secret put PREVIEW_SIGNING_KEY  --env preview
+  //   (`secret put --env preview` DOES honor this block — only the
+  //    build/deploy path is routed through the adapter-generated config.)
   //
-  // `workers_dev` and `preview_urls` are set explicitly below
-  // because the docs disagree on whether they inherit into a named
-  // env — same anti-drift rationale as the top-level block. Other
-  // top-level keys (assets, compatibility_*, observability) DO
-  // inherit and are intentionally not repeated. `workers_dev: false`
-  // means the preview Worker has no bare
+  // `workers_dev: false` means the preview Worker has no bare
   // `mjrossi-portfolio-website-preview.<sub>.workers.dev` alias, so
   // although isPreviewHost would unlock that host if it existed, it
   // never does — the only live preview hosts are the per-branch
-  // aliased URLs, which are meant to show drafts.
+  // aliased URLs, which are meant to show drafts. `preview_urls: true`
+  // keeps those aliased URLs on.
   "env": {
     "preview": {
       "name": "mjrossi-portfolio-website-preview",

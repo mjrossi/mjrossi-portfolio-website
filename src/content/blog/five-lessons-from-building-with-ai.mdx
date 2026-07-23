@@ -1,5 +1,5 @@
 ---
-title: "Five lessons from building with AI"
+title: "Five Lessons from Building the Urbanist Atlas with AI"
 description: "Where AI fell short building the Urbanist Atlas, five lessons on using it well, and why the whole project stays open source."
 pubDate: 2026-08-11
 tags: ["urban-mobility", "urbanist-atlas", "artificial-intelligence", "software-engineering", "open-source"]
@@ -31,7 +31,7 @@ There is a strong difference between "I want to build a directory of safe street
 
 "We are going to build a directory of safe-streets and urban advocacy organizations. I want this to be a modular application that can be consumed by a number of consumers. To start, let's build this in three pieces, starting with a simple API. This API will be built in Go. You should default to using standard libraries wherever possible, and ask before importing third party dependencies. Build it with a focus on TDD. Plan a skeleton of what this will look like."
 
-Every clause in there is doing work. TDD is test-driven development — you write the failing test first, then the code that satisfies it — and asking for it up front meant tests existed from the first commit instead of being bolted on months later, when nobody wants to write them. Naming the standard library as the default is what kept the dependency list short. None of that happens if the prompt is one sentence long.
+Every clause in there is doing work. TDD is test-driven development — writing tests alongside, or in the strictest version before, the implementation — and asking for it up front meant tests existed from the first commit instead of being bolted on months later, when nobody wants to write them. Naming the standard library as the default is what kept the dependency list short. None of that happens if the prompt is one sentence long.
 
 That prompt names Go, and the first post covered how it got there: I left the stack open, Claude suggested Node, and I turned it down because I had specific reasons — static typing, a straightforward concurrency model, a language I'd shipped a production application in recently. So being explicit isn't only about getting better output. It's about doing that thinking first, so there's something concrete to hold the model's answer against. If you can't say why you want something, you'll take whatever you're handed.
 
@@ -41,7 +41,7 @@ Being explicit gets you a better first draft. It doesn't get you a finished one.
 
 I'll admit that "never" is a strong word here. However, it was pretty rare that I was fully satisfied with the first result that the AI would return to me. It might "work," but perhaps the code wasn't structured well. There were some edge cases or tests missing. Or I realized there would be a better abstraction I could pull out somewhere.
 
-I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" — or, if I spotted a specific issue, I'd just tell the AI what I wanted. This is where our job as a software engineer shifts a little bit from writing the code to architecting it. We're architecting code that is well tested, well defined, maintainable, and appropriately simple — the ideas behind acronyms like SOLID and YAGNI ("you aren't gonna need it"), which mostly boil down to building the thing you actually need, and building it so the next person can change it without fear. Claude doesn't always land there on its own, so you say so (see point one: be explicit with your input!)
+I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" — or, if I spotted a specific issue, I'd just tell the AI what I wanted. This is where our job as software engineers shifts a little bit from writing the code to architecting it. We're architecting code that is well tested, well defined, maintainable, and appropriately simple — the ideas behind acronyms like SOLID and YAGNI ("you aren't gonna need it"), which mostly boil down to building the thing you actually need, and building it so the next person can change it without fear. Claude doesn't always land there on its own, so you say so (see point one: be explicit with your input!)
 
 The region graph from the last post is the clearest case of this. I seeded that brainstorming session with New York, Chicago, and San Francisco specifically because I knew those three places well enough to push back on a bad answer, and the multi-parent graph is what came out of the pushing — not what came back first. Tiers are the obvious way to model where somewhere is: a city inside a county inside a metro inside a state. They're also wrong, in a way you only catch if you already know that Park Slope has no border to look up and that Chicagoland crosses a state line.
 
@@ -55,25 +55,25 @@ Once a plan was drafted, I reviewed it and pushed back. Finally, after plenty of
 
 The polygon function from the last post is why I kept doing this even when it felt like overkill. That code ran. It didn't crash, it didn't throw, it returned a number, and the number was entirely plausible — a few postal codes just quietly resolved to the wrong metro. No amount of iterating would have surfaced that, because there was nothing there to look wrong. What catches a bug like that is something with no stake in the answer being right: a fresh agent, a deterministic regeneration that diffs against what's committed, or a person reading it slowly.
 
-There are open-source extensions for Claude Code that formalize this kind of loop, so you don't have to hold the whole process in your head. I used [Superpowers](https://github.com/obra/superpowers), which packages workflows like brainstorming, planning, and code review into skills the agent reaches for on its own. [GSD](https://github.com/open-gsd/gsd-core) is another project in the same spirit, built more around planning work in phases; I haven't used it myself, so treat that as a pointer rather than a recommendation. The specific tool is less important than the shape: focused tasks, small scopes, and a review done by something that didn't write the code in the first place.
+There are open-source extensions for Claude Code that formalize this kind of loop, so you don't have to hold the whole process in your head. I used [Superpowers](https://github.com/obra/superpowers), which packages workflows like brainstorming, planning, and code review into skills the agent reaches for on its own. The specific tool is less important than the shape: focused tasks, small scopes, and a review done by something that didn't write the code in the first place.
 
 Those first three lessons are mostly about how to work the tool. The last two are about what the tool is, and about what you shouldn't hand it no matter how well the first three are going.
 
 ### Remember what AI actually is
 
-At its core, it's a system generating predictions from patterns in an enormous body of existing work. That isn't a knock — it's a very, very good one. But it tells you something useful about *where* to aim the reviewing from the last two lessons, which is what makes this more than "check the output."
+At its core, it's a system trained on an enormous body of existing human work. That isn't a knock — it's what makes it as capable as it is. But it tells you something useful about *where* to aim the reviewing from the last two lessons, which is what makes this more than "check the output."
 
-A system that predicts the most likely answer is strongest exactly where your problem is ordinary, and weakest exactly where your problem is strange. Every genuinely hard thing in this project sat at the strange end: a ZIP code whose neighborhood has no legal boundary, two federal datasets that disagree about what year it is, a polygon with a hole in it. Claude handled the ordinary parts of the Atlas faster and more thoroughly than I would have alone. The parts that were specific to *this* project are where I had to slow down.
+A system like that is strongest exactly where your problem is ordinary — where it looks like the work the model learned from — and weakest exactly where your problem is strange. Every genuinely hard thing in this project sat at the strange end: a ZIP code whose neighborhood has no legal boundary, two federal datasets that disagree about what year it is, a polygon with a hole in it. Claude handled the ordinary parts of the Atlas faster and more thoroughly than I would have alone. The parts that were specific to *this* project are where I had to slow down.
 
 So the practical version is: before you start reviewing, ask which parts of what you're building are unusual. That's your list. That's where it'll be confidently, plausibly wrong.
 
 ### Know what only you can decide
 
-The fact is that these are machines with limitations, operating as effectively as they do in part because they've been trained on an enormous corpus of human-created knowledge. It's important not to anthropomorphize them. They can make mistakes, just like the humans whose work they learned from.
+The fact is that these are machines with limitations. It's important not to anthropomorphize them: they can make mistakes, just like the humans whose work they learned from.
 
 The mistakes aren't really the point, though. The six inclusion criteria from the last post are — local focus, active advocacy, transit or safe streets, no government agencies, no consultancies, no housing. Nothing in any training corpus could have decided that housing and YIMBY work, a neighboring movement and a friendly one, sits outside the Atlas's scope. Nothing could have decided that a group other people still write about, but that hasn't posted in two years, isn't one I can confidently send someone to. Those aren't really correctness questions with a right answer waiting to be retrieved. They're decisions about what the directory is for, and who it owes something to. A model can apply criteria like those very well. Someone still has to have chosen them, and be willing to defend the choice.
 
-Don't believe me? Consider Data from Star Trek: The Next Generation. Data is an extremely capable artificial life-form, but the character is compelling precisely because the series explores what he doesn't understand about being human.
+There's a reason I keep coming back to Data from Star Trek: The Next Generation. Data is an extremely capable artificial life-form — he can execute nearly anything asked of him — but the character is compelling precisely because the series explores what he can't originate: wanting things, valuing things, choosing what matters. The capability was never the interesting part. The choices were.
 
 ## If you want to try something like this
 
@@ -83,12 +83,12 @@ I'd be wary of anyone handing you a process to copy, mine included. The specific
 
 Beyond the model choices I mentioned earlier, the tooling is all there to borrow. Since the code is open source, I'd encourage you to look at my `just` file if you want to take any of it — like the containerized link validation that checks every organization's website through a VPN and flags the dead ones.
 
-## Why transparency is absolutely critical
+## Why I'm being transparent about AI
 
-That last point is why everything is openly licensed. The code, data, and written content are all publicly available under the [Apache 2.0](https://github.com/mjrossi/urbanist-atlas/blob/main/LICENSE), [ODbL-1.0](https://github.com/mjrossi/urbanist-atlas/blob/main/LICENSE-DATA) and [CC-BY-SA-4.0](https://github.com/mjrossi/urbanist-atlas/blob/main/LICENSE-CONTENT) licenses, respectively. I'm not seeking monetary compensation for the project, aside from a small tip jar. I really encourage folks not to throw coins into it unless they really want to and have already thrown some coins into the jar of their local advocacy orgs first.
+That kind of borrowing is only possible because everything is openly licensed. The code, data, and written content are all publicly available under the [Apache 2.0](https://github.com/mjrossi/urbanist-atlas/blob/main/LICENSE), [ODbL-1.0](https://github.com/mjrossi/urbanist-atlas/blob/main/LICENSE-DATA) and [CC-BY-SA-4.0](https://github.com/mjrossi/urbanist-atlas/blob/main/LICENSE-CONTENT) licenses, respectively. I'm not seeking monetary compensation for the project, aside from a small tip jar. I really encourage folks not to throw coins into it unless they really want to and have already thrown some coins into the jar of their local advocacy orgs first.
 
 I encourage people to reach out, submit corrections, tell me about their new advocacy org that they want included. Trust has to be a core value, and trust is built from being open and transparent. This project is a love letter to all my fellow advocates who want to make their cities the best places they can be. Hiding behind a robot, or not being forthcoming about the fact that I am using AI to build, operate, and maintain this site, would erode the trust that I know people are placing in me.
 
 AI is going to reshape a lot of how we work in the coming years, and there are powerful incentives pushing that in the wrong direction — maximizing profit even when the costs are borne by people and the planet. We can, and have to, look for ways to use these tools for good instead. I still like to believe that's possible.
 
-The Urbanist Atlas is my small way of trying to do just that: use the tools we have, keep the humans in the loop, and build something that helps people make their cities a little better. Looking back at the Atlas, I realize that nearly every place where the project succeeded or failed came down to the same thing: knowing what to delegate, knowing what to question, and knowing what I still had to own.
+The Urbanist Atlas is my small way of trying to do just that — build something that helps people make their cities a little better. Looking back, nearly every place where the project succeeded or failed came down to the same thing: knowing what to delegate, knowing what to question, and knowing what I still had to own.

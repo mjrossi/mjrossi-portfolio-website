@@ -59,8 +59,11 @@
   // Cloudflare dashboard → Workers → Settings → Build):
   //   • Build command is branch-conditional — preview only on
   //     non-`main` (WORKERS_CI_BRANCH is injected by Workers Builds):
-  //       mise install && mise exec -- sh -c 'if [ "$WORKERS_CI_BRANCH" = "main" ]; \
+  //       sh -c 'if [ "$WORKERS_CI_BRANCH" = "main" ]; \
   //         then npm run build; else CLOUDFLARE_ENV=preview npm run build; fi'
+  //     (The Cloudflare build gets Node + the Turnstile key from the
+  //      NODE_VERSION and PUBLIC_TURNSTILE_SITE_KEY build variables in
+  //      the dashboard — not mise — so no mise activation is needed here.)
   //   • Production deploy command stays `npx wrangler deploy`.
   //   • Non-production deploy command is a PLAIN `npx wrangler
   //     versions upload` (NO `--env` — the build already chose the env).

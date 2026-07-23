@@ -58,11 +58,11 @@ Buttondown → polls /blog/rss.xml → emails new posts
 
 | Variable | Where | Source (single, across all environments) |
 |---|---|---|
-| `PUBLIC_TURNSTILE_SITE_KEY` | Astro build (`import.meta.env`) | `mise.toml` `[env]` (committed). The real production site key is checked into the repo because it's public by design (Turnstile renders it into HTML on /blog). `mise.development.toml` and `mise.ci.toml` both override with the always-passes test key (when `MISE_ENV=development` locally or `MISE_ENV=ci` in CI). `mise.local.toml` (gitignored) can override anything for machine-specific testing. |
+| `PUBLIC_TURNSTILE_SITE_KEY` | Astro build (`import.meta.env`) | **Local + GitHub CI:** `mise.toml` `[env]` (committed). The real production site key is checked into the repo because it's public by design (Turnstile renders it into HTML on /blog). `mise.development.toml` and `mise.ci.toml` both override with the always-passes test key (when `MISE_ENV=development` locally or `MISE_ENV=ci` in CI). `mise.local.toml` (gitignored) can override anything for machine-specific testing. **Cloudflare build:** a dashboard `PUBLIC_TURNSTILE_SITE_KEY` build variable (see below) — keep it equal to the committed value. |
 | `BUTTONDOWN_API_KEY` | Worker runtime (`locals.runtime.env`) | `wrangler secret put BUTTONDOWN_API_KEY` (production). `.dev.vars` (local). Not needed in CI — smoke runs sad paths only. |
 | `TURNSTILE_SECRET_KEY` | Worker runtime (`locals.runtime.env`) | `wrangler secret put TURNSTILE_SECRET_KEY` (production). `.dev.vars` (local). Not needed in CI. |
 
-**Cloudflare Workers Builds reads `mise.toml`'s `[tools]` automatically** (which is how Node 22 gets picked up). It does **not** auto-activate `[env]`. To expose `[env]` to `npm run build`, the dashboard's **Build command** must be set to `mise install && mise exec -- npm run build` (rather than the default `npm run build`). With that change, mise activates during the build and the production `PUBLIC_TURNSTILE_SITE_KEY` from `mise.toml` reaches Astro.
+**Cloudflare Workers Builds does not use mise.** Node and the Turnstile key are supplied as dashboard **build variables** — `NODE_VERSION=22` and `PUBLIC_TURNSTILE_SITE_KEY=<site key>` (Settings → Build → Variables and secrets) — so the Build command is a plain `npm run build` (wrapped in a branch-conditional `CLOUDFLARE_ENV=preview` for preview isolation; see the Deployment section and `wrangler.jsonc`). mise is strictly the *local dev* + *GitHub Actions* toolchain here. The one coupling to remember: the committed `mise.toml` `PUBLIC_TURNSTILE_SITE_KEY` and the Cloudflare build variable must hold the same value.
 
 The split between mise and wrangler is by **layer**, not by convenience:
 

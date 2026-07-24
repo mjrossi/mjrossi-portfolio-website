@@ -12,9 +12,16 @@
 //   lake-county-in   parents = ["chicago-metro", "in"]            regions_us.toml
 //   chicagoland / il / in  parents = []
 //
+// The chicagoland node is named "Chicagoland (IL/IN/WI)" in the seed; the label
+// here is trimmed to "Chicagoland" because the post only ever discusses Illinois
+// and Indiana, and no WI edge exists for a reader to trace. Node names are a
+// display choice; edges are not — those stay verbatim.
+//
 // Two things deliberately absent. chicago-metro's rollup_states = ["il", "in"]
-// is browse-only and never walked, so no edge. DuPage County appears in the
-// design doc's mermaid but is not in the shipped seed, so it isn't drawn here.
+// is browse-only and never walked, so no edge. The five collar counties
+// (DuPage, Kane, Lake-IL, McHenry, Will) are all in the shipped seed with the
+// same parents as cook-county, but drawing five identical nodes would add
+// nothing the "Cook + 5 collar" subtitle doesn't already say.
 //
 // Styles live in global.css (.post-diagram) per the one-stylesheet rule.
 ---
@@ -86,7 +93,7 @@
     {/* ---- nodes ---- */}
     <g class="dg-group">
       <rect x="250" y="22" width="210" height="36" class="dg-node" />
-      <text x="355" y="45" class="dg-label">Chicagoland (IL/IN/WI)</text>
+      <text x="355" y="45" class="dg-label">Chicagoland</text>
     </g>
 
     <g class="dg-group">

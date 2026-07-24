@@ -29,7 +29,7 @@ That's what makes 11217 resolve the way it does. Park Slope has no boundary I co
 
 That asymmetry is the whole trick. Brooklyn reaches New York State by its own direct edge rather than by climbing up through the metro, so a lookup for 11217 returns Brooklyn groups, citywide New York City groups, and New York State groups in that order. It also picks up the genuinely regional organizations sitting above them — TransitCenter at the metro tier, the Tri-State Transportation Campaign above that. That's correct, and worth being clear about: the Tri-State Transportation Campaign's remit really does cover New Jersey and Connecticut, and if you're searching from Brooklyn it's an organization you should know about.
 
-What a Brooklyn search doesn't return is New Jersey's *own* advocacy groups. Bike JC, the New Jersey Bike & Walk Coalition, Trenton Cycling Revolution — those hang off the New Jersey state node, and New Jersey is not an ancestor of Brooklyn, so they never surface. That's the line the graph is drawing: a regional organization whose work genuinely covers you is worth showing, another state's neighborhood cycling group is not. Parent New York State under the metro instead, and that distinction collapses.
+What a Brooklyn search doesn't return is New Jersey's *own* advocacy groups. Bike JC, the New Jersey Bike & Walk Coalition, Trenton Cycling Revolution — those hang off the New Jersey state node, and New Jersey is not an ancestor of Brooklyn, so they never surface. That's the line the graph is drawing: a regional organization whose work genuinely covers you is worth showing; another state's neighborhood cycling group is not. Parent New York State under the metro instead, and that distinction collapses.
 
 <RegionGraphNYC />
 
@@ -37,19 +37,19 @@ The same graph shape is what lets messier cases work without special-casing each
 
 <RegionGraphChicago />
 
-None of it is hard-coded to the US, either. Canada gets the same graph, tuned to its own geography: postal codes anchor at the FSA (Forward Sortation Area, the smallest boundary Canada publishes) matched to its CMA (census metropolitan area: Canada's rough equivalent of an MSA) by a spatial overlap of the two boundary shapes, since Canada has no county layer to lean on the way the US does.
+None of it is hard-coded to the US, either. Canada gets the same graph, tuned to its own geography. There's no county layer to lean on the way there is in the US, so postal codes anchor at the FSA (Forward Sortation Area, the smallest postal geography Canada publishes boundaries for), and each FSA is matched to the CMA (census metropolitan area: Canada's rough equivalent of an MSA) whose boundary it overlaps most — unless I've curated a city underneath it, which takes precedence.
 
 Ottawa-Gatineau, which straddles Ontario and Quebec, reuses the same cross-border shape I built for NYC and Chicago: a province-neutral umbrella metro with one region per province underneath it, so a Gatineau postal code resolves to Quebec and never leaks into Ontario's results.
 
-I also modeled Portugal as a stress test, to see whether the graph held up against an administrative geography that nobody designed with the US or Canada in mind. Lisbon's metro area multi-parents into two separate EU statistical regions (NUTS-II, the mid-level tier the EU uses to carve up member states for reporting) — structurally the same problem as Brooklyn having two parents. Madeira needed the reverse: as an autonomous region it sits parallel to that tier rather than beneath it, with no parent at all. That data isn't live — it exists to validate the model, not to ship — and Portugal stays out of the API's default country list until the editorial coverage is ready.
+I also modeled Portugal as a stress test, to see whether the graph held up against an administrative geography that nobody designed with the US or Canada in mind. Lisbon's metro area multi-parents into two separate EU statistical regions (NUTS-II, the mid-level tier the EU uses to carve up member states for reporting) — structurally the same problem as Brooklyn having two parents. Madeira needed the reverse: as an autonomous region it sits parallel to that tier rather than beneath it, with no parent at all. That data isn't live — it exists to validate the model, not to ship. It sits in the repo alongside the US and Canadian seeds, but the running API never loads it at all, and won't until the editorial coverage is ready.
 
 I was extremely proud of the region graph design — a great example of using AI alongside my own knowledge of cities to build an adaptable data model. But designing the shape was only half the job. The graph still had to be *built*, out of real government data, and that's where the genuinely hard problems were waiting.
 
 ## Generating the graph
 
-The region graph isn't hand-written. Underneath it is a pipeline that takes five staged upstream files — the Census Bureau's metro delineation list, two ZCTA crosswalks from the 2020 census, HUD's ZIP-to-county file, and Statistics Canada's boundary shapefiles — and generates every data file the API ships with. One command rebuilds 487 US metros, 43 Canadian ones, and the anchors for over forty thousand postal codes.
+The region graph isn't hand-written. Underneath it is a pipeline that takes six staged upstream files — the Census Bureau's metro delineation list, two ZCTA crosswalks from the 2020 census, HUD's ZIP-to-county file, and two Statistics Canada boundary shapefiles, one for FSAs and one for metro areas — and generates every data file the API ships with. One command per country rebuilds all of it: 393 US metros and 41 Canadian ones, 530 rows once the cross-border portions are counted separately, plus the anchors for over forty thousand postal codes.
 
-I was insistent on one property here: the generator had to be deterministic. Same source data in, byte-identical files out. That sounds fussy, but it's what makes the data reviewable. When a diff shows up in a regenerated file, it means the upstream data actually changed — not that a map happened to iterate in a different order this time. There's a check that regenerates everything and fails if the result doesn't match what's committed, so nobody, me included, can quietly hand-edit generated data and have it survive.
+I was insistent on one property here: the generator had to be deterministic. Same source data in, byte-identical files out. That sounds fussy, but it's what makes the data reviewable. When a diff shows up in a regenerated file, it means the upstream data actually changed — not that a map happened to iterate in a different order this time. There's a check that regenerates the region files and fails if the result doesn't match what's committed, so nobody, me included, can quietly hand-edit generated data and have it survive.
 
 Which is how Connecticut turned into a puzzle. Two of the federal datasets I was combining were different vintages of the same geography — the Census Bureau had swapped the state's counties for new planning regions in 2022, and only one of the two files had caught up. Neither was wrong. They just disagreed about what year it was, and the join between them returned nothing rather than failing loudly, stranding hundreds of ZIP codes at the state line instead of their actual metro until I wrote a pass to reconcile the two.
 
@@ -67,7 +67,7 @@ So Claude and I fixed it together, by throwing out the drawing direction entirel
 
 That fix then had its own plausible-looking bug. To ask whether one outline sits inside another, you need a point that's definitely inside the first, and the obvious candidate — one of its corners — is exactly the wrong choice, because two outlines in a clipped shape can meet at a corner. A later review pass caught it on a test polygon: area 9,200, measured 10,800. The hole had been counted as solid.
 
-That one function is the argument of this whole post in miniature. The AI wrote plausible geometry code very fast — and then wrote a plausible fix for it. Plausible is not the same thing as correct, and the only thing standing between the two was someone actually reading the code: me on the first bug, a later review pass on the second.
+That one function is why I keep hammering on this. The AI wrote plausible geometry code very fast — and then wrote a plausible fix for it. Plausible is not the same thing as correct, and the only thing standing between the two was someone actually reading the code: me on the first bug, a later review pass on the second.
 
 ## Cataloging the organizations
 
@@ -100,9 +100,9 @@ Yes, occasionally. I didn't encounter organizations that appeared to be entirely
 
 It was also at this point in the process that I decided to introduce a submission desk: when I approve a visitor-submitted organization, a worker automatically opens a GitHub pull request adding it to the dataset, so I review a diff instead of a raw report. Because the data is baked into the binary, it goes live on the next deploy.
 
-Advocacy is human. This work is focused on making our cities better places to live, and I never forgot that, no matter how many interactions I had with Claude.
-
 ## Closing thoughts
+
+Advocacy is human. This work is focused on making our cities better places to live, and I never forgot that, no matter how many interactions I had with Claude.
 
 Use AI, and use it aggressively where it makes you faster. But don't let it stand in for your own eyes, ears, and the community of humans who call a city their home.
 

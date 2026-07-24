@@ -31,11 +31,9 @@ There is a strong difference between "I want to build a directory of safe street
 
 "We are going to build a directory of safe-streets and urban advocacy organizations. I want this to be a modular application that can be consumed by a number of consumers. To start, let's build this in three pieces, starting with a simple API. This API will be built in Go. You should default to using standard libraries wherever possible, and ask before importing third party dependencies. Build it with a focus on TDD. Plan a skeleton of what this will look like."
 
-Every clause in there is doing work. TDD is test-driven development — writing tests alongside, or in the strictest version before, the implementation — and asking for it up front meant tests existed from the first commit instead of being bolted on months later, when nobody wants to write them. Naming the standard library as the default is what kept the dependency list short. None of that happens if the prompt is one sentence long.
+Every clause in there is doing work. TDD is test-driven development — writing tests alongside, or in the strictest version before, the implementation — and asking for it up front meant tests existed from the first commit instead of being bolted on months later, when nobody wants to write them. Naming the standard library as the default is what kept the dependency list short. None of that happens if the prompt is one sentence long, and none of it is something the model was ever going to volunteer.
 
 That prompt names Go, and the first post covered how it got there: I left the stack open, Claude suggested Node, and I turned it down because I had specific reasons — static typing, a straightforward concurrency model, a language I'd shipped a production application in recently. So being explicit isn't only about getting better output. It's about doing that thinking first, so there's something concrete to hold the model's answer against. If you can't say why you want something, you'll take whatever you're handed.
-
-Being explicit gets you a better first draft. It doesn't get you a finished one.
 
 ### Never take the first result
 
@@ -53,11 +51,11 @@ Fresh context is what does the real work here. An agent that just spent an hour 
 
 Once a plan was drafted, I reviewed it and pushed back. Finally, after plenty of back and forth, I let it build. After it was built, I threw another agent with a fresh context to review the code that was generated. After 2 or 3 rounds of this, I'd do my own code review, leaving feedback, doing manual security analysis, and then throw another agent on it to address the feedback.
 
-The polygon function from the last post is why I kept doing this even when it felt like overkill. That code ran. It didn't crash, it didn't throw, it returned a number, and the number was entirely plausible — a few postal codes just quietly resolved to the wrong metro. No amount of iterating would have surfaced that, because there was nothing there to look wrong. What catches a bug like that is something with no stake in the answer being right: a fresh agent, a deterministic regeneration that diffs against what's committed, or a person reading it slowly.
+The polygon function from the last post is why I kept doing this even when it felt like overkill. That code ran clean, returned a number, and the number was entirely plausible — a few postal codes just quietly resolved to the wrong metro. No amount of iterating would have surfaced that, because there was nothing there to look wrong. What catches a bug like that is something with no stake in the answer being right: a fresh agent, a deterministic regeneration that diffs against what's committed, or a person reading it slowly.
 
 There are open-source extensions for Claude Code that formalize this kind of loop, so you don't have to hold the whole process in your head. I used [Superpowers](https://github.com/obra/superpowers), which packages workflows like brainstorming, planning, and code review into skills the agent reaches for on its own. The specific tool is less important than the shape: focused tasks, small scopes, and a review done by something that didn't write the code in the first place.
 
-Those first three lessons are mostly about how to work the tool. The last two are about what the tool is, and about what you shouldn't hand it no matter how well the first three are going.
+The last two lessons are less about how to work the tool and more about what you shouldn't hand it, however well the first three are going.
 
 ### Remember what AI actually is
 
@@ -65,7 +63,7 @@ At its core, it's a system trained on an enormous body of existing human work. T
 
 A system like that is strongest exactly where your problem is ordinary — where it looks like the work the model learned from — and weakest exactly where your problem is strange. Every genuinely hard thing in this project sat at the strange end: a ZIP code whose neighborhood has no legal boundary, two federal datasets that disagree about what year it is, a polygon with a hole in it. Claude handled the ordinary parts of the Atlas faster and more thoroughly than I would have alone. The parts that were specific to *this* project are where I had to slow down.
 
-So the practical version is: before you start reviewing, ask which parts of what you're building are unusual. That's your list. That's where it'll be confidently, plausibly wrong.
+So the practical version is: before you start reviewing, ask which parts of what you're building are unusual. That's your list, and that's where it'll be confidently, plausibly wrong.
 
 ### Know what only you can decide
 
@@ -79,7 +77,7 @@ There's a reason I keep coming back to Data from Star Trek: The Next Generation.
 
 It's never been easier to take an idea to a working prototype. That's an incredibly powerful tool, and the hope is that we'll see great ideas come to life that couldn't before. If you want to build your own idea, I hope this series was useful.
 
-I'd be wary of anyone handing you a process to copy, mine included. The specific shape of this project came out of what I already had — thirteen years of backend work, almost no frontend, and a subject I care about enough to argue with a model about. Yours will come out of something different. What transfers is probably smaller than the stack: say what you want precisely enough that you could disagree with the answer, don't stop at the first thing that works, and get something other than the author to check it. Where you know the domain, I'd delegate hard and review fast. Where you don't, slow down — that's where a plausible answer gets expensive.
+I'd be wary of anyone handing you a process to copy, mine included. The specific shape of this project came out of what I already had — thirteen years of backend work, almost no frontend, and a subject I care about enough to argue with a model about. Yours will come out of something different. What transfers is probably smaller than the stack: say what you want precisely enough that the answer can be held against something, don't stop at the first thing that works, and get something other than the author to check it. Where you know the domain, I'd delegate hard and review fast. Where you don't, slow down — that's where a plausible answer gets expensive.
 
 Beyond the model choices I mentioned earlier, the tooling is all there to borrow. Since the code is open source, I'd encourage you to look at my `just` file if you want to take any of it — like the containerized link validation that checks every organization's website through a VPN and flags the dead ones.
 

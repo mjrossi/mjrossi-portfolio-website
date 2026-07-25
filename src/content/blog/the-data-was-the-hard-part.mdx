@@ -99,7 +99,7 @@ That is exactly the assumption that breaks. It only holds if holes are reliably 
 
 Nothing crashes. Nothing throws an error. The number just comes back too big, and that number is what decides which metro an FSA belongs to.
 
-When I was testing Canadian postal codes by hand, I didn't really know all that many. I was just typing in random postal codes I found online that I knew were generally in the right city (e.g. Windsor, ON - a city I used to visit occasionally when I still lived in Detroit). One of those runs gave me an odd result that I wasn't expecting. Up until that point, nothing had actually landed wrong in the shipped data — but nothing in the run would have told me if it had. That is a different and much worse feeling than a failing test.
+When I was testing Canadian postal codes by hand, I didn't really know all that many. I was just typing in random postal codes I found online that I knew were generally in the right city (e.g. Windsor, ON — a city I used to visit occasionally when I still lived in Detroit). One of those runs gave me an odd result that I wasn't expecting. Up until that point, nothing had actually landed wrong in the shipped data — but nothing in the run would have told me if it had. That is a different and much worse feeling than a failing test.
 
 Claude and I fixed it together, by throwing out the drawing direction entirely and reading the nesting instead. For each outline, count how many of the other outlines it sits inside: an odd number means it's a hole, so its area comes off the total; an even number — including none at all — means it's solid, so it gets added. Which way it was drawn never enters into it.
 
@@ -117,7 +117,7 @@ That one function is why I keep hammering on this. The AI wrote plausible geomet
 
 Cataloging 236 organizations across tens of thousands of postal codes in two countries is the sort of task that could easily have taken weeks or months. AI let me do it — along with the rest of this project — in a little over a month, casting a far wider net than I could have cast alone. But the data still had to be accurate. It still had to be verified.
 
-The first bit was deciding exactly what organizations I wanted to include, so I defined a set of criteria that was at the forefront of any request to AI (full list [on the About page](https://urbanistatlas.com/about)).
+The first step was deciding exactly what organizations I wanted to include, so I defined a set of criteria that was at the forefront of any request to AI (full list [on the About page](https://urbanistatlas.com/about)).
 
 1. Geographic focus — a defined region, because the best advocacy happens locally
 2. Active advocacy — visible public-facing work: campaigns, hearings, testimony, organizing

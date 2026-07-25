@@ -36,7 +36,7 @@ At this stage, Claude started proposing a plan for Go. There was a lot of back a
 
 Could I have just taken its recommendation? Yes. But after thirteen years of writing code, and very recently writing an extremely robust application in Go, I had my own ideas of how I wanted to do this, so I stayed just as explicit with Claude about the rest. Rather than hand all of that — initialization, configuration, deployment — to a single pass, I acted as a bit of a project manager, product owner, and software architect in one go, and split the work across three of Claude Code's subagents: one focused purely on the endpoint and API design, another on deployment and tooling (the `just` file and `mise` config that show up below), and a third whose only job was to review the first two against idiomatic Go and Go community convention.
 
-And Claude delivered! Because I was extremely detailed in my input and leaned on my own knowledge, we ended up with an endpoint and a code structure I was pleased with. Over time, Claude and I added more layers, more endpoints, a `just` file and `mise` for managing tooling. If I was unclear or didn't have a strong preference, there was the back and forth, and I'd explicitly push the AI to look at community guidelines on making good choices.
+Because I was extremely detailed in my input and leaned on my own knowledge, we ended up with an endpoint and a code structure I was pleased with. Over time, Claude and I added more layers, more endpoints, a `just` file and `mise` for managing tooling. If I was unclear or didn't have a strong preference, there was the back and forth, and I'd explicitly push the AI to look at community guidelines on making good choices.
 
 That's another place human judgment shows up in this story — those community guidelines exist because people who care about good code quality wrote them down and published them.
 
@@ -56,7 +56,7 @@ I attempted to do some independent research on the frameworks, but it was challe
 
 From here, Claude wrote the first iteration of the UI that consumed that single `/lookup` endpoint from before. As with the backend, this single slice was a deliverable and something that showcased a working prototype that could be iterated on over time. As I did my testing, both locally and on a Cloudflare preview deploy, I was pleased to see a real page that called the live endpoint and rendered a real result, not a mockup. I successfully had a monorepo with two separate but connected pieces: a backend API in Go, and a frontend app in React consuming that Go API. Hurrah!
 
-Using AI can often feel like a useful shortcut. I didn't have to _know_ React to write a React app; it just didn't feel particularly comfortable for me to do it. I tried to work around this by taking more review time on these components, and actually having dialog with the AI assistant to ask questions and make sure I could reason about what was being written. It wasn't as good as writing the code myself, but that dialog is an imperative step in AI-assisted coding — it's how you keep learning and growing while you work.
+Using AI can often feel like a useful shortcut. I didn't have to _know_ React to write a React app; it just didn't feel particularly comfortable for me to do it. I tried to work around this by taking more review time on these components, and actually having dialogue with the AI assistant to ask questions and make sure I could reason about what was being written. It wasn't as good as writing the code myself, but that dialogue is part of the work — it's how you keep learning and growing while you work.
 
 ### Fleshing out more features
 
@@ -78,8 +78,8 @@ Which brings back the trap from earlier: in the code, I mostly knew enough.
 
 ## Closing thoughts
 
-That's the part I'd want someone starting out to take from this. "The human eye is imperative" isn't a reassuring thing I said to myself to still feel like my job is still important, it's where the actual work shifted. The typing got cheap. Deciding what was worth typing didn't, and that's where most of those two months went.
+That's the part I'd want someone starting out to take from this. "The human eye is imperative" isn't a reassuring thing I said to myself to feel like my job is still important, it's where the actual work shifted. The typing got cheap. Deciding what was worth typing didn't, and that's where most of those two months went.
 
-Which is a little funny, given why I'm here at all. I moved to Lisbon to study how cities move people, and the problems worth solving in that field are the ones you can't look up - they're judgment calls about real places and the people living in them. Building the Atlas turned out to be practice for that, with the small mercy of a compiler checking part of my work.
+Which is a little funny, given why I'm here at all. I moved to Lisbon to study how cities move people, and the problems worth solving in that field are the ones you can't look up — they're judgment calls about real places and the people living in them. Building the Atlas turned out to be practice for that, with the small mercy of a compiler checking part of my work.
 
 Eventually it got to the point where we needed real data to work with, and that's where the trap actually sprang. Cities don't fit neatly into hierarchies, government datasets disagree with each other, and an organization that doesn't exist looks exactly like one that does until you check. That's the next post.

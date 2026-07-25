@@ -8,9 +8,7 @@ tags: ["urban-mobility", "urbanist-atlas", "software-engineering", "artificial-i
 import Figure from '../../../components/Figure.astro';
 import lisbon_mini_buses from './lisbon_mini_buses.jpg';
 
-[The Urbanist Atlas](https://urbanistatlas.com) — a directory of local safe-streets and transit advocacy organizations, searchable by ZIP or postal code — has been live for about two months now. The idea is simple: you land in a new city, type in your postal code, and find the people already working for better buses, safer crossings, and streets built for humans where you live. Two months feels like enough time to reflect on what worked, what didn't, and where I still had to step in instead of letting Claude run on its own.
-
-That reflection became a three-part series. This first post covers the code: how I used Claude Code as my "coding assistant" to greenfield the project. The second covers the data — modeling cities as a graph, generating that graph from federal datasets, and cataloging the organizations. The third steps back, with tips and broader, non-technical thoughts about AI.
+[The Urbanist Atlas](https://urbanistatlas.com) — a directory of local safe-streets and transit advocacy organizations, searchable by ZIP or postal code — has been live for about two months now. The idea is simple: you land in a new city, type in your postal code, and find the people already working for better buses, safer crossings, and streets built for humans where you live. Two months feels like enough time to reflect on what worked, what didn't, and where I still had to step in instead of letting Claude run on its own. That reflection became a three-part series. This first entry covers the code: how I used Claude Code as my "coding assistant" to greenfield the project.
 
 This post has also been stewing for the last month somewhere between the thousand things that go into an international move (which could be its own post someday) — my wife Hilary and I have relocated to Lisbon, Portugal, in preparation for my first year in the EIT Urban Mobility Master's program (Sustainable Urban Mobility Transitions) at Instituto Superior Técnico.
 
@@ -48,7 +46,7 @@ The frontend was therefore a more interesting test of my thesis: I was delegatin
 
 I'm not a designer either, so I used [Claude Design](https://claude.com/product/design) — Anthropic's dedicated design product — to draft the look of the frontend before writing any code or deciding on a framework. I'd already done an iteration of this on my personal blog and website, so I used that as a starting point, responding to each draft, asking for a different layout or visual hierarchy, and iterating until the handoff document matched what I actually wanted. I was also impressed that Claude Design could produce handoff materials for Claude Code to go ahead and implement the frontend code, which I definitely took advantage of.
 
-I couldn't really review it, though. It handed me a lot of CSS files, and I could read them well enough to know what any individual rule did — but not whether the design decisions themselves were good, or whether the implementation would hold up as the application grew. That's a very different thing from being able to review code. I decided to take the output, and hand it off as instructed, assuming that I could do a proper pass later.
+I couldn't really review it, though. It handed me a lot of CSS files, and I could read them well enough to know what any individual rule did — but not whether it held together as a design, or whether it would hold up as the application grew. I had to trust it, which is a very different thing from being able to comprehensively review code. I handed it off as instructed, assuming that I could do a proper pass later.
 
 At this point, it was time to build a frontend. I was direct in my initial prompts — I have a lot of experience as a backend engineer, minimal frontend, but have dabbled in HTML, CSS, JavaScript, TypeScript, Node, etc. I leaned much more heavily on Claude's input here, but was explicit that I needed advice, not just answers. I knew my high-level requirements: easy to maintain; no stored state, consuming everything from the API; hosted on Cloudflare; thoroughly tested; and open to community input. Claude provided a couple of solutions: a few newer frameworks I'd never heard of, an Astro-powered site like this exact blog you're reading, and of course a tried and true React solution with TypeScript.
 
@@ -60,7 +58,7 @@ Using AI can often feel like a useful shortcut. I didn't have to _know_ React to
 
 ### Fleshing out more features
 
-Thinking like a product manager was really valuable here, because I've seen how useful it can be to just ship something that works. It doesn't need all the features ready. It doesn't need to be perfect. It just needs to prove the basic structure holds up, and at this stage it did.
+Thinking like a product manager was really valuable here, because I've seen how useful it can be to just ship something that works. It doesn't need all the features ready. It just needs to prove the basic structure holds up, and at this stage it did.
 
 This meant that going forward I could work on the backend and frontend in parallel, using each side to validate the other. Add a new endpoint with a frontend to consume, ensure it worked. Make changes on the frontend, know that the backend was stable.
 
@@ -72,13 +70,13 @@ This was a tradeoff I made: the database and the queue both keep their state on 
 
 ### Where that leaves the code
 
-Looking back at this half of the project, the pattern is consistent: Claude was fast and genuinely good, and every place it saved me real time was a place where I could already tell a good answer from a plausible one. I turned down Node for Go because I had thirteen years of reasons to. I split the work across three subagents because I already knew what the three roles were. I pushed back on the first draft because I knew what "well structured" looked like.
+Looking back at this half of the project, the pattern is consistent: Claude was fast and genuinely good, and every place it saved me real time was a place where I could already tell a good answer from a plausible one. It suggested Node but I turned it down because I had thirteen years of reasons to.
 
 Which brings back the trap from earlier: in the code, I mostly knew enough.
 
 ## Closing thoughts
 
-That's the part I'd want someone starting out to take from this. "The human eye is imperative" isn't a reassuring thing I said to myself to feel like my job is still important, it's where the actual work shifted. The typing got cheap. Deciding what was worth typing didn't, and that's where most of those two months went.
+That's the part I'd want someone starting out to take from this. "The human eye is imperative" isn't a reassuring thing I said to myself to feel like my job is still important, it's where the actual work shifted. The typing became essentially free; deciding what was worth typing didn't. That's where most of those two months went.
 
 Which is a little funny, given why I'm here at all. I moved to Lisbon to study how cities move people, and the problems worth solving in that field are the ones you can't look up — they're judgment calls about real places and the people living in them. Building the Atlas turned out to be practice for that, with the small mercy of a compiler checking part of my work.
 

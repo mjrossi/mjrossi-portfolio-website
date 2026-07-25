@@ -89,7 +89,7 @@ The join between them returned nothing at all, which is the worst possible outco
 
 Reconciling the vintages was only half of it. The Stamford ZIPs now landed in their own metro, Bridgeport-Stamford, and still surfaced no Tri-State orgs, because that metro had no edge up to the Tri-State region. I added one.
 
-The Canadian side broke differently. The source files and the loading pipeline there needed a different calculation entirely. Matching each FSA to the CMA it overlaps most, the way I described above, sounds like a lookup but isn't — it's really a measurement: clip the FSA's boundary against the metro's, then measure how much shape is left over. A library does the clipping. Nothing in it measures area — that part I had to write.
+The Canadian side broke differently. The source files and the loading pipeline there needed a different calculation entirely. Matching each FSA to the CMA it overlaps most, the way I described above, sounds like a direct lookup but is really a measurement: clip the FSA's boundary against the metro's, then measure how much shape is left over. A library does the clipping. Nothing in it measures area — that part I had to write.
 
 The problem sounds simple: take a clipped geographic shape and calculate how much area it contains. The obvious way to measure it is the shoelace formula — you walk each outline of the shape in order and total up the area it sweeps out.
 
@@ -150,7 +150,7 @@ It was also at this point in the process that I decided to introduce a submissio
 
 Every one of those 236 entries is a room full of people somewhere, arguing about a bus route. I spent a month building a machine to find those rooms, and it's genuinely good at it. But I found Riders Alliance and Transportation Alternatives by showing up to meetings after I moved to New York, not by querying anything.
 
-So use AI, and use it aggressively where it makes you faster. It made me faster. It did not make me right, and on the two occasions in this post that actually mattered — a join that silently returned nothing, a polygon that measured too big — faster is precisely what would have shipped the error.
+So use AI, and use it aggressively where it makes you faster. It made me faster. On the two occasions in this post that actually mattered — a join that silently returned nothing, a polygon that measured too big — faster is precisely what would have shipped the error.
 
 Cities aren't static. They're made and remade every day by the people living in them, in ways no dataset fully captures, and the parts that matter most are usually the parts somebody has to tell you.
 

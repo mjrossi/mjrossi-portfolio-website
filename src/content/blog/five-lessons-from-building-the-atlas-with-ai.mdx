@@ -5,7 +5,9 @@ pubDate: 2026-08-11
 tags: ["urban-mobility", "urbanist-atlas", "artificial-intelligence", "software-engineering", "open-source"]
 ---
 
-Over the last two posts I wrote about the thought process behind the Urbanist Atlas: [the code](/blog/i-used-ai-to-build-the-urbanist-atlas/) — the Go API and the React frontend — and then [the data](/blog/the-atlas-data-was-the-hard-part/), where modeling cities and verifying organizations turned out to be the harder half. This is the third and last part: where AI genuinely fell short, what the month cost in money and energy, my five primary takeaways, and a note about transparency.
+Over the last two posts I wrote about the thought process behind the Urbanist Atlas: [the code](/blog/i-used-ai-to-build-the-urbanist-atlas/) — the Go API and the React frontend — and then [the data](/blog/the-atlas-data-was-the-hard-part/), where modeling cities and verifying organizations turned out to be the harder half.
+
+This is the third and final part, where I step away from the technical and get to what I actually learned.
 
 ## Where AI fell short
 
@@ -21,7 +23,7 @@ The AI can do it. It's probably good enough, and it does work. But is it _really
 
 ### The energy and environmental cost
 
-I paid for one month of a Claude Max subscription to do this. That's $100. To say nothing of the fact that many people can't afford that sort of spend, there are a lot of tokens spent on each subagent, each feature, each AI-assisted review cycle or organizational pass. Data centers are expanding rapidly to meet increased demand. The communities hosting that infrastructure can face increased pressure on electricity, water, and other resources, while often not being the primary beneficiaries of the technology driving that demand.
+I paid for one month of a Claude Max subscription to do this. That's $100. To say nothing of the fact that many people can't afford that sort of spend, there are a lot of tokens spent on each subagent, each feature, each AI-assisted review cycle or organizational pass. Data centers are expanding rapidly to meet increased demand. In my home state of Michigan, at least thirteen data centers are in various planning stages, and [residents are organizing against them](https://www.reuters.com/world/us/americans-are-angry-about-data-centers-politicians-are-feeling-pressure-2026-07-16/). They cite impacts on their towns' water supply, power grid, and rural character.
 
 I did make some deliberate choices not to reach for the biggest hammer by default. Opus was my primary model, but simpler subagent work — a documentation pass, a formatting cleanup, a first read of a diff — went to Haiku or Sonnet instead. I tried to keep agents few and tightly scoped rather than spawning a swarm just because I could, and to batch review passes instead of re-running them every time I changed my mind.
 
@@ -39,15 +41,15 @@ There is a strong difference between "I want to build a directory of safe street
 
 Every clause in there is doing work. TDD is test-driven development — writing tests alongside, or in the strictest version before, the implementation — and asking for it up front meant tests existed from the first commit instead of being bolted on months later, when nobody wants to write them. Naming the standard library as the default is what kept the dependency list short. None of that happens if the prompt is one sentence long, and the model was never going to volunteer it.
 
-That prompt names Go, and the first post covered how it got there: I left the stack open, Claude suggested Node, and I turned it down because I had specific reasons — static typing, a straightforward concurrency model, a language I'd shipped a production application in recently. So being explicit isn't only about getting better output. It's about doing that thinking first, so there's something concrete to hold the model's answer against. If you can't say why you want something, you'll take whatever you're handed.
+That prompt names Go, and the first post covered how it got there: I left the stack open, Claude suggested Node, and I turned it down because I had specific reasons — static typing, a straightforward concurrency model, a language I'd shipped a production application in recently. So being explicit improves the model's output, but the bigger gain is doing that thinking first — it gives you something concrete to hold the model's answer against. If you can't say why you want something, you'll take whatever you're handed.
 
 ### Never take the first result
 
 I'll admit that "never" is a strong word here. However, it was pretty rare that I was fully satisfied with the first result that the AI would return to me. It might "work," but perhaps the code wasn't structured well. There were some edge cases or tests missing. Or I realized there would be a better abstraction I could pull out somewhere.
 
-I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" — or, if I spotted a specific issue, I'd just tell the AI what I wanted. This is where our job as software engineers shifts a little bit from writing the code to architecting it. We're architecting code that is well tested, well defined, maintainable, and appropriately simple. That's the ground the old acronyms cover — SOLID, YAGNI ("you aren't gonna need it") — and they mostly boil down to building the thing you actually need, and building it so the next person can change it without fear. Claude doesn't always land there on its own, so you say so (see point one: be explicit with your input!)
+I did multiple passes of simply "look for refactor opportunities" or "look for simplifications" — or, if I spotted a specific issue, I'd just tell the AI what I wanted. This is where our job as software engineers shifts a little bit from writing the code to architecting it. That's the ground the old acronyms cover — SOLID, YAGNI ("you aren't gonna need it") — and they mostly boil down to building the thing you actually need, and building it so the next person can change it without fear. Claude doesn't always land there on its own, so you say so (see point one: be explicit with your input!)
 
-The region graph from the last post is the clearest case of this. I seeded that brainstorming session with New York, Chicago, and San Francisco specifically because I knew those three places well enough to push back on a bad answer, and the multi-parent graph is what came out of the pushing — not what came back first. Tiers are the obvious way to model where somewhere is: a city inside a county inside a metro inside a state. They're also wrong, in a way you only catch if you already know that Park Slope has no border to look up and that Chicagoland crosses a state line.
+The region graph from the last post is the clearest case of this. I seeded that brainstorming session with New York, Chicago, and San Francisco specifically because I knew those three places well enough to push back on a bad answer, and the multi-parent graph is what came out of the pushing. Tiers are the obvious way to model where somewhere is: a city inside a county inside a metro inside a state. They're also wrong, in a way you only catch if you already know that Park Slope has no border to look up and that Chicagoland crosses a state line.
 
 That's iteration: working the same problem with the same tool until the answer is good. It's necessary. But everything inside that loop is still being judged by the thing that produced it, which is what the next lesson is for.
 
@@ -65,7 +67,7 @@ The last two lessons are less about how to work the tool and more about what you
 
 ### Remember what AI actually is
 
-These models are trained on an enormous body of existing human work. That's not a criticism; it's the whole reason they're any good. But it does tell you *where* to aim the reviewing from the last two lessons.
+These models are trained on an enormous body of existing human work — the whole reason they're any good. That tells you *where* to aim the reviewing from the last two lessons.
 
 A system like that is strongest where your problem is ordinary, because ordinary is what it learned from. It's weakest where your problem is strange. Every hard thing in this project sat at the strange end: a ZIP code whose neighborhood has no legal boundary, two federal datasets that disagree about what year it is, a polygon with a hole in it. Claude handled the ordinary parts of the Atlas faster and more thoroughly than I would have alone. The parts that were specific to *this* project are where I had to slow down.
 
@@ -85,7 +87,7 @@ There's a reason I think about Data from Star Trek: The Next Generation. Data is
 
 It's never been easier to take an idea to a working prototype. That's an incredibly powerful tool, and the hope is that we'll see great ideas come to life that couldn't before. If you want to build your own idea, I hope this series was useful.
 
-I'd be wary of anyone handing you a process to copy, mine included. The specific shape of this project came out of what I already had — thirteen years of backend work, almost no frontend, and a subject I care about enough to argue with a model about. Yours will come out of something different. What transfers is probably smaller than the stack: know what you want well enough to argue about it, don't stop at the first thing that works, and get something other than the author to check it. Where you know the domain, I'd delegate hard and review fast. Where you don't, slow down — that's where a plausible answer gets expensive.
+I'd be wary of anyone handing you a process to copy, mine included. The specific shape of this project came out of what I already had — thirteen years of backend work, almost no frontend, and a subject I care about enough to argue with a model about. Yours will come out of something different. The real lesson is knowing what you want well enough to argue about it, not stopping at the first thing that works, and getting something other than the author to check it. Where you know the domain, I'd delegate hard and review fast. Where you don't, slow down — or the AI's plausible answer will get expensive to untangle.
 
 Beyond the model choices I mentioned earlier, the tooling is all there to borrow. Since the code is open source, I'd encourage you to look at my `just` file if you want to take any of it — like the containerized link validation that checks every organization's website through a VPN and flags the dead ones.
 
@@ -95,6 +97,6 @@ That kind of borrowing is only possible because everything is openly licensed. T
 
 I encourage people to reach out, submit corrections, tell me about a new advocacy org they'd like included. Trust has to be a core value, and trust is built from being open and transparent. This project is a love letter to all my fellow advocates who want to make their cities the best places they can be. Hiding behind a robot, or not being forthcoming about the fact that I am using AI to build, operate, and maintain this site, would erode the trust that I know people are placing in me.
 
-AI is going to reshape a lot of how we work in the coming years, and there are powerful incentives pushing that in the wrong direction — maximizing profit even when the costs are borne by people and the planet. We can, and have to, look for ways to use these tools for good instead. I still like to believe that's possible.
+AI is going to reshape a lot of how we work in the coming years, and there are powerful incentives pushing that in the wrong direction — maximizing profit even when the costs are borne by people and the planet. I've met some incredible activists over the years, and have been inspired by their work and passion for their homes. The Urbanist Atlas is my small way of doing my part — building something that helps people make their cities a little better.
 
-The Urbanist Atlas is my small way of trying to do just that — build something that helps people make their cities a little better. Looking back, nearly every place it succeeded or failed came down to what I handed off and what I kept.
+Looking back, nearly every place it succeeded or failed came down to what I handed off and what I kept.

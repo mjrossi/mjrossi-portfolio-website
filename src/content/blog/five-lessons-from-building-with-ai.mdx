@@ -9,13 +9,19 @@ Over the last two posts I wrote about the thought process behind the Urbanist At
 
 ## Where AI fell short
 
-There were a good number of instances where I had to ask myself: is this really saving me time? There are a lot of loops, a lot of time spent waiting, and reviewing output over and over again often becomes fairly mind-numbing. Some of these shortcomings were limitations of the models themselves. Others were limitations of the workflow they created. There's an art and a craft to writing software, and I found that some of it gets harder to access when you're spending your time reviewing generated code instead of building it yourself. The code these models produce can often be just average; something trained on a vast corpus of existing code tends toward the familiar, not necessarily the best solution for your particular problem.
+There were a good number of instances where I had to ask myself: is this really saving me time? There are a lot of loops, a lot of time spent waiting, and reviewing output over and over again often becomes fairly mind-numbing.
 
-Despite all the human review I built into the process, not writing the code myself made it hard to fully and accurately know what I was working with. When I write code, the act of writing it forces me to construct a mental model in real time. When AI writes it, I have to construct that mental model through review. It feels analogous to hand-writing vs typing — hand-writing is going to do a better job of committing something to memory. In the case of writing software, it's not just the end result that has to be right. The security parameters need to be fleshed out. The deploy strategy has to be robust and handle intermittent failure. The internal structure of the software, such as how you're importing and using third-party libraries, or building out abstractions across the network, database, and hardware layers — all of this matters. The AI can do it. It's probably good enough, and it does work. But is it _really_ the best for _your_ specific problem? That's hard to answer with AI-assisted coding like this.
+Some of that was the models. Some of it was the workflow they created. There's an art and a craft to writing software, and I found that some of it gets harder to access when you're spending your time reviewing generated code instead of building it yourself. The code these models produce can often be just average; something trained on a vast corpus of existing code tends toward the familiar, not necessarily the best solution for your particular problem.
+
+Despite all the human review I built into the process, not writing the code myself made it hard to fully and accurately know what I was working with. When I write code, the act of writing it forces me to construct a mental model in real time. When AI writes it, I have to construct that mental model through review. It feels analogous to hand-writing vs typing — hand-writing is going to do a better job of committing something to memory.
+
+And the end result isn't the only thing that has to be right. The security parameters need to be fleshed out. The deploy strategy has to be robust and handle intermittent failure. The internal structure of the software, such as how you're importing and using third-party libraries, or building out abstractions across the network, database, and hardware layers — all of this matters.
+
+The AI can do it. It's probably good enough, and it does work. But is it _really_ the best for _your_ specific problem? That's hard to answer with AI-assisted coding like this.
 
 ### The energy and environmental cost
 
-I paid for one month of a Claude Max subscription to do this. That's $100. To say nothing of the fact that many people can't afford that sort of spend, there are a lot of tokens spent on each subagent, each feature, each AI-assisted review cycle or organizational pass. Data centers are expanding rapidly to meet increased demand. The communities hosting that infrastructure can face increased pressure on electricity, water, and other resources, while often not being the primary beneficiaries of the technology driving that demand — bearing its externalities without much of its upside.
+I paid for one month of a Claude Max subscription to do this. That's $100. To say nothing of the fact that many people can't afford that sort of spend, there are a lot of tokens spent on each subagent, each feature, each AI-assisted review cycle or organizational pass. Data centers are expanding rapidly to meet increased demand. The communities hosting that infrastructure can face increased pressure on electricity, water, and other resources, while often not being the primary beneficiaries of the technology driving that demand.
 
 I did make some deliberate choices not to reach for the biggest hammer by default. Opus was my primary model, but simpler subagent work — a documentation pass, a formatting cleanup, a first read of a diff — went to Haiku or Sonnet instead. I tried to keep agents few and tightly scoped rather than spawning a swarm just because I could, and to batch review passes instead of re-running them every time I changed my mind.
 
@@ -23,7 +29,7 @@ I had this in the back of my mind when writing the Atlas, and I admit it's a har
 
 ## Five lessons from building with AI
 
-Having walked through the actual work — the code, the data, where it fell short — here are the five takeaways I keep coming back to for using AI effectively. If there's a single thread running through them, it's this: you have to know enough about the problem to disagree with the answer.
+Having walked through the actual work — the code, the data, where it fell short — here are the five takeaways I keep coming back to for using AI effectively. They all come back to the same thing: you have to know enough about the problem to disagree with the answer.
 
 ### Be *very* explicit with your input
 
@@ -31,7 +37,7 @@ There is a strong difference between "I want to build a directory of safe street
 
 "We are going to build a directory of safe-streets and urban advocacy organizations. I want this to be a modular application that can be consumed by a number of consumers. To start, let's build this in three pieces, starting with a simple API. This API will be built in Go. You should default to using standard libraries wherever possible, and ask before importing third party dependencies. Build it with a focus on TDD. Plan a skeleton of what this will look like."
 
-Every clause in there is doing work. TDD is test-driven development — writing tests alongside, or in the strictest version before, the implementation — and asking for it up front meant tests existed from the first commit instead of being bolted on months later, when nobody wants to write them. Naming the standard library as the default is what kept the dependency list short. None of that happens if the prompt is one sentence long, and none of it is something the model was ever going to volunteer.
+Every clause in there is doing work. TDD is test-driven development — writing tests alongside, or in the strictest version before, the implementation — and asking for it up front meant tests existed from the first commit instead of being bolted on months later, when nobody wants to write them. Naming the standard library as the default is what kept the dependency list short. None of that happens if the prompt is one sentence long, and the model was never going to volunteer it.
 
 That prompt names Go, and the first post covered how it got there: I left the stack open, Claude suggested Node, and I turned it down because I had specific reasons — static typing, a straightforward concurrency model, a language I'd shipped a production application in recently. So being explicit isn't only about getting better output. It's about doing that thinking first, so there's something concrete to hold the model's answer against. If you can't say why you want something, you'll take whatever you're handed.
 
@@ -43,7 +49,7 @@ I did multiple passes of simply "look for refactor opportunities" or "look for s
 
 The region graph from the last post is the clearest case of this. I seeded that brainstorming session with New York, Chicago, and San Francisco specifically because I knew those three places well enough to push back on a bad answer, and the multi-parent graph is what came out of the pushing — not what came back first. Tiers are the obvious way to model where somewhere is: a city inside a county inside a metro inside a state. They're also wrong, in a way you only catch if you already know that Park Slope has no border to look up and that Chicagoland crosses a state line.
 
-That's iteration — working the same problem with the same tool until the answer is actually good. It's necessary. It also isn't quite enough on its own, because everything inside that loop is still being judged by the thing that produced it.
+That's iteration: working the same problem with the same tool until the answer is good. It's necessary. But everything inside that loop is still being judged by the thing that produced it, which is what the next lesson is for.
 
 ### Review, review, and then review again
 
@@ -53,15 +59,15 @@ Once a plan was drafted, I reviewed it and pushed back. Finally, after plenty of
 
 The polygon function from the last post is why I kept doing this even when it felt like overkill. That code ran clean, returned a number, and the number was entirely plausible — a few postal codes just quietly resolved to the wrong metro. No amount of iterating would have surfaced that, because there was nothing there to look wrong. What catches a bug like that is something with no stake in the answer being right: a fresh agent, a deterministic regeneration that diffs against what's committed, or a person reading it slowly.
 
-There are open-source extensions for Claude Code that formalize this kind of loop, so you don't have to hold the whole process in your head. I used [Superpowers](https://github.com/obra/superpowers), which packages workflows like brainstorming, planning, and code review into skills the agent reaches for on its own. The specific tool is less important than the shape: focused tasks, small scopes, and a review done by something that didn't write the code in the first place.
+There are open-source extensions for Claude Code that formalize this kind of loop, so you don't have to hold the whole process in your head. I used [Superpowers](https://github.com/obra/superpowers), which packages workflows like brainstorming, planning, and code review into skills the agent reaches for on its own. The specific tool matters less than the shape of it — small, focused scopes, and a review done by something that didn't write the code in the first place.
 
 The last two lessons are less about how to work the tool and more about what you shouldn't hand it, however well the first three are going.
 
 ### Remember what AI actually is
 
-At its core, it's a system trained on an enormous body of existing human work. That isn't a knock — it's what makes it as capable as it is. But it tells you something useful about *where* to aim the reviewing from the last two lessons, which is what makes this more than "check the output."
+These models are trained on an enormous body of existing human work. That's not a criticism; it's the whole reason they're any good. But it does tell you *where* to aim the reviewing from the last two lessons.
 
-A system like that is strongest exactly where your problem is ordinary — where it looks like the work the model learned from — and weakest exactly where your problem is strange. Every genuinely hard thing in this project sat at the strange end: a ZIP code whose neighborhood has no legal boundary, two federal datasets that disagree about what year it is, a polygon with a hole in it. Claude handled the ordinary parts of the Atlas faster and more thoroughly than I would have alone. The parts that were specific to *this* project are where I had to slow down.
+A system like that is strongest where your problem is ordinary, because ordinary is what it learned from. It's weakest where your problem is strange. Every hard thing in this project sat at the strange end: a ZIP code whose neighborhood has no legal boundary, two federal datasets that disagree about what year it is, a polygon with a hole in it. Claude handled the ordinary parts of the Atlas faster and more thoroughly than I would have alone. The parts that were specific to *this* project are where I had to slow down.
 
 So the practical version is: before you start reviewing, ask which parts of what you're building are unusual. That's your list, and that's where it'll be confidently, plausibly wrong.
 
@@ -69,15 +75,17 @@ So the practical version is: before you start reviewing, ask which parts of what
 
 The fact is that these are machines with limitations. It's important not to anthropomorphize them: they can make mistakes, just like the humans whose work they learned from.
 
-The mistakes aren't really the point, though. The six inclusion criteria from the last post are — local focus, active advocacy, transit or safe streets, no government agencies, no consultancies, no housing. Nothing in any training corpus could have decided that housing and YIMBY work, a neighboring movement and a friendly one, sits outside the Atlas's scope. Nothing could have decided that a group other people still write about, but that hasn't posted in two years, isn't one I can confidently send someone to. Those aren't really correctness questions with a right answer waiting to be retrieved. They're decisions about what the directory is for, and who it owes something to. A model can apply criteria like those very well. Someone still has to have chosen them, and be willing to defend the choice.
+The mistakes aren't really the point, though. The six inclusion criteria from the last post are — local focus, active advocacy, transit or safe streets, no government agencies, no consultancies, no housing.
 
-There's a reason I keep coming back to Data from Star Trek: The Next Generation. Data is an extremely capable artificial life-form — he can execute nearly anything asked of him — but the character is compelling precisely because the series explores what he can't originate: wanting things, valuing things, choosing what matters. The capability was never the interesting part. The choices were.
+No training corpus was going to tell me that housing and YIMBY work, a neighboring movement and a friendly one, sits outside the Atlas's scope. Or that a group other people still write about, but that hasn't posted in two years, isn't one I can confidently send someone to. Those are decisions about what the directory is for and who it owes something to. A model can apply criteria like that very well once they exist; someone has to have chosen them, and be willing to defend the choice.
+
+There's a reason I keep coming back to Data from Star Trek: The Next Generation. Data is an extremely capable artificial life-form — he can execute nearly anything asked of him — but the character is compelling because of what he can't originate: wanting things, valuing things, choosing what matters.
 
 ## If you want to try something like this
 
 It's never been easier to take an idea to a working prototype. That's an incredibly powerful tool, and the hope is that we'll see great ideas come to life that couldn't before. If you want to build your own idea, I hope this series was useful.
 
-I'd be wary of anyone handing you a process to copy, mine included. The specific shape of this project came out of what I already had — thirteen years of backend work, almost no frontend, and a subject I care about enough to argue with a model about. Yours will come out of something different. What transfers is probably smaller than the stack: say what you want precisely enough that the answer can be held against something, don't stop at the first thing that works, and get something other than the author to check it. Where you know the domain, I'd delegate hard and review fast. Where you don't, slow down — that's where a plausible answer gets expensive.
+I'd be wary of anyone handing you a process to copy, mine included. The specific shape of this project came out of what I already had — thirteen years of backend work, almost no frontend, and a subject I care about enough to argue with a model about. Yours will come out of something different. What transfers is probably smaller than the stack: know what you want well enough to argue about it, don't stop at the first thing that works, and get something other than the author to check it. Where you know the domain, I'd delegate hard and review fast. Where you don't, slow down — that's where a plausible answer gets expensive.
 
 Beyond the model choices I mentioned earlier, the tooling is all there to borrow. Since the code is open source, I'd encourage you to look at my `just` file if you want to take any of it — like the containerized link validation that checks every organization's website through a VPN and flags the dead ones.
 
@@ -89,4 +97,4 @@ I encourage people to reach out, submit corrections, tell me about their new adv
 
 AI is going to reshape a lot of how we work in the coming years, and there are powerful incentives pushing that in the wrong direction — maximizing profit even when the costs are borne by people and the planet. We can, and have to, look for ways to use these tools for good instead. I still like to believe that's possible.
 
-The Urbanist Atlas is my small way of trying to do just that — build something that helps people make their cities a little better. Looking back, nearly every place where the project succeeded or failed came down to the same thing: knowing what to delegate, knowing what to question, and knowing what I still had to own.
+The Urbanist Atlas is my small way of trying to do just that — build something that helps people make their cities a little better. Looking back, nearly every place it succeeded or failed came down to what I handed off and what I kept.

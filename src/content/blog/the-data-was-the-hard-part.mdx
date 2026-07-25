@@ -9,9 +9,11 @@ import RegionGraphNYC from '../../components/diagrams/RegionGraphNYC.astro';
 import RegionGraphChicago from '../../components/diagrams/RegionGraphChicago.astro';
 import PolygonHoleArea from '../../components/diagrams/PolygonHoleArea.astro';
 
-This is the second of three posts about building [the Urbanist Atlas](https://urbanistatlas.com) with Claude Code. [The first](/blog/i-used-ai-to-build-the-urbanist-atlas/) covered the code — the Go API, the React frontend, and the moment I turned down Claude's first architectural recommendation because I had reasons I could articulate. It ended on a warning: the danger isn't that AI makes a bad choice, it's that it makes a plausible one you don't know enough to question.
+This is the second of three posts about building [the Urbanist Atlas](https://urbanistatlas.com) with Claude Code. [The first](/blog/i-used-ai-to-build-the-urbanist-atlas/) covered the code — the Go API, the React frontend, and the moment I turned down Claude's first architectural recommendation because I had reasons I could articulate.
 
-This post is where that stopped being a warning and started costing me time. The data is where I knew the most, cared the most, and caught the most.
+It ended on a warning: the danger isn't that AI makes a bad choice, it's that it makes a plausible one you don't know enough to question. This post is where that stopped being a warning and started costing me time.
+
+The data is where I knew a lot, and where I found out how much I still didn't. It turned up nuance after nuance I hadn't expected.
 
 ## The region graph
 
@@ -19,21 +21,45 @@ Cities are complex, and their boundaries aren't always static — which is exact
 
 I started with the United States, where I'm from — as they say, "write what you know." I wanted ZIP codes to be the anchor for looking up advocacy groups, but learned quickly that ZIP codes are a useful starting point for a search, not themselves the editorial unit I could rely on to anchor a key data model against. I knew about Metropolitan Statistical Areas (MSAs), but advocacy is local — 11217 is Brooklyn, but it's also Park Slope, and Park Slope isn't a border you can look up anywhere. Brooklyn is NYC, but 11217 also sits inside the New York-Newark-Jersey City metro area, which the Census draws across two states. And what if you're in Connecticut, close enough to feel like the New York region but outside that metro's boundary?
 
-Just from that paragraph, you can see how complex this was going to get: I needed a way to represent geographic relationships that aren't strictly hierarchical. So I did a Claude brainstorming session. I said "let's start by modeling New York City, Chicago, and San Francisco." These are places I knew well enough that I knew the brainstorming would be valuable in defining an initial draft, but I could push back if something didn't make sense. I didn't want to just hard code — that's not going to scale. I didn't want to include national organizations as an editorial decision. So, Claude and I built a directed acyclic graph (DAG).
+Just from that paragraph, you can see how complex this was going to get. I needed a way to represent geographic relationships that aren't strictly hierarchical.
+
+So I did a Claude brainstorming session. I said "let's start by modeling New York City, Chicago, and San Francisco." These are places I knew well enough that I knew the brainstorming would be valuable in defining an initial draft, but I could push back if something didn't make sense.
+
+Two constraints came in with me. I didn't want to just hard code zip codes to organizations — that's not going to scale. And I didn't want to include national organizations, which was an editorial call rather than a technical one.
 
 The [region-graph design doc](https://github.com/mjrossi/urbanist-atlas/blob/main/docs/region-graph.md) has the thorough version, but for a high level summary:
 
-The core idea is to stop thinking of a location as a fixed set of tiers — city, county, metro, state — and instead model geography as a graph. Every region is a node (a borough, a city, a metro, a state, a transit district, a multi-state coalition), and each node just declares its parents. A postal code (ZIP code in the US, postal code elsewhere) anchors to the smallest region I've curated for it, and a lookup walks up the graph from there, collecting every region above it and the advocacy orgs attached to each.
+The first thing that came back was tiers. A ZIP code being the lowest level, and then that would map to a city (or borough, in the case of NYC). Then cities up to states. That didn't seem unreasonable; it's how we write letters. It matches how most people would think about that relationship, and it handles Brooklyn perfectly well.
 
-That's what makes 11217 resolve the way it does. Park Slope has no boundary I could curate against, so 11217 anchors at Brooklyn — the smallest unit around it with a real border. Brooklyn declares two parents: New York City and New York State. New York City's own parent is the New York metro, and above that sits the Tri-State Region. New York State, by contrast, is a top-level node with no parent at all.
+That breaks pretty quickly though, as you keep going. What about an organization that maps to multiple zip codes? I'm not going to build something as brute-forced as:
+- Riders Alliance: 10001, 10002, ...
 
-That asymmetry is the whole trick. Brooklyn reaches New York State by its own direct edge rather than by climbing up through the metro, so a lookup for 11217 returns Brooklyn groups, citywide New York City groups, and New York State groups in that order. It also picks up the genuinely regional organizations sitting above them — TransitCenter at the metro tier, the Tri-State Transportation Campaign above that. That's correct, and worth being clear about: the Tri-State Transportation Campaign's remit really does cover New Jersey and Connecticut, and if you're searching from Brooklyn it's an organization you should know about.
+Or with zip code as the key:
+- 10036: Riders Alliance, Transportation Alternatives, etc.
 
-What a Brooklyn search doesn't return is New Jersey's *own* advocacy groups. Bike JC, the New Jersey Bike & Walk Coalition, Trenton Cycling Revolution — those hang off the New Jersey state node, and New Jersey is not an ancestor of Brooklyn, so they never surface. That's the line the graph is drawing: a regional organization whose work genuinely covers you is worth showing; another state's neighborhood cycling group is not. Parent New York State under the metro instead, and that distinction collapses.
+I needed something much more adaptable to all of the various layers that roll up to a state / province, and that would act as a better data structure once it all came together.
+
+So back to the drawing board: what Claude and I landed on instead was a directed acyclic graph (DAG). Every region is a node — a borough, a city, a metro, a state, a transit district, a multi-state coalition — and each node just declares its parents. A postal code (ZIP code in the US, postal code elsewhere) anchors to the smallest region I've curated for it, and a lookup walks up from there, collecting every region above it and the advocacy orgs attached to each.
+
+Take my own ZIP code. Park Slope has no boundary I could curate against, so 11217 anchors at Brooklyn — the smallest unit around it with a real border. Brooklyn declares two parents: New York City and New York State.
+
+Why two? Because New York City's own parent is the New York metro, and above that sits the Tri-State Region, while New York State is a top-level node with no parent at all. Brooklyn reaches the state by its own direct edge rather than by climbing up through the metro.
+
+That asymmetry is the whole trick. A lookup for 11217 returns Brooklyn groups, citywide New York City groups, and New York State groups, in that order. It also picks up the genuinely regional organizations sitting above them — TransitCenter at the metro tier, the Tri-State Transportation Campaign above that.
+
+I want to be clear that this last bit is correct and not a leak. The Tri-State Transportation Campaign's remit really does cover New Jersey and Connecticut, and if you're searching from Brooklyn it's an organization you should know about. What a Brooklyn search doesn't return is New Jersey's *own* advocacy groups. Bike JC, the New Jersey Bike & Walk Coalition, Trenton Cycling Revolution — those hang off the New Jersey state node, and New Jersey is not an ancestor of Brooklyn, so they never surface.
+
+That's the line I was trying to draw. A regional organization whose work genuinely covers you is worth showing; another state's neighborhood cycling group is not. Parent New York State under the metro instead and the distinction collapses, which is the sort of thing you only notice by naming actual organizations and asking whether you'd want them in the results.
 
 <RegionGraphNYC />
 
-The same graph shape is what lets messier cases work without special-casing each one. Chicago is the clearest example of why the tiers refuse to line up. Chicagoland spills across the state line into northwest Indiana, and the Census metro area is officially an Illinois-Indiana one. But the RTA — the transit district that actually funds the trains and buses — stops dead at the Illinois border, covering Cook County plus five collar counties and nothing else. Those are two different shapes drawn over roughly the same place, so they're two different nodes rather than one fudged tier. A search from the Loop picks up both. A search from Gary, Indiana picks up the metro and Indiana's groups, but never the RTA and never Illinois — which is right, because Gary sits inside the metro but outside the RTA's service area and its governance.
+The same graph shape is what lets messier cases work without special-casing each one. Chicago is the clearest example of why the tiers refuse to line up. Chicagoland spills across the state line into northwest Indiana, and the Census metro area is officially an Illinois-Indiana one.
+
+However, the RTA — the transit district that actually funds the trains and buses — stops dead at the Illinois border, covering Cook County plus five collar counties and nothing else. I lived in Chicago for years only knowing about these boundaries because I was active in the local advocacy world, but now I was trying to model against it. Those are two different shapes over roughly the same place, so they became two different nodes rather than one fudged tier.
+
+Illinois has since folded the RTA into the new Northern Illinois Transit Authority, and the Atlas data still says RTA — which is its own small lesson about datasets and the year they think it is.
+
+A search from the Loop picks up both. A search from Gary, Indiana picks up the metro and Indiana's groups, but never the RTA and never Illinois — which is right, because Gary sits inside the metro but outside the RTA's service area and its governance.
 
 <RegionGraphChicago />
 
@@ -41,33 +67,51 @@ None of it is hard-coded to the US, either. Canada gets the same graph, tuned to
 
 Ottawa-Gatineau, which straddles Ontario and Quebec, reuses the same cross-border shape I built for NYC and Chicago: a province-neutral umbrella metro with one region per province underneath it, so a Gatineau postal code resolves to Quebec and never leaks into Ontario's results.
 
-I also modeled Portugal as a stress test, to see whether the graph held up against an administrative geography that nobody designed with the US or Canada in mind. Lisbon's metro area multi-parents into two separate EU statistical regions (NUTS-II, the mid-level tier the EU uses to carve up member states for reporting) — structurally the same problem as Brooklyn having two parents. Madeira needed the reverse: as an autonomous region it sits parallel to that tier rather than beneath it, with no parent at all. That data isn't live — it exists to validate the model, not to ship. It sits in the repo alongside the US and Canadian seeds, but the running API never loads it at all, and won't until the editorial coverage is ready.
+Portugal I modeled as a stress test — partly to see whether the graph held up against an administrative geography that nobody designed with the US or Canada in mind, and partly because I knew I was about to move to Lisbon and I wanted to learn and understand more about its regional administrative boundaries.
 
-I was extremely proud of the region graph design — a great example of using AI alongside my own knowledge of cities to build an adaptable data model. But designing the shape was only half the job. The graph still had to be *built*, out of real government data, and that's where the genuinely hard problems were waiting.
+The model held. Lisbon's metro area multi-parents into two separate EU statistical regions (NUTS-II, the mid-level tier the EU uses to carve up member states for reporting), which is structurally the same problem as Brooklyn having two parents. Madeira needed the reverse: as an autonomous region it sits parallel to that tier rather than beneath it, with no parent at all. Note that none of the Portugal data is live, though. It exists to validate the model, not to ship for now. It sits in the repo alongside the US and Canadian seeds, but the running API never loads it, and won't until the editorial coverage is ready.
+
+I was extremely proud of the region graph design — a great example of using AI alongside my own knowledge of cities to build an adaptable data model. But designing the shape was only half the job. The graph still had to be *built*, out of real government data and not just a few hand-picked cities and zip codes that I knew and understood.
 
 ## Generating the graph
 
 The region graph isn't hand-written. Underneath it is a pipeline that takes six staged upstream files — the Census Bureau's metro delineation list, two ZCTA crosswalks from the 2020 census, HUD's ZIP-to-county file, and two Statistics Canada boundary shapefiles, one for FSAs and one for metro areas — and generates every data file the API ships with. One command per country rebuilds all of it: 393 US metros and 41 Canadian ones, 530 rows once the cross-border portions are counted separately, plus the anchors for over forty thousand postal codes.
 
-I was insistent on one property here: the generator had to be deterministic. Same source data in, byte-identical files out. That sounds fussy, but it's what makes the data reviewable. When a diff shows up in a regenerated file, it means the upstream data actually changed — not that a map happened to iterate in a different order this time. There's a check that regenerates the region files and fails if the result doesn't match what's committed, so nobody, me included, can quietly hand-edit generated data and have it survive.
+I was insistent on one property here: the generator had to be deterministic. Same source data in, byte-identical files out. It's what makes the data reviewable and reliable. When a diff shows up in a regenerated file, the upstream data actually changed. There's a check that regenerates the region files and fails if the result doesn't match what's committed, so nobody, me included, can quietly hand-edit generated data and have it survive.
 
-Which is how Connecticut turned into a puzzle. Two of the federal datasets I was combining were different vintages of the same geography — the Census Bureau had swapped the state's counties for new planning regions in 2022, and only one of the two files had caught up. Neither was wrong. They just disagreed about what year it was, and the join between them returned nothing rather than failing loudly, stranding hundreds of ZIP codes at the state line instead of their actual metro until I wrote a pass to reconcile the two.
+Which is how I ended up staring at Connecticut. I'd been getting in touch with everyone I knew in other cities and asking them to hammer on early versions — the fastest way I had to vet the data model against places I couldn't check myself.
 
-The Canadian side broke differently. Matching each FSA to the CMA it overlaps most, the way I described above, sounds like a lookup but isn't — it's really a measurement: clip the FSA's boundary against the metro's, then measure how much shape is left over. A library does the clipping. Nothing in it measures area — that part I had to write.
+So when I was out at lunch with my wife's family, who live up in Stamford, CT, I asked for their ZIP code and tried it. It rolled up to the State of Connecticut and stopped there, when I would have expected Tri-State orgs too. 45 minutes from Grand Central Terminal and you're trying to tell me this isn't part of the NYC Metro region? Something was wrong, so I went digging.
 
-The problem sounds simple: take a clipped geographic shape and calculate how much area it contains. The obvious way to measure it is the shoelace formula — you walk each outline of the shape in order and total up the area it sweeps out. It has a property that looks like a gift: walk an outline backwards and its area comes out negative. So if every hole is drawn in the opposite direction from the boundary around it, the holes subtract themselves and you never have to think about them.
+Two of the federal datasets I was combining turned out to be different vintages of the same geography. The Census Bureau had swapped the state's counties for new planning regions in 2022, and only one of the two files had caught up. Neither was wrong. They just disagreed about what year it was.
 
-And that is exactly the assumption that breaks. It only holds if holes are reliably drawn backwards, and the clipping library makes no such promise — it hands back the outlines in whatever order it traced them, each drawn in whichever direction the algorithm happened to go. When a hole comes back drawn the same way as the boundary around it, its area gets *added* to the total instead of subtracted. Nothing crashes. Nothing throws an error. The number just comes back too big — and that number is what decides which metro an FSA belongs to.
+The join between them returned nothing at all, which is the worst possible outcome, because if you didn't know any better, my model just returned the state. But in reality, hundreds of ZIP codes sat at the state line instead of in their actual metro, and they'd have stayed there if I hadn't gone looking. Writing the pass to reconcile the two vintages didn't take very long, because once I understood the problem I could articulate it to Claude and get a fix deployed. No amount of AI review was ever going to catch this, though.
 
-Nothing had actually landed wrong in the shipped data by the time I caught it in review. But nothing in the run would have told me if it had.
+Reconciling the vintages was only half of it. The Stamford ZIPs now landed in their own metro, Bridgeport-Stamford, and still surfaced no Tri-State orgs, because that metro had no edge up to the Tri-State region. I added one.
 
-So Claude and I fixed it together, by throwing out the drawing direction entirely and reading the nesting instead: for each outline, count how many of the other outlines it sits inside. An odd number means it's a hole, so its area comes off the total; an even number — including none at all — means it's solid, so it gets added. Which way it was drawn never enters into it. The picture below makes it concrete with a shape the Canadian data really produces — an FSA along the Ottawa River, the same Ottawa-Gatineau metro from earlier, where the river reads as a hole to subtract and an island in it reads back as solid ground to add.
+The Canadian side broke differently. The source files and the loading pipeline there needed a different calculation entirely. Matching each FSA to the CMA it overlaps most, the way I described above, sounds like a lookup but isn't — it's really a measurement: clip the FSA's boundary against the metro's, then measure how much shape is left over. A library does the clipping. Nothing in it measures area — that part I had to write.
+
+The problem sounds simple: take a clipped geographic shape and calculate how much area it contains. The obvious way to measure it is the shoelace formula — you walk each outline of the shape in order and total up the area it sweeps out.
+
+It has a property that looks like a gift. Walk an outline backwards and its area comes out negative. Thus, if every hole is drawn in the opposite direction from the boundary around it, the holes subtract themselves and you never have to think about them.
+
+That is exactly the assumption that breaks. It only holds if holes are reliably drawn backwards, and the clipping library makes no such promise — it hands back the outlines in whatever order it traced them, each drawn in whichever direction the algorithm happened to go. When a hole comes back drawn the same way as the boundary around it, its area gets *added* to the total instead of subtracted.
+
+Nothing crashes. Nothing throws an error. The number just comes back too big, and that number is what decides which metro an FSA belongs to.
+
+When I was testing Canadian postal codes by hand, I didn't really know all that many. I was just typing in random postal codes I found online that I knew were generally in the right city (e.g. Windsor, ON - a city I used to visit occasionally when I still lived in Detroit). One of those runs gave me an odd result that I wasn't expecting. Up until that point, nothing had actually landed wrong in the shipped data — but nothing in the run would have told me if it had. That is a different and much worse feeling than a failing test.
+
+Claude and I fixed it together, by throwing out the drawing direction entirely and reading the nesting instead. For each outline, count how many of the other outlines it sits inside: an odd number means it's a hole, so its area comes off the total; an even number — including none at all — means it's solid, so it gets added. Which way it was drawn never enters into it.
+
+The picture below makes it concrete with a shape the Canadian data really produces — an FSA along the Ottawa River, the same Ottawa-Gatineau metro from earlier, where the river reads as a hole to subtract and an island in it reads back as solid ground to add.
 
 <PolygonHoleArea />
 
-That fix then had its own plausible-looking bug. To ask whether one outline sits inside another, you need a point that's definitely inside the first, and the obvious candidate — one of its corners — is exactly the wrong choice, because two outlines in a clipped shape can meet at a corner. A later review pass caught it on a test polygon: area 9,200, measured 10,800. The hole had been counted as solid.
+And then that fix had its own plausible-looking bug.
 
-That one function is why I keep hammering on this. The AI wrote plausible geometry code very fast — and then wrote a plausible fix for it. Plausible is not the same thing as correct, and the only thing standing between the two was someone actually reading the code: me on the first bug, a later review pass on the second.
+To ask whether one outline sits inside another, you need a point that's definitely inside the first. The obvious candidate is one of its corners, and that is exactly the wrong choice, because two outlines in a clipped shape can meet at a corner. A later review pass caught it on a test polygon: true area 9,200, measured 10,800. The hole had been counted as solid. Frankly, I was already having a hard time reconciling and understanding all of this, so seeing that calculation had me throw my hands up a bit.
+
+That one function is why I keep hammering on this. The AI wrote plausible geometry code very fast, and then wrote a plausible fix for it, and I signed off on both and trusted the AI a little bit too much on this at first. Plausible is not the same thing as correct, and the only thing standing between the two was someone actually reading the code: me on the first bug, a later review pass on the second.
 
 ## Cataloging the organizations
 
@@ -96,16 +140,18 @@ AI was genuinely good at the first half of that loop — casting a wide net and 
 
 ## Did Claude hallucinate?
 
-Yes, occasionally. I didn't encounter organizations that appeared to be entirely fabricated, but it did guess at URLs (that didn't exist), or provide some metadata that wasn't accurate. Fortunately, the combination of human review and subsequent agent reviews caught these. This is the distinction that mattered throughout the whole cataloging effort: AI-assisted research isn't the same thing as AI-verified research. The model was good at breadth and discovery; verification still required deterministic tooling and a human actually looking.
+Yes, occasionally. I didn't encounter organizations that appeared to be entirely fabricated, but it did guess at URLs that didn't exist, and it handed me metadata that wasn't accurate. The combination of human review and subsequent agent reviews caught these.
+
+That's the distinction that mattered through the whole cataloging effort: AI-assisted research isn't the same thing as AI-verified research. The model was good at breadth and discovery. Verification still required deterministic tooling and a human actually looking.
 
 It was also at this point in the process that I decided to introduce a submission desk: when I approve a visitor-submitted organization, a worker automatically opens a GitHub pull request adding it to the dataset, so I review a diff instead of a raw report. Because the data is baked into the binary, it goes live on the next deploy.
 
 ## Closing thoughts
 
-Advocacy is human. This work is focused on making our cities better places to live, and I never forgot that, no matter how many interactions I had with Claude.
+Every one of those 236 entries is a room full of people somewhere, arguing about a bus route. I spent a month building a machine to find those rooms, and it's genuinely good at it. But I found Riders Alliance and Transportation Alternatives by showing up to meetings after I moved to New York, not by querying anything.
 
-Use AI, and use it aggressively where it makes you faster. But don't let it stand in for your own eyes, ears, and the community of humans who call a city their home.
+So use AI, and use it aggressively where it makes you faster. It made me faster. It did not make me right, and on the two occasions in this post that actually mattered — a join that silently returned nothing, a polygon that measured too big — faster is precisely what would have shipped the error.
 
-Cities aren't static — they're made and remade every day by the people living in them, in ways no dataset fully captures. No AI, predictive text generator, or any one individual is going to be able to fully understand the specific nuances of a city. One learns and understands a city by talking to its people, listening to their specific stories. A city is its people.
+Cities aren't static. They're made and remade every day by the people living in them, in ways no dataset fully captures, and the parts that matter most are usually the parts somebody has to tell you.
 
 The last post in this series steps back from the Atlas itself: where AI genuinely fell short, what the month cost me in money and energy, and the five lessons I keep coming back to.

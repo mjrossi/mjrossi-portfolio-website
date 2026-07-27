@@ -16,7 +16,7 @@ This post has also been stewing for the last month somewhere between the thousan
 
 ## Upfront disclaimers
 
-Yes, I vibe coded a substantial amount of the Atlas. But "vibe coding" has gotten so overused it's practically lost its meaning, and loaded enough to make people roll their eyes, so it's worth saying what I actually mean by it: AI generated a lot of code, but I was the one specifying architecture, reviewing the generated changes, writing and running tests, validating the data, and making the calls when the AI's first answer wasn't the right one. I try to stay clear-eyed about where AI is genuinely helpful (repetitive tasks, extra analysis) and where it's worth being concerned (energy and environmental impacts).
+Yes, I vibe coded a substantial amount of the Atlas. But "vibe coding" has gotten so overused it's practically lost its meaning, and loaded enough to make people roll their eyes, so it's worth saying what I actually mean by it. AI generated a lot of code, but I was the one specifying architecture, reviewing the generated changes, writing and running tests, validating the data, and making the calls when the AI's first answer wasn't the right one. I try to stay clear-eyed about where AI is genuinely helpful (repetitive tasks, extra analysis) and where it's worth being concerned (energy and environmental impacts).
 
 In a social media ecosystem filled with absolutes and binaries, the intention of this post is to be upfront about how I used Claude Code as a tool to help me write the Atlas: where AI was helpful and effective, where there were shortcomings, and hopefully an example of where a modern software engineer can use AI, but where that AI is only as effective as the engineer behind the keyboard.
 
@@ -68,15 +68,11 @@ That parallel work also settled how the two halves ship, which turned out not to
 
 This was a tradeoff I made: the database and the queue both keep their state on that one machine, so scaling it horizontally would quietly break them both. In the future, I'll likely migrate away from an embedded SQLite database to a standalone database with proper locking mechanisms and idempotency. The region data, on the other hand, is compiled directly into the Go binary, so changing the dataset means deploying the API rather than migrating a database. More about the data in the next post, but I actually like having it built at compile time, which forces a review of every addition and change.
 
-### Where that leaves the code
-
-Looking back at this half of the project, the pattern is consistent: Claude was fast and genuinely good, and every place it saved me real time was a place where I could already tell a good answer from a plausible one. It suggested Node but I turned it down because I had thirteen years of reasons to.
-
-Which brings back the trap from earlier: in the code, I mostly knew enough.
+Looking back at this half of the project, the pattern is consistent: Claude was fast and genuinely good, and every place it saved me real time was a place where I could already tell a good answer from a plausible one.
 
 ## Closing thoughts
 
-That's the part I'd want someone starting out to take from this. "The human eye is imperative" isn't a reassuring thing I said to myself to feel like my job is still important, it's where the actual work shifted. The typing became essentially free; deciding what was worth typing didn't. That's where most of those two months went.
+This brings me back to the trap from earlier: in the code, I mostly knew enough. That's the part I'd want someone starting out to take from this: "the human eye is imperative" isn't a reassuring thing I said to myself to feel like my job is still important, it's where the actual work shifted. The typing became essentially free; deciding what was worth typing didn't. That's where most of those two months went.
 
 Which is a little funny, given why I'm here at all. I moved to Lisbon to study how cities move people, and the problems worth solving in that field are the ones you can't look up — they're judgment calls about real places and the people living in them. Building the Atlas turned out to be practice for that, with the small mercy of a compiler checking part of my work.
 

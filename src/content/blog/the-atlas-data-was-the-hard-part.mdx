@@ -115,7 +115,7 @@ And then that fix had its own plausible-looking bug.
 
 To ask whether one outline sits inside another, you need a point that's definitely inside the first. The obvious candidate is one of its corners, and that is exactly the wrong choice, because two outlines in a clipped shape can meet at a corner. A code-review pass over the pull request — a fresh agent that hadn't written any of it — caught it on a test polygon: true area 9,200, measured 10,800. The hole had been counted as solid. Frankly, I was already having a hard time reconciling and understanding all of this, so seeing that calculation had me throw my hands up a bit.
 
-That one function is why I keep hammering on this. The AI wrote plausible geometry code very fast, and then wrote a plausible fix for it, and I signed off on both and trusted the AI a little bit too much on this at first. Plausible is not the same thing as correct, and the only thing standing between the two was a deliberate second look at the code: me on the first bug, a fresh review agent that hadn't written any of it on the second.
+That one function is why I keep hammering on this. The AI wrote plausible geometry code very fast, and then wrote a plausible fix for it, and I signed off on both and trusted the AI a little bit too much on this at first. Plausible is not the same thing as correct, and the only thing standing between the two was a deliberate second look at the code: me on the first bug, a fresh review agent on the second.
 
 ## Cataloging the organizations
 

@@ -49,13 +49,18 @@ jobs:
             if [ "$HEAD_BRANCH" = "main" ]; then
               URL="https://mjrossi.com"
             else
-              # Cloudflare Workers per-branch preview alias:
+              # Cloudflare Workers per-branch preview alias. Branch/PR
+              # builds deploy to the ISOLATED preview Worker
+              # (`mjrossi-portfolio-website-preview`, the env.preview block in
+              # wrangler.jsonc) via `wrangler versions upload --env preview`,
+              # so the host carries the `-preview` suffix. Production (main)
+              # audits mjrossi.com above.
               # <branch-alias>-<worker-name>.<subdomain>.workers.dev
               # Alias = lowercase, non-alphanumerics collapsed to dashes, trimmed.
               ALIAS=$(printf '%s' "$HEAD_BRANCH" \
                 | tr '[:upper:]' '[:lower:]' \
                 | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
-              URL="https://${ALIAS}-mjrossi-portfolio-website.link00seven.workers.dev"
+              URL="https://${ALIAS}-mjrossi-portfolio-website-preview.link00seven.workers.dev"
             fi
           fi
           URL="${URL%/}"

@@ -87,7 +87,7 @@ new MDX → git push → Cloudflare build → /blog/rss.xml → Buttondown polls
 **Hosting:**
 - Cloudflare Workers with Static Assets binding
 - Production URL: `https://mjrossi.com`
-- Preview URLs: `https://<branch-alias>-mjrossi-portfolio-website.link00seven.workers.dev` (per-branch, share production secrets — noted in `wrangler.jsonc`)
+- Preview URLs: `https://<branch-alias>-mjrossi-portfolio-website-preview.link00seven.workers.dev` (per-branch, on the isolated preview Worker — `env.preview` in `wrangler.jsonc`, selected at build time via `CLOUDFLARE_ENV=preview` and shipped with a plain `wrangler versions upload`. Secrets mirror production.)
 
 **CI Pipeline:**
 - GitHub Actions — `.github/workflows/build.yml`

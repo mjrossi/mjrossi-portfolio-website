@@ -1035,6 +1035,140 @@ em {
   font-style: italic;
 }
 
+/* Inline-SVG diagrams in posts (src/components/diagrams/*.astro). The site
+   ships no client JS outside the newsletter form, so these are hand-authored
+   rather than rendered from mermaid; they pull their palette and type from the
+   same tokens as the rest of the page. Below ~460px the diagram scrolls inside
+   its own box instead of shrinking the labels into illegibility — the page
+   body itself must never scroll sideways. */
+.post-body .post-diagram {
+  overflow-x: auto;
+  margin: 2rem 0;
+}
+
+.post-body .post-diagram .dg {
+  display: block;
+  width: 100%;
+  min-width: 460px;
+  height: auto;
+}
+
+.post-body .post-diagram figcaption {
+  text-align: left;
+  max-width: 44rem;
+}
+
+.dg-node {
+  fill: var(--bg2);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.dg-node--anchor {
+  stroke: var(--accent);
+  stroke-width: 1.75;
+}
+
+/* A node the walk never reaches — present on the page, absent from the result. */
+.dg-node--out {
+  fill: none;
+  stroke: var(--border);
+  stroke-dasharray: 4 4;
+}
+
+.dg-group--out {
+  opacity: 0.72;
+}
+
+.dg-label,
+.dg-sub,
+.dg-note,
+.dg-call {
+  font-family: var(--font-ui);
+  text-anchor: middle;
+}
+
+.dg-label {
+  font-size: 15px;
+  fill: var(--text);
+}
+
+.dg-sub {
+  font-size: 10.5px;
+  fill: var(--muted);
+}
+
+.dg-note {
+  font-size: 10.5px;
+  font-style: italic;
+  fill: var(--muted);
+}
+
+.dg-note--start {
+  text-anchor: start;
+}
+
+.dg-call {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.dg-edge {
+  stroke: var(--accent-rule);
+  stroke-width: 1.5;
+}
+
+.dg-edge--key,
+.dg-edge--a {
+  stroke: var(--accent);
+}
+
+.dg-arrowhead {
+  fill: var(--accent-rule);
+  stroke: none;
+}
+
+.dg-arrowhead--a {
+  fill: var(--accent);
+}
+
+/* Polygon-area diagram. .dg-poly is one path carrying every outline and drawn
+   with fill-rule="evenodd", so the browser fills it by the same rule the ETL
+   measures it by — holes stay unfilled without being drawn separately. */
+.dg-poly {
+  fill: var(--bg2);
+  stroke: none;
+}
+
+.dg-ring {
+  fill: none;
+  stroke: var(--accent-rule);
+  stroke-width: 1.5;
+}
+
+/* The hole — the outline whose sign the winding got wrong. */
+.dg-ring--hole {
+  stroke: var(--accent);
+}
+
+.dg-wind {
+  stroke: var(--accent-rule);
+  stroke-width: 1.25;
+}
+
+.dg-row {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  fill: var(--text);
+  text-anchor: start;
+}
+
+.dg-call--start {
+  text-anchor: start;
+}
+
 .post-body hr {
   border: none;
   border-top: 1px solid var(--accent-rule);

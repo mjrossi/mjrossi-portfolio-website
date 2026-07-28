@@ -41,7 +41,7 @@ test('the production workers.dev alias is NOT a preview host', () => {
   // PRODUCTION, and the subdomain is derivable from .github/workflows/
   // lighthouse.yml. If this ever returns true, every scheduled draft is
   // public on that hostname — including /blog/rss.xml, which fires the
-  // Buttondown email and the LinkedIn/Bluesky fan-out.
+  // Buttondown email to real subscribers.
   assert.equal(isPreviewHost(`${WORKER_NAME}.link00seven.workers.dev`), false);
   assert.equal(isPreviewHost(`${WORKER_NAME}.any-other-subdomain.workers.dev`), false);
   assert.equal(isPreviewHost(`${WORKER_NAME.toUpperCase()}.link00seven.WORKERS.DEV`), false);

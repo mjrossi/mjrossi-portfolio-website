@@ -1,0 +1,140 @@
+---
+// Hand-authored inline SVG: how the FSA∩CMA overlap shape is measured by the
+// even-odd rule instead of by winding direction. Inline (not an <img>) so it
+// inherits the Broadsheet tokens from global.css and needs no client JS.
+//
+// Unlike RegionGraphNYC/RegionGraphChicago, this diagram encodes an *algorithm*,
+// not seed data — there is no TOML to transcribe from. The source of truth is
+// polygonArea + nestingDepth in the Atlas repo's
+// api/internal/etl/ca/geom.go:
+//   depth := number of other contours containing this one
+//   depth % 2 == 0  ->  area added        (filled)
+//   depth % 2 == 1  ->  area subtracted   (hole)
+// The shape is deliberately drawn as ONE <path> with fill-rule="evenodd", so
+// the browser fills it by the same rule the ETL measures it by — the picture
+// and the code agree by construction rather than by my redrawing them to match.
+//
+// The three outlines are cast as a real, recognisable case: an FSA on the
+// Ontario side of the cross-province Ottawa-Gatineau CMA (the metro the post
+// already introduces earlier), the Ottawa River as the water inside it, and a
+// real island in that river (Victoria / Chaudière). This is a SCHEMATIC of that
+// geometry, NOT a traced StatsCan boundary — see the caption. It is here only
+// to make the even-odd rule concrete; the picture is still a stylised shape.
+//
+// Two things a future editor must NOT "fix":
+//   - Land and river are drawn wound the SAME direction on purpose: that is the
+//     bug the passage describes, and the reason winding can't be the signal.
+//   - The Ontario/Quebec split is decided by PRUID (province code), NOT by this
+//     area math. It is deliberately out of frame; do not add a province line.
+//
+// Styles live in global.css (.post-diagram, .dg-*) per the one-stylesheet rule.
+// Marker and aria IDs are prefixed dg-area-* — three diagrams share this page.
+---
+
+<figure class="post-figure post-diagram">
+  <svg
+    viewBox="0 0 680 400"
+    role="img"
+    aria-labelledby="dg-area-title dg-area-desc"
+    class="dg"
+  >
+    <title id="dg-area-title">Measuring an FSA's overlap near the Ottawa River by nesting depth</title>
+    <desc id="dg-area-desc">
+      On the left, a schematic overlap shape near the Ottawa River: an outer land
+      boundary — an FSA on the Ontario side of the Ottawa-Gatineau metro — with
+      the Ottawa River as a water body inside it and Victoria Island in the river.
+      Arrows on the land and the river show both outlines are drawn in the same
+      direction, so the direction an outline is drawn in cannot distinguish a
+      hole from a boundary. On the right, the rule that does work: the land sits
+      inside zero other outlines, an even number, so its area is added; the river
+      sits inside one outline, an odd number, so its area is subtracted; the
+      island sits inside two, an even number, so its area is added.
+    </desc>
+
+    <defs>
+      <marker
+        id="dg-area-arrow"
+        viewBox="0 0 10 10"
+        refX="9"
+        refY="5"
+        markerWidth="6"
+        markerHeight="6"
+        orient="auto"
+      >
+        <path d="M0 0 L10 5 L0 10 z" class="dg-arrowhead" />
+      </marker>
+    </defs>
+
+    {/* ---- the overlap shape: one path, three subpaths, even-odd fill ----
+         Rendered by the browser exactly as polygonArea sums it: land filled,
+         river left as an unfilled hole, island filled back in. */}
+    <path
+      class="dg-poly"
+      fill-rule="evenodd"
+      d="M 55 305 L 40 195 L 85 110 L 165 62 L 285 60 L 360 105 L 385 195 L 355 285 L 265 335 L 145 330 Z
+         M 108 175 L 140 132 L 185 118 L 240 128 L 295 165 L 322 215 L 300 250 L 250 258 L 195 240 L 145 212 Z
+         M 192 205 L 188 172 L 222 160 L 250 180 L 238 208 Z"
+    />
+
+    {/* ---- each outline stroked separately so it can be pointed at ---- */}
+    <path
+      class="dg-ring"
+      d="M 55 305 L 40 195 L 85 110 L 165 62 L 285 60 L 360 105 L 385 195 L 355 285 L 265 335 L 145 330 Z"
+    />
+    <path
+      class="dg-ring dg-ring--hole"
+      d="M 108 175 L 140 132 L 185 118 L 240 128 L 295 165 L 322 215 L 300 250 L 250 258 L 195 240 L 145 212 Z"
+    />
+    <path
+      class="dg-ring"
+      d="M 192 205 L 188 172 L 222 160 L 250 180 L 238 208 Z"
+    />
+
+    {/* ---- winding arrows: land and river point the same way, which is the point ---- */}
+    <g class="dg-wind" fill="none" marker-end="url(#dg-area-arrow)">
+      <path d="M 197 61 L 250 60" />
+      <path d="M 150 128 L 205 120" />
+    </g>
+
+    {/* ---- role labels, sitting on the region each names ---- */}
+    <text x="328" y="135" class="dg-sub">land</text>
+    <text x="222" y="230" class="dg-sub">Ottawa River</text>
+    <text x="210" y="150" class="dg-sub">Victoria Island</text>
+
+    <text x="212" y="372" class="dg-note">
+      The land and the river are wound the same way — direction can't tell them apart
+    </text>
+
+    {/* ---- the rule that does work ---- */}
+    <text x="396" y="86" class="dg-note dg-note--start">
+      so instead, count what each one sits inside:
+    </text>
+
+    <g>
+      <circle cx="404" cy="120" r="5" class="dg-node" />
+      <text x="418" y="124" class="dg-row">land — inside 0 outlines</text>
+      <text x="418" y="142" class="dg-call dg-call--start">even → added</text>
+    </g>
+
+    <g>
+      <circle cx="404" cy="192" r="5" class="dg-node dg-node--anchor" />
+      <text x="418" y="196" class="dg-row">Ottawa River — inside 1 (the land)</text>
+      <text x="418" y="214" class="dg-call dg-call--start">odd → subtracted</text>
+    </g>
+
+    <g>
+      <circle cx="404" cy="264" r="5" class="dg-node" />
+      <text x="418" y="268" class="dg-row">Victoria Island — inside 2 (land + river)</text>
+      <text x="418" y="286" class="dg-call dg-call--start">even → added</text>
+    </g>
+  </svg>
+
+  <figcaption>
+    The shape on the left is drawn as a single path under the even-odd rule, so
+    the browser fills it the same way the pipeline measures it: the land is
+    solid, the Ottawa River is the hole inside it, and Victoria Island fills
+    back in. It's a schematic near the river, not a traced boundary —
+    counting nesting rather than reading winding direction is what makes the
+    answer independent of how the clipping library happened to draw each outline.
+  </figcaption>
+</figure>

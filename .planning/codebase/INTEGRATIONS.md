@@ -21,20 +21,17 @@
   - IP forwarding: `ip_address` is passed so Buttondown's firewall can geo/reputation-score submissions
   - Error handling: already-subscribed 400s treated as success (subscriber-enumeration defense); other 400s surface as `upstream_rejected`
 
-**Social syndication:**
-- LinkedIn — new posts auto-syndicated as standard profile posts via Buttondown Automations
-  - No code in this repo; entirely operator-side configuration in Buttondown dashboard
-  - Trigger: "When a newsletter is sent" → Buttondown creates a LinkedIn post automatically
-  - Limitation: posts to profile only, not LinkedIn Newsletters (no API surface for that)
-- Bluesky — new posts auto-syndicated via Buttondown Automations
-  - No code in this repo; entirely operator-side configuration in Buttondown dashboard
-  - Trigger: "When a newsletter is sent" → Buttondown creates a Bluesky post automatically
+**Social syndication — MANUAL, not automated:**
+- Buttondown's LinkedIn and Bluesky automations require a higher plan tier than this newsletter is on, so they do **not** fire. Facebook has no Buttondown integration at any tier.
+- LinkedIn, Bluesky, and Facebook posts are written and posted by hand after each publish.
+- No code in this repo owns syndication. See CLAUDE.md § "Syndication (social)" for the posting workflow and for what changes if the plan is ever upgraded.
+- Limitation that survives an upgrade: Buttondown can post to a LinkedIn **profile** only, not LinkedIn Newsletters (no API surface for that).
 
 **Syndication pipeline:**
 ```
-new MDX → git push → Cloudflare build → /blog/rss.xml → Buttondown polls RSS
-                                                              ↓
-                                                email + LinkedIn + Bluesky
+new MDX → git push → Cloudflare build → /blog/rss.xml → Buttondown polls RSS → email
+                                              │
+                                              └→ (by hand) LinkedIn · Bluesky · Facebook
 ```
 
 **Fonts:**

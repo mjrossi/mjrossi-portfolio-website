@@ -1,0 +1,157 @@
+---
+// Hand-authored inline SVG: two boundaries drawn over roughly the same place,
+// and the different answers they produce for the Loop and for Gary, Indiana.
+// Inline for the same reasons as RegionGraphNYC.astro — see that file's header.
+//
+// Nodes and edges transcribed from the shipped seed data:
+//   chicago          parents = ["cook-county"]                    regions_us.toml
+//   cook-county      parents = ["chicago-metro", "rta-service-area"]
+//   rta-service-area parents = ["il"]                             regions_us_multistate.toml
+//   chicago-metro    parents = ["chicagoland"]                    regions_us_msas.toml
+//   gary             parents = ["lake-county-in"]                 regions_us.toml
+//   lake-county-in   parents = ["chicago-metro", "in"]            regions_us.toml
+//   chicagoland / il / in  parents = []
+//
+// The chicagoland node is named "Chicagoland (IL/IN/WI)" in the seed; the label
+// here is trimmed to "Chicagoland" because the post only ever discusses Illinois
+// and Indiana, and no WI edge exists for a reader to trace. Node names are a
+// display choice; edges are not — those stay verbatim.
+//
+// Two things deliberately absent. chicago-metro's rollup_states = ["il", "in"]
+// is browse-only and never walked, so no edge. The five collar counties
+// (DuPage, Kane, Lake-IL, McHenry, Will) are all in the shipped seed with the
+// same parents as cook-county, but drawing five identical nodes would add
+// nothing the "Cook + 5 collar" subtitle doesn't already say.
+//
+// Styles live in global.css (.post-diagram) per the one-stylesheet rule.
+---
+
+<figure class="post-figure post-diagram">
+  <svg
+    viewBox="0 0 700 600"
+    role="img"
+    aria-labelledby="dg-chi-title dg-chi-desc"
+    class="dg"
+  >
+    <title id="dg-chi-title">
+      The Chicago metro area and the RTA service area as separate regions
+    </title>
+    <desc id="dg-chi-desc">
+      A directed graph with two paths. From Chicago, the walk goes up through
+      Cook County, which has two parents: the Chicago Metro area, and the RTA
+      Service Area, whose parent is Illinois. So a search from the Loop reaches
+      both the metro and the transit district. From Gary, Indiana, the walk goes
+      up through Lake County, Indiana, whose parents are the Chicago Metro area
+      and the state of Indiana. Gary therefore reaches the metro but never the
+      RTA and never Illinois, because the metro has no edge to either state.
+      Both paths converge on Chicago Metro and then Chicagoland.
+    </desc>
+
+    <defs>
+      <marker
+        id="dg-chi-arrow"
+        viewBox="0 0 10 10"
+        refX="9"
+        refY="5"
+        markerWidth="6"
+        markerHeight="6"
+        orient="auto-start-reverse"
+      >
+        <path d="M0 0 L10 5 L0 10 z" class="dg-arrowhead" />
+      </marker>
+      <marker
+        id="dg-chi-arrow-a"
+        viewBox="0 0 10 10"
+        refX="9"
+        refY="5"
+        markerWidth="6"
+        markerHeight="6"
+        orient="auto-start-reverse"
+      >
+        <path d="M0 0 L10 5 L0 10 z" class="dg-arrowhead dg-arrowhead--a" />
+      </marker>
+    </defs>
+
+    {/* ---- edges ---- */}
+    <g class="dg-edges" fill="none">
+      {/* the Loop's walk — and, above the merge, the spine both walks share */}
+      <g marker-end="url(#dg-chi-arrow-a)">
+        <path class="dg-edge dg-edge--a" d="M305 482 V 436" />
+        <path class="dg-edge dg-edge--a" d="M305 394 V 180 H 355 V 154" />
+        <path class="dg-edge dg-edge--a" d="M230 412 H 90 V 350" />
+        <path class="dg-edge dg-edge--a" d="M90 296 V 252" />
+        <path class="dg-edge dg-edge--a" d="M355 112 V 64" />
+      </g>
+      {/* Gary's walk — joins the spine at the metro and never touches the left side */}
+      <g marker-end="url(#dg-chi-arrow)">
+        <path class="dg-edge" d="M530 482 V 436" />
+        <path class="dg-edge" d="M530 394 V 180 H 355 V 154" />
+        <path class="dg-edge" d="M610 412 H 625 V 252" />
+      </g>
+    </g>
+
+    {/* ---- nodes ---- */}
+    <g class="dg-group">
+      <rect x="250" y="22" width="210" height="36" class="dg-node" />
+      <text x="355" y="45" class="dg-label">Chicagoland</text>
+    </g>
+
+    <g class="dg-group">
+      <rect x="270" y="112" width="170" height="36" class="dg-node" />
+      <text x="355" y="135" class="dg-label">Chicago Metro</text>
+    </g>
+
+    <g class="dg-group">
+      <rect x="20" y="216" width="140" height="36" class="dg-node" />
+      <text x="90" y="239" class="dg-label">Illinois</text>
+    </g>
+
+    <g class="dg-group">
+      <rect x="560" y="216" width="130" height="36" class="dg-node" />
+      <text x="625" y="239" class="dg-label">Indiana</text>
+    </g>
+
+    <g class="dg-group">
+      <rect x="13" y="296" width="154" height="48" class="dg-node" />
+      <text x="90" y="316" class="dg-label">RTA Service Area</text>
+      <text x="90" y="333" class="dg-sub">Cook + 5 collar counties</text>
+    </g>
+
+    <g class="dg-group">
+      <rect x="230" y="394" width="150" height="36" class="dg-node" />
+      <text x="305" y="417" class="dg-label">Cook County</text>
+    </g>
+
+    <g class="dg-group">
+      <rect x="450" y="394" width="160" height="36" class="dg-node" />
+      <text x="530" y="417" class="dg-label">Lake County, IN</text>
+    </g>
+
+    <g class="dg-group">
+      <rect x="225" y="482" width="160" height="36" class="dg-node" />
+      <text x="305" y="505" class="dg-label">Chicago — the Loop</text>
+    </g>
+    <text x="305" y="541" class="dg-call">60601 anchors here</text>
+
+    <g class="dg-group">
+      <rect x="455" y="482" width="150" height="36" class="dg-node" />
+      <text x="530" y="505" class="dg-label">Gary, Indiana</text>
+    </g>
+    <text x="530" y="541" class="dg-call">46402 anchors here</text>
+
+    {/* ---- legend ---- */}
+    <g class="dg-legend">
+      <path class="dg-edge dg-edge--a" d="M20 578 H 56" fill="none" />
+      <text x="64" y="582" class="dg-note dg-note--start">the walk up from 60601</text>
+      <path class="dg-edge" d="M250 578 H 286" fill="none" />
+      <text x="294" y="582" class="dg-note dg-note--start">the walk up from 46402</text>
+    </g>
+  </svg>
+
+  <figcaption>
+    Two shapes over roughly the same place. The metro crosses into Indiana; the
+    RTA stops at the Illinois line. Because Chicago Metro has no edge to either
+    state, Gary picks up the metro and Indiana but never the RTA and never
+    Illinois — no special-casing required, just the graph.
+  </figcaption>
+</figure>

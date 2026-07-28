@@ -10,7 +10,7 @@ This is not a real article. It is a **test fixture**.
 Its `pubDate` is set to 2099-01-01 so it is always in the future, which means
 production must never show it — not on `/blog`, not on `/blog/tag/smoke-fixture`,
 not at its own URL, and above all not in `/blog/rss.xml`, which is what triggers
-the Buttondown email and the LinkedIn/Bluesky fan-out.
+the Buttondown email to real subscribers.
 
 `scripts/smoke.mjs` uses it to assert all four of those, plus the two things a
 unit test cannot reach: that a valid signed preview link *does* open this page,

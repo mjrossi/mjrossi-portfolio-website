@@ -4,14 +4,14 @@ import { getPublishedPosts } from '../../lib/blog.ts';
 
 // On-demand (not prerendered): the feed is rebuilt per request so that
 // scheduled posts (future pubDate) enter it automatically once their date
-// passes — no redeploy needed — which keeps Buttondown's RSS-to-email and
-// syndication pipeline working for scheduled publishing. `getPublishedPosts`
+// passes — no redeploy needed — which keeps Buttondown's RSS-to-email
+// pipeline working for scheduled publishing. `getPublishedPosts`
 // applies the date filter in production.
 
 export async function GET(context: APIContext) {
   // Only the host-based unlock reaches the feed. Signed preview links are
   // scoped to a single post's own URL and deliberately cannot inject a draft
-  // here — this feed is what triggers Buttondown's email and social fan-out.
+  // here — this feed is what triggers Buttondown's email to real subscribers.
   const posts = await getPublishedPosts({ showScheduled: context.locals.showScheduled });
   const site = context.site ?? new URL('https://mjrossi.com');
 

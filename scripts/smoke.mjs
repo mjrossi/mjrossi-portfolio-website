@@ -118,7 +118,7 @@ if (existsSync(postRoutePath)) {
 // The preview unlock must never widen beyond the post's own URL. If
 // previewSlug ever reaches the listing helpers, a shared preview link could
 // inject an unpublished post into the RSS feed — which is what triggers
-// Buttondown's email and social syndication. Assert it stays out.
+// Buttondown's email to real subscribers. Assert it stays out.
 // Comments are stripped first: both files *document* why previewSlug is
 // absent, and that prose would otherwise trip the check asserting its absence.
 const blogLibSource = existsSync(blogLibPath) ? stripComments(readFileSync(blogLibPath, 'utf8')) : '';
@@ -132,7 +132,7 @@ if (existsSync(rssRoutePath)) {
   check(
     'rss route: previewSlug does NOT reach the feed',
     !/previewSlug/.test(stripComments(readFileSync(rssRoutePath, 'utf8'))),
-    'previewSlug leaked into the RSS route — a preview link could trigger syndication',
+    'previewSlug leaked into the RSS route — a preview link could trigger the subscriber email',
   );
 }
 
@@ -433,8 +433,8 @@ try {
 
   // 3. THE load-bearing direction: that same valid token must not widen the
   // listing surfaces. RSS is the one that matters most — it drives Buttondown's
-  // email and the LinkedIn/Bluesky fan-out, so a link handed to a reviewer
-  // reaching it would publish the post for real.
+  // email to real subscribers, so a link handed to a reviewer reaching it would
+  // publish the post for real.
   const [tokenIndex, tokenRss] = await Promise.all([
     fetch(`${BASE}/blog?${q}`).then((r) => r.text()),
     fetch(`${BASE}/blog/rss.xml?${q}`).then((r) => r.text()),
@@ -447,7 +447,7 @@ try {
   check(
     'preview: valid token does NOT add the post to RSS',
     !tokenRss.includes(FIXTURE_SLUG),
-    'a signed preview link reached the feed — this would trigger email + social syndication',
+    'a signed preview link reached the feed — this would trigger the subscriber email',
   );
 
   // 4. A token minted for one slug must not open a DIFFERENT post's URL.
@@ -564,7 +564,7 @@ try {
   check(
     'production workers.dev alias: does NOT reveal the fixture in RSS',
     !(await aliasRss.text()).includes(FIXTURE_SLUG),
-    'the production alias leaked a draft into the feed — this would trigger syndication',
+    'the production alias leaked a draft into the feed — this would trigger the subscriber email',
   );
   check(
     'production workers.dev alias: still cacheable',

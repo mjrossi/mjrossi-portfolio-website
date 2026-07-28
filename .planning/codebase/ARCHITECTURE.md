@@ -161,9 +161,9 @@
 
 ### RSS / Blog Discovery Flow
 
-1. `GET /blog/rss.xml` is statically prerendered: `src/pages/blog/rss.xml.ts` calls `getPublishedPosts()` at build time
-2. Buttondown polls `/blog/rss.xml`; on new items it sends email and triggers LinkedIn/Bluesky automations
-3. No code in this repo owns syndication; it is configured entirely in the Buttondown dashboard
+1. `GET /blog/rss.xml` renders **on demand** (not prerendered): `src/pages/blog/rss.xml.ts` calls `getPublishedPosts()` per request, so a scheduled post enters the feed once its `pubDate` passes with no rebuild
+2. Buttondown polls `/blog/rss.xml`; on new items it sends **email only**
+3. Social syndication (LinkedIn, Bluesky, Facebook) is **manual** — Buttondown's social automations need a higher plan tier and are not active. No code in this repo owns syndication; see CLAUDE.md § "Syndication (social)"
 
 **State Management:**
 - No client state beyond the newsletter form (ephemeral: cleared on success/reload)

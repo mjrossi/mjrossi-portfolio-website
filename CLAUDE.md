@@ -155,7 +155,7 @@ npm run preview-link -- my-draft --host http://127.0.0.1:8788
 
 The URL goes to stdout and the metadata to stderr, so it pipes cleanly. The script refuses to mint a link for a slug with no matching file — a typo would otherwise produce a valid-looking link that 404s.
 
-**Signed links are scoped to the post's own URL and nothing else.** They do not add the draft to `/blog`, tag pages, or `/blog/rss.xml`. That is deliberate and load-bearing: the RSS feed is what triggers Buttondown's email and LinkedIn/Bluesky fan-out, so a link you hand to a reviewer must not be able to reach it. `getPublishedPosts` therefore takes only a boolean `showScheduled`; the per-slug signal (`Astro.locals.previewSlug`) is read solely by `src/pages/blog/[...slug].astro`.
+**Signed links are scoped to the post's own URL and nothing else.** They do not add the draft to `/blog`, tag pages, or `/blog/rss.xml`. That is deliberate and load-bearing: the RSS feed is what triggers Buttondown's email — an irreversible send to real subscribers — so a link you hand to a reviewer must not be able to reach it. `getPublishedPosts` therefore takes only a boolean `showScheduled`; the per-slug signal (`Astro.locals.previewSlug`) is read solely by `src/pages/blog/[...slug].astro`.
 
 `smoke.mjs` guards this two ways, because neither alone is sufficient:
 
@@ -295,31 +295,37 @@ CI handles this via `MISE_ENV=ci` in `.github/workflows/build.yml`, so the issue
 
 PR branches get preview URLs from Cloudflare Workers Builds. **Preview deploys currently share production secrets** — a subscription via a preview URL lands in the production Buttondown account. Acceptable for a personal site (preview URLs are `noindex`'d). `wrangler.jsonc` carries a commented scaffold for isolating preview into its own environment if that ever needs to change.
 
-## Syndication (LinkedIn + Bluesky)
+## Syndication (social)
 
-New blog posts fan out to LinkedIn and Bluesky from the same Buttondown pipeline that handles email — Buttondown's Automations feature posts to both natively. **No code in this repo** owns the syndication; everything is configured operator-side in Buttondown's dashboard.
+**Social syndication is manual.** Buttondown's LinkedIn and Bluesky automations sit behind a higher plan tier than this newsletter is on, so they do **not** fire. Facebook was never offered by Buttondown at all. The only thing a published post reaches automatically is **email**.
+
+Do not write code, comments, or docs that assume a post fans out to social on its own — it doesn't.
 
 ```
-new MDX → git push → Cloudflare build → /blog/rss.xml → Buttondown polls
-                                                            ↓
-                                              ┌─────────────┼─────────────┐
-                                              ↓             ↓             ↓
-                                            email       Bluesky        LinkedIn
+new MDX → git push → Cloudflare build → /blog/rss.xml → Buttondown polls → email
+                                              │
+                                              └→ (by hand) LinkedIn · Bluesky · Facebook
 ```
 
-### Why Buttondown, not in-repo
+### Posting workflow
 
-Buttondown owns OAuth refresh (LinkedIn tokens expire in 60 days), Bluesky app-password storage, rate limiting, retries, and dedup state. Building any of that into the Worker would mean adding KV/D1 + cron triggers + smoke sad-paths for a personal site with infrequent posts. Buttondown already owns the email side; expanding to social keeps one provider, one auth surface, one place to debug. If Buttondown ever drops a platform, the escape hatch is small — a single Worker endpoint reading `/blog/rss.xml` and posting via the AT Protocol / LinkedIn API. Don't pre-build it.
+1. Merge, wait for the Cloudflare build, then **load the post's URL yourself before sharing it.** `/blog`, tag pages, and the feed all carry `Cache-Control: public, max-age=3600`, so there's up to an hour of edge-cache lag — see "Scheduled publishing". A dead link in the first ten minutes is the failure mode worth avoiding.
+2. Confirm the Buttondown email actually went out. Buttondown polls the feed; it is not instant.
+3. Write and post to LinkedIn, Bluesky, and Facebook by hand. Each wants its own register: Bluesky has a hard 300-character limit, LinkedIn truncates at roughly the first 200 characters before "see more", and Facebook is the personal-audience one.
 
-### Known limitation: LinkedIn Newsletters
+Because the posts are hand-written, they can say more than an automation would — see "If the plan is ever upgraded" for what is lost by automating.
 
-Buttondown posts to your LinkedIn **profile** as a standard post. It cannot publish to LinkedIn **Newsletters** (LinkedIn's own newsletter product) — LinkedIn doesn't expose an API for that surface, only for standard posts. The standard-post route is fine: the post text plus the canonical link does the same job.
+### If the plan is ever upgraded
 
-### Operator setup (one-time, in Buttondown dashboard)
+- **Setup**: Settings → Integrations (connect LinkedIn via OAuth, Bluesky via app password), then Settings → Automations → two new automations triggered on **When a newsletter is sent**, with actions **Create a LinkedIn post** and **Create a Bluesky post**.
+- **The body is not templatable.** Those two automations expose no body field — the post is generated from the newsletter's title and canonical URL. That is a real downgrade from a hand-written post, so upgrading is not automatically the right call; it may be worth automating Bluesky (where the 300-character limit makes copy less valuable) and continuing to write LinkedIn by hand.
+- **Stop posting manually the same day**, or the automation and a hand-written post will double up.
+- **Facebook stays manual regardless** — Buttondown has no Facebook integration at any tier.
 
-1. Settings → Integrations → connect LinkedIn (OAuth) and connect Bluesky (app password).
-2. Settings → Automations → alongside the existing RSS-to-email automation, create two more:
-   - Trigger: **When a newsletter is sent** → Action: **Create a LinkedIn post**
-   - Trigger: **When a newsletter is sent** → Action: **Create a Bluesky post**
+LinkedIn caveat that applies either way: Buttondown posts to your LinkedIn **profile** as a standard post. It cannot publish to LinkedIn **Newsletters** (LinkedIn's own newsletter product) — LinkedIn exposes no API for that surface. Posting by hand is the only route to a LinkedIn newsletter.
 
-Buttondown's LinkedIn and Bluesky automations don't expose a body-template field — the post body is generated from the newsletter's title and canonical URL automatically. Nothing in `docs/` to keep in sync for these two; the email template (`docs/buttondown-rss-template.md`) remains the only operator-managed surface.
+### Why manual, and why not in-repo
+
+Building syndication into the Worker would mean owning OAuth refresh (LinkedIn tokens expire in 60 days), Bluesky app-password storage, rate limiting, retries, and dedup state — plus KV/D1, cron triggers, and smoke sad-paths, for a personal site that posts infrequently. At this volume, writing three short posts by hand costs less than any of that and produces better copy. **Don't pre-build it.** If posting volume ever makes automation worth it, upgrading the Buttondown plan is the cheaper move than owning the auth surface here.
+
+**No code in this repo** owns syndication, and nothing in `docs/` tracks the social posts. The email template (`docs/buttondown-rss-template.md`) remains the only operator-managed surface.

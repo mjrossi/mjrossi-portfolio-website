@@ -1,7 +1,7 @@
 ---
 title: "I Used AI to Build the Urbanist Atlas. Here's Why the Human Eye Is Imperative."
 description: "How I used Claude Code to build the Urbanist Atlas — the Go API, the React frontend, and why the engineer behind the keyboard stayed in control."
-pubDate: 2026-08-04
+pubDate: 2026-07-28
 tags: ["urban-mobility", "urbanist-atlas", "software-engineering", "artificial-intelligence"]
 ---
 
@@ -24,7 +24,7 @@ In a social media ecosystem filled with absolutes and binaries, the intention of
 
 ### The Go API
 
-I'm primarily a backend engineer, so I've designed my fair share of APIs, build tools, low-level data layers, integrations, etc. This is where I could be the most picky and explicit about how I wanted the code built. It was also my natural starting point, since I wanted the API to drive everything, including the inevitable frontend, and future ability to allow users to directly integrate with the API.
+I'm primarily a backend engineer, so I've designed my fair share of APIs, build tools, low-level data layers, integrations, etc. This is where I could be the most picky and explicit about how I wanted the code built. It was also my natural starting point, since I wanted the API to drive everything, including the inevitable frontend, while leaving open the future ability for users to integrate with the API directly.
 
 I knew I wanted Go, but I also wanted to see how Claude would fare, so I began a brainstorming session. My prompt was explicit about what I wanted, but not about the tech stack — at first. I directed Claude to build an API that would power a frontend and, eventually, be drivable straight from `curl` by anyone who wanted to integrate with it. I started with the simplest endpoint, `/lookup`, since I could use that as a complete slice of a working bit of functionality. I didn't want to worry about the data quite yet, so I directed Claude to hard-code `11217` (my zip code) with a single result: one advocacy organization, the kind of entry the Atlas is built to catalog.
 

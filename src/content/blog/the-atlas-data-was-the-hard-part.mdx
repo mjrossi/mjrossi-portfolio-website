@@ -1,8 +1,8 @@
 ---
 title: "The Atlas Data Was the Hard Part"
 description: "Modeling cities as a graph, generated from federal data, to catalog 236 advocacy organizations — where AI's plausible answers for the Urbanist Atlas got expensive."
-pubDate: 2026-08-11
-tags: ["urban-mobility", "urbanist-atlas", "data-modeling", "artificial-intelligence"]
+pubDate: 2026-08-04
+tags: ["urban-mobility", "urbanist-atlas", "data-modeling", "artificial-intelligence", "software-engineering", "advocacy"]
 ---
 
 import RegionGraphNYC from '../../components/diagrams/RegionGraphNYC.astro';
@@ -75,7 +75,7 @@ I was extremely proud of the region graph design — a great example of using AI
 
 ## Generating the graph
 
-The region graph isn't hand-written. Underneath it is a pipeline that takes six staged upstream files — the US Census Bureau's metro delineation list, two crosswalks from the 2020 census tying ZCTAs (ZIP Code Tabulation Areas, the Census's statistical stand-in for a ZIP code) to counties, the Department of Housing and Urban Development's ZIP-to-county file, and two Statistics Canada boundary shapefiles, one for FSAs and one for metro areas — and generates every data file the API ships with. One command per country rebuilds all of it: 393 US metros and 41 Canadian ones, 530 rows once the cross-border portions are counted separately, plus the anchors for over 40,000 postal codes.
+The region graph isn't hand-written. Underneath it is a pipeline that takes six staged upstream files — the US Census Bureau's metro delineation list, two crosswalks from the 2020 census tying ZCTAs (ZIP Code Tabulation Areas, the Census's statistical stand-in for a ZIP code) to counties and to places, the Department of Housing and Urban Development's ZIP-to-county file, and two Statistics Canada boundary shapefiles, one for FSAs and one for metro areas — and generates every data file the API ships with. One command per country rebuilds all of it: 393 US metros and 41 Canadian ones, 530 rows once the cross-border portions are counted separately, plus the anchors for over 40,000 postal codes.
 
 I was insistent on one property here: the generator had to be deterministic. Same source data in, byte-identical files out. It's what makes the data reviewable and reliable. When a diff — the line-by-line comparison of what a file used to say against what it says now — shows up in a regenerated file, the upstream data actually changed. There's a check that regenerates the region files and fails if the result doesn't match what's committed, so nobody, me included, can quietly hand-edit generated data and have it survive.
 

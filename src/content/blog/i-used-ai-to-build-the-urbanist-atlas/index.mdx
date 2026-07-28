@@ -1,0 +1,79 @@
+---
+title: "I Used AI to Build the Urbanist Atlas. Here's Why the Human Eye Is Imperative."
+description: "How I used Claude Code to build the Urbanist Atlas — the Go API, the React frontend, and why the engineer behind the keyboard stayed in control."
+pubDate: 2026-07-28
+tags: ["urban-mobility", "urbanist-atlas", "software-engineering", "artificial-intelligence"]
+---
+
+import Figure from '../../../components/Figure.astro';
+import lisbon_mini_buses from './lisbon_mini_buses.jpg';
+
+[The Urbanist Atlas](https://urbanistatlas.com) — a directory of local safe-streets and transit advocacy organizations, searchable by ZIP or postal code — has been live for about two months now. The idea is simple: you land in a new city, type in your postal code, and find the people already working for better buses, safer crossings, and streets built for humans where you live. Two months feels like enough time to reflect on what worked, what didn't, and where I still had to step in instead of letting Claude run on its own. That reflection became a three-part series. This first entry covers the code: how I used Claude Code as my "coding assistant" to greenfield the project.
+
+This post has also been stewing for the last month somewhere between the thousand things that go into an international move (which could be its own post someday) — my wife Hilary and I have relocated to Lisbon, Portugal, in preparation for my first year in the EIT Urban Mobility Master's program (Sustainable Urban Mobility Transitions) at Instituto Superior Técnico.
+
+<Figure src={lisbon_mini_buses} alt="A typical Lisbon building, pink, with two KARSAN e-Jest mini public transit buses stopped in front" caption="Two KARSAN e-Jest mini buses, part of the Carris bus fleet in Lisbon, Portugal." />
+
+## Upfront disclaimers
+
+Yes, I vibe coded a substantial amount of the Atlas. But "vibe coding" has gotten so overused it's practically lost its meaning, and loaded enough to make people roll their eyes, so it's worth saying what I actually mean by it. AI generated a lot of code, but I was the one specifying architecture, reviewing the generated changes, writing and running tests, validating the data, and making the calls when the AI's first answer wasn't the right one. I try to stay clear-eyed about where AI is genuinely helpful (repetitive tasks, extra analysis) and where it's worth being concerned (energy and environmental impacts).
+
+In a social media ecosystem filled with absolutes and binaries, the intention of this post is to be upfront about how I used Claude Code as a tool to help me write the Atlas: where AI was helpful and effective, where there were shortcomings, and hopefully an example of where a modern software engineer can use AI, but where that AI is only as effective as the engineer behind the keyboard.
+
+## AI for the code
+
+### The Go API
+
+I'm primarily a backend engineer, so I've designed my fair share of APIs, build tools, low-level data layers, integrations, etc. This is where I could be the most picky and explicit about how I wanted the code built. It was also my natural starting point, since I wanted the API to drive everything, including the inevitable frontend, while leaving open the future ability for users to integrate with the API directly.
+
+I knew I wanted Go, but I also wanted to see how Claude would fare, so I began a brainstorming session. My prompt was explicit about what I wanted, but not about the tech stack — at first. I directed Claude to build an API that would power a frontend and, eventually, be drivable straight from `curl` by anyone who wanted to integrate with it. I started with the simplest endpoint, `/lookup`, since I could use that as a complete slice of a working bit of functionality. I didn't want to worry about the data quite yet, so I directed Claude to hard-code `11217` (my zip code) with a single result: one advocacy organization, the kind of entry the Atlas is built to catalog.
+
+It suggested that I write it all in Node / JavaScript. I disagreed. That was partially my preference, but I also had specific technical reasons: I wanted static typing, a straightforward concurrency model, and, practically, a language I'd already written a robust production application in recently. Node would have worked fine here too; that's not the point. The point is I had reasons, and I could articulate them. To me, this was the first trap that can burn folks who don't have a software engineering background when they try to vibe code: the danger isn't that AI will make a bad choice, it's that it'll make a perfectly plausible one you don't know enough to question.
+
+At this stage, Claude started proposing a plan for Go. There was a lot of back and forth; I was explicit in my input. From this one endpoint, we needed to write the initialization logic, manage the application configuration, and settle the deployment target.
+
+Could I have just taken its recommendation? Yes. But after thirteen years of writing code, and very recently writing an extremely robust application in Go, I had my own ideas of how I wanted to do this, so I stayed just as explicit with Claude about the rest. Rather than hand all of that — initialization, configuration, deployment — to a single pass, I acted as a bit of a project manager, product owner, and software architect in one go, and split the work across three of Claude Code's subagents: one focused purely on the endpoint and API design, another on deployment and tooling (the `just` file and `mise` config that show up below), and a third whose only job was to review the first two against idiomatic Go and Go community convention.
+
+Because I was extremely detailed in my input and leaned on my own knowledge, we ended up with an endpoint and a code structure I was pleased with. Over time, Claude and I added more layers, more endpoints, a `just` file and `mise` for managing tooling. If I was unclear or didn't have a strong preference, there was the back and forth, and I'd explicitly push the AI to look at community guidelines on making good choices.
+
+That's another place human judgment shows up in this story — those community guidelines exist because people who care about good code quality wrote them down and published them.
+
+### The React SPA
+
+This is where I knew I was going to run into more difficulty. I _don't_ have strong frontend experience. My JavaScript knowledge at the start of this application was basically "jQuery is definitely not a thing anymore, right?" Beyond a few small edits to larger frontend framework applications, it was not a strong suit for me.
+
+The frontend was therefore a more interesting test of my thesis: I was delegating more of the implementation and design decisions precisely because I knew less.
+
+I'm not a designer either, so I used [Claude Design](https://claude.com/product/design) — Anthropic's dedicated design product — to draft the look of the frontend before writing any code or deciding on a framework. I'd already done an iteration of this on my personal blog and website, so I used that as a starting point, responding to each draft, asking for a different layout or visual hierarchy, and iterating until the handoff document matched what I actually wanted. I was also impressed that Claude Design could produce handoff materials for Claude Code to go ahead and implement the frontend code, which I definitely took advantage of.
+
+I couldn't really review it, though. It handed me a lot of CSS files, and I could read them well enough to know what any individual rule did — but not whether it held together as a design, or whether it would hold up as the application grew. I had to trust it, which is a very different thing from being able to comprehensively review code. I handed it off as instructed, assuming that I could do a proper pass later.
+
+At this point, it was time to build a frontend. I was direct in my initial prompts — I have a lot of experience as a backend engineer, minimal frontend, but have dabbled in HTML, CSS, JavaScript, TypeScript, Node, etc. I leaned much more heavily on Claude's input here, but was explicit that I needed advice, not just answers. I knew my high-level requirements: easy to maintain; no stored state, consuming everything from the API; hosted on Cloudflare; thoroughly tested; and open to community input. Claude provided a couple of solutions: a few newer frameworks I'd never heard of, an Astro-powered site like this exact blog you're reading, and of course a tried and true React solution with TypeScript.
+
+I attempted to do some independent research on the frameworks, but it was challenging. I felt like I was flying blind, and I didn't have another person I could talk to who had this experience. It wasn't the last time in this process that I wished I had a pair programming buddy who wasn't an AI agent. I decided to go with the tried and true React solution, essentially because I knew I liked TypeScript and could probably maintain it myself a bit more easily, and, perhaps without enough evidence, an assumption that I'd be more comfortable maintaining a React app at the Atlas's scale than extending the Astro setup I use for this blog.
+
+From here, Claude wrote the first iteration of the UI that consumed that single `/lookup` endpoint from before. As with the backend, this single slice was a deliverable and something that showcased a working prototype that could be iterated on over time. As I did my testing, both locally and on a Cloudflare preview deploy, I was pleased to see a real page that called the live endpoint and rendered a real result, not a mockup. I successfully had a monorepo with two separate but connected pieces: a backend API in Go, and a frontend app in React consuming that Go API. Hurrah!
+
+Using AI can often feel like a useful shortcut. I didn't have to _know_ React to write a React app; it just didn't feel particularly comfortable for me to do it. I tried to work around this by taking more review time on these components, and actually having dialogue with the AI assistant to ask questions and make sure I could reason about what was being written. It wasn't as good as writing the code myself, but that dialogue is part of the work — it's how you keep learning and growing while you work.
+
+### Fleshing out more features
+
+Thinking like a product manager was really valuable here, because I've seen how useful it can be to just ship something that works. It doesn't need all the features ready. It just needs to prove the basic structure holds up, and at this stage it did.
+
+This meant that going forward I could work on the backend and frontend in parallel, using each side to validate the other. Add a new endpoint with a frontend to consume, ensure it worked. Make changes on the frontend, know that the backend was stable.
+
+I directed Claude to write an OpenAPI spec, so we were working with hard contracts that future agents — and me, and other contributors — could rely on. The spec generates both the Go server's types and the frontend's TypeScript ones, and CI rejects any commit where either has drifted from it. I always wanted to ensure that at the end of the day, nobody was going to feel stuck if they didn't have an AI robot to lean on to look at, review, or contribute to this code. To that end, documentation passes, tooling passes, and thorough, well-written `just` commands always happened in between new feature work and bugfixes.
+
+That parallel work also settled how the two halves ship, which turned out not to be symmetric at all. The React app deploys to Cloudflare as static assets. The Go API runs on a single Fly.io machine. The submissions database is SQLite, embedded in the API's own process, and the queue that opens pull requests lives inside that process too.
+
+This was a tradeoff I made: the database and the queue both keep their state on that one machine, so scaling it horizontally would quietly break them both. In the future, I'll likely migrate away from an embedded SQLite database to a standalone database with proper locking mechanisms and idempotency. The region data, on the other hand, is compiled directly into the Go binary, so changing the dataset means deploying the API rather than migrating a database. More about the data in the next post, but I actually like having it built at compile time, which forces a review of every addition and change.
+
+Looking back at this half of the project, the pattern is consistent: Claude was fast and genuinely good, and every place it saved me real time was a place where I could already tell a good answer from a plausible one.
+
+## Closing thoughts
+
+This brings me back to the trap from earlier: in the code, I mostly knew enough. That's the part I'd want someone starting out to take from this: "the human eye is imperative" isn't a reassuring thing I said to myself to feel like my job is still important, it's where the actual work shifted. The typing became essentially free; deciding what was worth typing didn't. That's where most of those two months went.
+
+Which is a little funny, given why I'm here at all. I moved to Lisbon to study how cities move people, and the problems worth solving in that field are the ones you can't look up — they're judgment calls about real places and the people living in them. Building the Atlas turned out to be practice for that, with the small mercy of a compiler checking part of my work.
+
+Eventually it got to the point where we needed real data to work with, and that's where the trap actually sprang. Cities don't fit neatly into hierarchies, government datasets disagree with each other, and an organization that doesn't exist looks exactly like one that does until you check. That's the next post.

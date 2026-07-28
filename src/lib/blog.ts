@@ -22,8 +22,8 @@ export const isoDate = (d: Date): string => d.toISOString().slice(0, 10);
  * sets true on *.workers.dev preview deploys. It is deliberately a plain
  * boolean: the per-post signed-link unlock (`locals.previewSlug`) is NOT
  * threaded through here, because these helpers back the blog index, tag pages,
- * and the RSS feed — and RSS drives Buttondown's email + social syndication,
- * which a shareable preview link must never be able to reach. The scoped
+ * and the RSS feed — and RSS drives Buttondown's email, an irreversible send to
+ * real subscribers that a shareable preview link must never reach. The scoped
  * unlock is handled in src/pages/blog/[...slug].astro alone.
  */
 export type PostQuery = { showScheduled?: boolean };

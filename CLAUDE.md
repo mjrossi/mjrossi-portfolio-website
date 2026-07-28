@@ -14,6 +14,7 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece 
 - `src/components/ContactLinks.astro` — inline-SVG icon row (GitHub, LinkedIn, `/api/contact` email, Bluesky). Rendered twice per page (nav + footer); the smoke tests assert both occurrences.
 - `src/components/BlogPostEntry.astro` — shared `<article class="post-entry">` card used by `blog/index.astro` and `blog/tag/[tag].astro`.
 - `src/components/Figure.astro` — `<figure>` wrapper around `astro:assets` `<Image>` with an optional `<figcaption>`. Imported in `.mdx` posts when an inline image needs a visible caption separate from its `alt`.
+- `src/components/diagrams/*.astro` — per-post explanatory diagrams as hand-authored **inline SVG**. Not site chrome; each is imported by exactly one `.mdx` post. Hand-authored rather than generated because the no-client-JS rule plus `script-src 'self'` rules out running mermaid in the browser, and pre-rendering it would mean a Puppeteer dev dependency and a house style that fights the Broadsheet palette. They emit their own `<figure class="post-figure post-diagram">` and reuse the existing `.post-figure` / `figcaption` rules — they do **not** go through `Figure.astro`, which requires `ImageMetadata`. Shared styling (`.post-diagram`, `.dg-*`) lives in `global.css`. See "Diagrams in posts" under Blog.
 - `src/components/NewsletterSignup.astro` — newspaper-style email signup form. Rendered **only** in `src/pages/blog/index.astro` — this is the single carve-out from the no-client-JS rule. Loads Cloudflare Turnstile + a hoisted submit handler. Owns its own scoped `<style>` block (the `.newsletter-*` rules live with the component, not in `global.css`). Smoke asserts the form is present on `/blog` and absent on `/` (regression guard against accidental lifts into shared chrome).
 - `src/components/PageHeader.astro` — shared interior-page header (`<h1>` + optional description + default slot for `.page-meta`). Used by `/work`, `/education`, `/urban-mobility`, `/privacy`, and `/blog/tag/[tag]`. `/blog` keeps its custom `.blog-header` since the RSS-link variant doesn't fit the prop shape.
 - `src/components/PostTags.astro` — `<p class="post-tags">` chip list, rendered twice by `BlogPost.astro` (header and footer). Single source of truth for the tag-list markup.
@@ -81,6 +82,24 @@ Driven by Astro Content Collections + MDX. Posts are markdown, published via `gi
 - `src/pages/blog/rss.xml.ts` — RSS feed at `/blog/rss.xml`. On-demand (not prerendered) so scheduled posts enter the feed once their `pubDate` passes, with no rebuild; sets its own `Cache-Control: public, max-age=3600` since middleware only adds cache headers to HTML responses.
 - `src/components/Figure.astro` — opt-in component for inline images with a visible caption. Import it at the top of an `.mdx` post (`import Figure from '../../../components/Figure.astro';`) plus an ESM image import for each photo, then use `<Figure src={...} alt="..." caption="..." />`. Plain markdown `![alt](src)` still works for images that don't need a caption.
 
+### Diagrams in posts
+
+When a post needs a diagram rather than a photograph, it goes in `src/components/diagrams/` as an `.astro` component emitting **hand-authored inline SVG**, imported by that one post. Three exist today, all in `the-data-was-the-hard-part.mdx`: `RegionGraphNYC.astro`, `RegionGraphChicago.astro`, and `PolygonHoleArea.astro`.
+
+Inline SVG rather than a rendered image, for reasons that are unlikely to change:
+
+- **Mermaid can't run here.** The Atlas repo draws these same shapes in mermaid, but the site ships no client JS outside the newsletter carve-out and `script-src 'self'` would block it anyway. Pre-rendering mermaid to a file means a Puppeteer/Chromium dev dependency and a visual style that fights the Broadsheet palette.
+- **It inherits the design system.** The SVG uses `.dg-*` classes defined in `global.css`, so nodes, rules, and type resolve to `--bg2`, `--border`, `--accent`, `--accent-rule`, `--muted`, `--font-ui` — the same tokens as the rest of the page, with nothing to re-sync if the palette moves.
+- Sharp at any zoom, no image weight, and the graph is readable by a screen reader via `role="img"` + `<title>` + `<desc>`.
+
+Conventions worth keeping:
+
+- **Transcribe from shipped data, not from prose or design docs.** The two region graphs were built against `api/seed/*.toml` in the Atlas repo, and the header comment in each component records the exact `parents = [...]` lines it encodes. Design docs drift — `docs/region-graph.md` renders DuPage as a stand-in for all five Chicago collar counties, which is a fine simplification in a doc but would misstate the seed if copied literally. Anything drawn from a doc instead of the data will eventually contradict the product; where a diagram does simplify, say so in the header comment and say why.
+- **A diagram of an algorithm cites the function, not the seed.** `PolygonHoleArea.astro` is the one diagram with no TOML behind it — it illustrates `polygonArea` / `nestingDepth` in `api/internal/etl/ca/geom.go`, and its header comment records the depth-parity rule it encodes. Where possible make the drawing enforce the claim rather than restate it: that shape is a single `<path>` with `fill-rule="evenodd"`, so the browser fills it by the same rule the ETL measures it by and the picture can't silently drift from the prose.
+- **Don't draw an edge the code doesn't walk.** `rollup_states` is browse-only and is deliberately absent from both region graphs — drawing it would assert exactly the relationship the diagram exists to rule out.
+- **Marker and `aria-labelledby` IDs must be unique per page.** Three diagrams render in the same post, so IDs are prefixed (`dg-nyc-*`, `dg-chi-*`, `dg-area-*`).
+- **Wide diagrams scroll, they don't shrink.** `.post-diagram` is an `overflow-x: auto` box and the SVG carries `min-width: 460px`, so on a narrow screen the diagram scrolls inside its own container while the page body never scrolls sideways. Below that floor the labels stop being legible, so scrolling is the better trade. Verify with a real narrow column — headless Chrome clamps its layout viewport to ~500px, so a 390px `--window-size` screenshot shows a cropped 500px layout and looks like a bug that isn't there.
+
 ### Frontmatter
 
 ```yaml
@@ -136,7 +155,7 @@ npm run preview-link -- my-draft --host http://127.0.0.1:8788
 
 The URL goes to stdout and the metadata to stderr, so it pipes cleanly. The script refuses to mint a link for a slug with no matching file — a typo would otherwise produce a valid-looking link that 404s.
 
-**Signed links are scoped to the post's own URL and nothing else.** They do not add the draft to `/blog`, tag pages, or `/blog/rss.xml`. That is deliberate and load-bearing: the RSS feed is what triggers Buttondown's email and LinkedIn/Bluesky fan-out, so a link you hand to a reviewer must not be able to reach it. `getPublishedPosts` therefore takes only a boolean `showScheduled`; the per-slug signal (`Astro.locals.previewSlug`) is read solely by `src/pages/blog/[...slug].astro`.
+**Signed links are scoped to the post's own URL and nothing else.** They do not add the draft to `/blog`, tag pages, or `/blog/rss.xml`. That is deliberate and load-bearing: the RSS feed is what triggers Buttondown's email — an irreversible send to real subscribers — so a link you hand to a reviewer must not be able to reach it. `getPublishedPosts` therefore takes only a boolean `showScheduled`; the per-slug signal (`Astro.locals.previewSlug`) is read solely by `src/pages/blog/[...slug].astro`.
 
 `smoke.mjs` guards this two ways, because neither alone is sufficient:
 
@@ -276,31 +295,37 @@ CI handles this via `MISE_ENV=ci` in `.github/workflows/build.yml`, so the issue
 
 PR branches get preview URLs from Cloudflare Workers Builds. **Preview deploys currently share production secrets** — a subscription via a preview URL lands in the production Buttondown account. Acceptable for a personal site (preview URLs are `noindex`'d). `wrangler.jsonc` carries a commented scaffold for isolating preview into its own environment if that ever needs to change.
 
-## Syndication (LinkedIn + Bluesky)
+## Syndication (social)
 
-New blog posts fan out to LinkedIn and Bluesky from the same Buttondown pipeline that handles email — Buttondown's Automations feature posts to both natively. **No code in this repo** owns the syndication; everything is configured operator-side in Buttondown's dashboard.
+**Social syndication is manual.** Buttondown's LinkedIn and Bluesky automations sit behind a higher plan tier than this newsletter is on, so they do **not** fire. Facebook was never offered by Buttondown at all. The only thing a published post reaches automatically is **email**.
+
+Do not write code, comments, or docs that assume a post fans out to social on its own — it doesn't.
 
 ```
-new MDX → git push → Cloudflare build → /blog/rss.xml → Buttondown polls
-                                                            ↓
-                                              ┌─────────────┼─────────────┐
-                                              ↓             ↓             ↓
-                                            email       Bluesky        LinkedIn
+new MDX → git push → Cloudflare build → /blog/rss.xml → Buttondown polls → email
+                                              │
+                                              └→ (by hand) LinkedIn · Bluesky · Facebook
 ```
 
-### Why Buttondown, not in-repo
+### Posting workflow
 
-Buttondown owns OAuth refresh (LinkedIn tokens expire in 60 days), Bluesky app-password storage, rate limiting, retries, and dedup state. Building any of that into the Worker would mean adding KV/D1 + cron triggers + smoke sad-paths for a personal site with infrequent posts. Buttondown already owns the email side; expanding to social keeps one provider, one auth surface, one place to debug. If Buttondown ever drops a platform, the escape hatch is small — a single Worker endpoint reading `/blog/rss.xml` and posting via the AT Protocol / LinkedIn API. Don't pre-build it.
+1. Merge, wait for the Cloudflare build, then **load the post's URL yourself before sharing it.** `/blog`, tag pages, and the feed all carry `Cache-Control: public, max-age=3600`, so there's up to an hour of edge-cache lag — see "Scheduled publishing". A dead link in the first ten minutes is the failure mode worth avoiding.
+2. Confirm the Buttondown email actually went out. Buttondown polls the feed; it is not instant.
+3. Write and post to LinkedIn, Bluesky, and Facebook by hand. Each wants its own register: Bluesky has a hard 300-character limit, LinkedIn truncates at roughly the first 200 characters before "see more", and Facebook is the personal-audience one.
 
-### Known limitation: LinkedIn Newsletters
+Because the posts are hand-written, they can say more than an automation would — see "If the plan is ever upgraded" for what is lost by automating.
 
-Buttondown posts to your LinkedIn **profile** as a standard post. It cannot publish to LinkedIn **Newsletters** (LinkedIn's own newsletter product) — LinkedIn doesn't expose an API for that surface, only for standard posts. The standard-post route is fine: the post text plus the canonical link does the same job.
+### If the plan is ever upgraded
 
-### Operator setup (one-time, in Buttondown dashboard)
+- **Setup**: Settings → Integrations (connect LinkedIn via OAuth, Bluesky via app password), then Settings → Automations → two new automations triggered on **When a newsletter is sent**, with actions **Create a LinkedIn post** and **Create a Bluesky post**.
+- **The body is not templatable.** Those two automations expose no body field — the post is generated from the newsletter's title and canonical URL. That is a real downgrade from a hand-written post, so upgrading is not automatically the right call; it may be worth automating Bluesky (where the 300-character limit makes copy less valuable) and continuing to write LinkedIn by hand.
+- **Stop posting manually the same day**, or the automation and a hand-written post will double up.
+- **Facebook stays manual regardless** — Buttondown has no Facebook integration at any tier.
 
-1. Settings → Integrations → connect LinkedIn (OAuth) and connect Bluesky (app password).
-2. Settings → Automations → alongside the existing RSS-to-email automation, create two more:
-   - Trigger: **When a newsletter is sent** → Action: **Create a LinkedIn post**
-   - Trigger: **When a newsletter is sent** → Action: **Create a Bluesky post**
+LinkedIn caveat that applies either way: Buttondown posts to your LinkedIn **profile** as a standard post. It cannot publish to LinkedIn **Newsletters** (LinkedIn's own newsletter product) — LinkedIn exposes no API for that surface. Posting by hand is the only route to a LinkedIn newsletter.
 
-Buttondown's LinkedIn and Bluesky automations don't expose a body-template field — the post body is generated from the newsletter's title and canonical URL automatically. Nothing in `docs/` to keep in sync for these two; the email template (`docs/buttondown-rss-template.md`) remains the only operator-managed surface.
+### Why manual, and why not in-repo
+
+Building syndication into the Worker would mean owning OAuth refresh (LinkedIn tokens expire in 60 days), Bluesky app-password storage, rate limiting, retries, and dedup state — plus KV/D1, cron triggers, and smoke sad-paths, for a personal site that posts infrequently. At this volume, writing three short posts by hand costs less than any of that and produces better copy. **Don't pre-build it.** If posting volume ever makes automation worth it, upgrading the Buttondown plan is the cheaper move than owning the auth surface here.
+
+**No code in this repo** owns syndication, and nothing in `docs/` tracks the social posts. The email template (`docs/buttondown-rss-template.md`) remains the only operator-managed surface.

@@ -14,8 +14,9 @@
 //
 // Scope note: a signed token unlocks the post's own URL only. It is
 // deliberately NOT plumbed into the blog index, tag pages, or the RSS feed —
-// RSS drives Buttondown's email + social syndication, and a preview link must
-// never be able to reach it. See CLAUDE.md, "Scheduled publishing".
+// RSS drives Buttondown's email — an irreversible send to real subscribers —
+// and a preview link must never be able to reach it. See CLAUDE.md,
+// "Scheduled publishing".
 
 /**
  * The only slug shape a preview token can carry. Deliberately narrow: the slug

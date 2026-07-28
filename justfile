@@ -63,10 +63,24 @@ smoke: build
 # wrangler secret put NAME — set a production Worker secret
 # usage: just secret BUTTONDOWN_API_KEY
 #        just secret TURNSTILE_SECRET_KEY
+#        just secret PREVIEW_SIGNING_KEY
 [group('ops')]
 [doc('wrangler secret put NAME — set a production Worker secret')]
 secret name:
     wrangler secret put {{name}}
+
+# mint a signed, expiring link that reveals ONE scheduled post on its own
+# URL — not /blog, tag pages, or RSS (see CLAUDE.md "Previewing a scheduled
+# post"; that scoping is what keeps a review link away from the feed that
+# triggers the Buttondown send). Needs PREVIEW_SIGNING_KEY in .dev.vars or
+# the environment; without it the script exits with setup instructions.
+# usage: just preview-link my-draft
+#        just preview-link my-draft --hours 4
+#        just preview-link my-draft --host http://127.0.0.1:8788
+[group('ops')]
+[doc('mint a signed preview link for one scheduled post (needs PREVIEW_SIGNING_KEY)')]
+preview-link slug *flags:
+    npm run preview-link -- {{slug}} {{flags}}
 
 # manual fallback — Cloudflare Workers Builds deploys automatically on
 # git push (see CLAUDE.md's Newsletter env table / dashboard build

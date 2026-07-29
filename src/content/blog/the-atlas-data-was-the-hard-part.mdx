@@ -21,7 +21,7 @@ Cities are complicated and their boundaries move, and all of that has to fit int
 
 I modeled the United States first, because it's where I'm from and I could check the results against places I know. ZIP codes were the obvious anchor — it's what a visitor types in. But a ZIP code is a postal delivery route, not a place anyone organizes around, so it can't be the unit the whole model hangs off.
 
-The Census publishes a ready-made alternative: the Metropolitan Statistical Area, a city plus the counties that commute into it. For a while I assumed that was my answer. It isn't, because advocacy is more local than that. 11217 is Brooklyn, but it's also Park Slope, which has no border you can look up anywhere. And 11217 sits inside the New York-Newark-Jersey City metro area, which the Census draws across two states — while Stamford, Connecticut commutes into Manhattan from outside that boundary, and Hartford, two hours further up I-91, isn't part of the New York region at all.
+The Census publishes a ready-made alternative: the Metropolitan Statistical Area, a city plus the counties that commute into it. It's a *functional* geography — drawn from where people actually travel, rather than from an administrative line — which is the right instinct. For a while I assumed it was my answer. It isn't, because advocacy is more local than that. 11217 is Brooklyn, but it's also Park Slope, which has no border you can look up anywhere. And 11217 sits inside the New York-Newark-Jersey City metro area, which the Census draws across two states — while Stamford, Connecticut commutes into Manhattan from outside that boundary, and Hartford, two hours further up I-91, isn't part of the New York region at all.
 
 I needed a way to represent geographic relationships that aren't strictly hierarchical, so I opened a brainstorming session with Claude: "let's start by modeling New York City, Chicago, and San Francisco." I picked those three because I've lived in or visited each enough to know when an answer was wrong.
 
@@ -53,7 +53,9 @@ Tri-State in, Bike JC out. If I'd parented New York State under the metro instea
 
 The same shape handles messier cases without special-casing any of them. Chicago is the clearest example of why tiers refuse to line up. Chicagoland spills across the state line into northwest Indiana, so the Census metro area is officially an Illinois-Indiana one.
 
-The RTA, the transit district that funds the trains and buses there, stops dead at the Illinois border: Cook County plus five collar counties and nothing else. I only knew that boundary existed because I spent years in Chicago's advocacy world. Two different shapes over roughly the same place, so they became two different nodes instead of one blurred tier. (Illinois has since folded the RTA into the new Northern Illinois Transit Authority and the Atlas data still says RTA, which is its own small lesson about the year a dataset was frozen in.)
+The RTA, the transit district that funds the trains and buses there, stops dead at the Illinois border: Cook County plus five collar counties and nothing else. That's a third kind of boundary — not functional, not administrative, but the reach of a service and of the body that governs it. I only knew it existed because I spent years in Chicago's advocacy world. Two different shapes over roughly the same place, so they became two different nodes instead of one blurred tier.
+
+The RTA is itself mid-transition, which makes the point better than I could have staged it. Illinois's new Northern Illinois Transit Authority formally takes over on September 1st, a month after this post goes up. The Atlas data says RTA, which is right today and won't be for long.
 
 A search from downtown Chicago picks up both nodes. A search from Gary, Indiana picks up the metro and Indiana's groups but never the RTA and never Illinois — right, because Gary sits inside the metro but outside the RTA's service area and its governance.
 
@@ -67,7 +69,7 @@ I'm proud of the region graph. But designing the shape was only half the job. It
 
 ## Generating the graph
 
-The region graph isn't hand-written. Underneath it is a pipeline that reads six staged upstream files and generates every data file the API ships with. Four are American: the US Census Bureau's metro delineation list, two crosswalks from the 2020 census tying ZCTAs (ZIP Code Tabulation Areas, the Census's stand-in for a ZIP code) to counties and places, and the Department of Housing and Urban Development's ZIP-to-county file. Two are Canadian, both Statistics Canada boundary shapefiles. One command per country rebuilds all of it: 393 US metros and 41 Canadian ones, 530 rows once the cross-border portions are counted separately, plus the anchors for over 40,000 postal codes.
+The region graph isn't hand-written. Underneath it is a pipeline that reads six staged upstream files and generates every data file the API ships with. Four are American: the US Census Bureau's [metro delineation list](https://www.census.gov/geographies/reference-files/time-series/demo/metro-micro/delineation-files.html), two [crosswalks from the 2020 census](https://www.census.gov/geographies/reference-files/time-series/geo/relationship-files.2020.html) tying ZCTAs (ZIP Code Tabulation Areas, the Census's stand-in for a ZIP code) to counties and places, and the Department of Housing and Urban Development's [ZIP-to-county file](https://www.huduser.gov/portal/datasets/usps_crosswalk.html). Two are Canadian, both [Statistics Canada boundary shapefiles](https://www12.statcan.gc.ca/census-recensement/2021/geo/sip-pis/boundary-limites/index2021-eng.cfm?year=21). One command per country rebuilds all of it: 393 US metros and 41 Canadian ones, 530 rows once the cross-border portions are counted separately, plus the anchors for over 40,000 postal codes.
 
 I was insistent on one property here. The generator had to be deterministic — same source data in, byte-identical files out — which is what makes the data reviewable. When a regenerated file comes back with a diff (a line-by-line comparison of what it used to say against what it says now), the upstream data really changed. A check regenerates the region files and fails if the result doesn't match what's committed, so nobody, me included, can quietly hand-edit generated data and have it survive.
 
@@ -75,7 +77,7 @@ This is how I ended up staring at Connecticut. I'd been asking everyone I knew i
 
 At lunch with some of my wife's extended family, who live up in Stamford, CT, I asked for their ZIP code and tried it. It rolled up to the State of Connecticut and stopped, when I'd have expected Tri-State orgs too. Stamford is 45 minutes from Grand Central and you're trying to tell me this isn't part of the NYC metro? Something was wrong, so I went digging.
 
-Two of the federal datasets I was combining turned out to be different vintages of the same geography — snapshots of the same map taken years apart. The Census Bureau had swapped Connecticut's eight counties for nine new planning regions in 2022, and only one of the two files had caught up. Neither was wrong. They just disagreed about what year it was.
+Two of the federal datasets I was combining turned out to be different vintages of the same geography — snapshots of the same map taken years apart. The Census Bureau had swapped Connecticut's eight counties for nine new planning regions in 2022, and only one of the two files had caught up. That swap wasn't housekeeping, either: the planning regions are the state's councils of governments, and Connecticut abolished county government in 1960, so its counties had been empty statistical containers for sixty years. Neither file was wrong. They just disagreed about what year it was.
 
 The join between them returned nothing at all, which is the worst possible outcome, because the model still looked like it was working — it just returned the state. Hundreds of ZIP codes sat at the state line instead of in their actual metro, and they'd have stayed there if I hadn't gone looking. Writing the pass to reconcile the vintages didn't take very long; once I understood the problem I could articulate it to Claude and get a fix deployed. No amount of AI review was ever going to catch it, though.
 
@@ -83,15 +85,15 @@ That was only half of it. The Stamford ZIPs now landed in their own metro, Bridg
 
 The Canadian side broke differently. Matching each FSA to the CMA it overlaps most sounds like a lookup but is really a measurement: clip the FSA's boundary against the metro's, then measure how much shape is left over. A library does the clipping. Nothing in it measures the area, so that part I had to write.
 
-The problem sounds simple: take a clipped shape and work out how much area it contains. The catch is that a shape like that isn't one outline. It's several — an outer boundary, anything punched out of the middle like a lake or a river, and any islands sitting inside those. Add them all up and you get the wrong answer, because the holes need to come off the total, not onto it. So something has to decide which outlines are holes.
+The problem sounds simple: take a clipped shape and work out how much area it contains. The catch is that a shape like that isn't one outline. It's several — an outer boundary, anything punched out of the middle like a lake or a river, and any islands sitting inside those. So something has to decide which outlines are holes, because those come off the total rather than onto it.
 
 The tempting shortcut is to read the direction each outline was drawn in, since a hole is conventionally drawn the opposite way round from the boundary it sits in. Do that and the holes subtract themselves.
 
-That's the assumption that breaks, because the clipping library doesn't honor that convention. It hands back outlines in whatever order it traced them, each drawn in whichever direction the algorithm happened to go, so a hole can come back drawn the same way round as the boundary around it. Its area then gets *added* instead of subtracted.
+That's the assumption that breaks, because the clipping library doesn't honor that convention. It hands back outlines in whatever direction the algorithm happened to trace them, so a hole can come back drawn the same way round as the boundary around it, and its area gets *added* instead of subtracted.
 
 Nothing crashes. Nothing throws an error. The number just comes back too big, and that number is what decides which metro an FSA belongs to.
 
-I found it by hand, and fairly close to by accident. I didn't really know all that many Canadian postal codes, so I was just typing in ones I'd found online for cities I knew, like Windsor, Ontario, which I used to visit occasionally when I still lived in Detroit. One of those runs came back wrong. Nothing had actually shipped wrong up to that point, but nothing in the run would have told me if it had, and that is a much worse feeling than a failing test.
+I found it by hand, and fairly close to by accident. I didn't really know all that many Canadian postal codes, so I was just typing in ones I'd found online for cities I knew, like Windsor, Ontario, which I used to visit when I still lived in Detroit. One of those runs came back wrong. Nothing had actually shipped wrong up to that point, but nothing would have told me if it had, and that is a much worse feeling than a failing test.
 
 Claude and I fixed it by throwing out the drawing direction entirely and reading the nesting instead. The code counts how many of the other outlines each outline sits inside. An odd number means it's a hole, so its area comes off the total. An even number, including zero, means it's solid, so it gets added. Which way it was drawn never enters the calculation.
 
@@ -101,13 +103,13 @@ The picture below uses a shape the Canadian data really produces: an FSA along t
 
 And then that fix had its own plausible-looking bug.
 
-To ask whether one outline sits inside another, you need a point that's definitely inside the first. The obvious candidate is one of its corners, and that is exactly the wrong choice, because two outlines in a clipped shape can meet at a corner. A code-review pass by a fresh agent that hadn't written any of it caught it on a test polygon: true area 9,200, measured 10,800. The hole had been counted as solid. I was already struggling to hold all of this in my head, so seeing that had me throw my hands up a bit.
+To ask whether one outline sits inside another, you need a point that's definitely inside the first. The obvious candidate is one of its corners, and that is exactly the wrong choice, because two outlines in a clipped shape can meet at a corner. A code-review pass by a fresh agent caught it on a test polygon: true area 9,200, measured 10,800. The hole had been counted as solid. I was already struggling to hold all of this in my head, so seeing that had me throw my hands up a bit.
 
 The AI wrote plausible geometry code very fast, then wrote a plausible fix for it, and I signed off on both. Plausible is not the same thing as correct, and the only thing standing between the two was someone taking a deliberate second look: me on the first bug, a fresh review agent on the second.
 
 ## Cataloging the organizations
 
-Cataloging 236 organizations across two countries could easily have taken months. AI let me do it in a little over a month, casting a far wider net than I could have alone. But the data still had to be verified.
+Cataloging 236 organizations across two countries could easily have taken months. AI let me do it in a little over a month. The data still had to be verified, though.
 
 First I had to decide what belonged, so I defined a set of criteria that went into every request to AI (full list [on the About page](https://urbanistatlas.com/about)).
 
@@ -120,21 +122,23 @@ First I had to decide what belonged, so I defined a set of criteria that went in
 
 Those six rules look like an implementation detail. They're closer to the definition of the Atlas itself — what belongs, what doesn't, and therefore what the whole thing is *for*. Every one is a call I had to make before any AI research was worth anything.
 
-In practice I hold "active" to a harder line: the evidence has to be on the organization's own site or social presence. External press alone doesn't clear the bar. A group other people still write about but that hasn't posted in two years isn't one I can confidently send someone to.
+In practice I hold "active" to a harder line: the evidence has to be on the organization's own site or social presence, not in external press. A group other people still write about but that hasn't posted in two years isn't one I can confidently send someone to.
+
+That test has a bias worth naming, though. It measures *visible* activity, which isn't quite the same as activity: a volunteer-run group doing real work with a neglected website reads as dead to me. So the Atlas skews toward organizations with the capacity to keep a web presence up — bigger, newer, better resourced, English-language. It's a proxy, and I haven't found a better one that a single person can actually check.
 
 So, using the rules above, here's the typical workflow for adding new organizations.
 
 1. Prompt: "Please do a deep dive into organizations that are focused on advocating for safe, sustainable, and human-focused city design and transportation. Ensure that organizations follow the editorial rules defined. Review social media presence to determine activity. Ask me if you're unsure about a specific org."
 2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Then I'd review every org myself and run a custom-built `just verify-org-urls`, which spins up an Alpine Linux container routed through a WireGuard VPN tunnel, hits every URL in the dataset, and flags anything dead, redirected off-domain, or parked. Anything I couldn't verify came out. This is deliberately boring, deterministic tooling: rather than asking an AI whether a URL looks valid, I ask a machine whether it actually resolves.
-3. Prompt: "Do another pass to look for orgs in `<region>`, seeing if we missed any or falsely flagged any that we should exclude based on the criteria." Then another review step.
+3. A third pass looking for orgs I'd missed in a given region, or falsely excluded. Then another review step.
 
-AI was genuinely good at the first half of that loop, surfacing candidates I'd never have found. It was never the authority on whether an organization actually belonged. That call, and the verification behind it, will always be mine.
+AI was genuinely good at the first half of that loop, casting a far wider net than I could have alone. It was never the authority on whether an organization actually belonged. That call, and the verification behind it, will always be mine.
 
 Around the same time I added a submission desk. When I approve a visitor-submitted org, a worker opens a GitHub pull request adding it to the dataset, so I review a diff instead of a raw report. Because the data is baked into the binary, it goes live on the next deployment.
 
 ## Did Claude hallucinate?
 
-Yes, occasionally. I didn't encounter organizations that appeared to be entirely fabricated, but it guessed at URLs that didn't exist and handed me metadata that wasn't accurate. Human review and the later agent passes caught those — which is the distinction that mattered through the whole effort: AI-assisted research isn't AI-verified research. The model was good at breadth and discovery. Verification took deterministic tooling and a person actually looking.
+Yes, occasionally. I didn't encounter organizations that appeared to be entirely fabricated, but it guessed at URLs that didn't exist and handed me metadata that wasn't accurate. Human review and the later agent passes caught those — which is the distinction that mattered through the whole effort: AI-assisted research isn't AI-verified research. The model was good at breadth. Verification took deterministic tooling and a person actually looking.
 
 ## Closing thoughts
 

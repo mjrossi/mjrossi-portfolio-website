@@ -287,38 +287,9 @@ CI handles this via `MISE_ENV=ci` in `.github/workflows/build.yml`, so the issue
 
 **Other smoke gotchas worth knowing:**
 
-- **A previous smoke run left wrangler running.** This is the single most common local failure, and it has *two* different symptoms — see the next bullet, which is the same root cause wearing a disguise. The script spawns `wrangler dev` on port 8788 and traps SIGINT/SIGTERM to clean up, but a hard kill (timeout, `kill -9`, sandbox shutdown) or an interrupted agent turn leaves the process orphaned. Symptom: smoke prints `Address already in use (127.0.0.1:8788)` and bails.
-
-  Fix — match on the **binary path** and kill by PID, then verify the count is zero before doing anything else:
-
-  ```sh
-  ps -eo pid,args --no-headers | awk '/bin\/workerd|wrangler-dist/ && !/awk/ {print $1}' \
-    | while read p; do kill -9 "$p"; done
-  ps -eo pid,args --no-headers | awk '/bin\/workerd|wrangler-dist/ && !/awk/' | wc -l   # must be 0
-  ```
-
-  **Do not use `pkill -f wrangler`.** The pattern text appears in the command line of the shell you type it in, so pkill matches your own session and kills it — you get a silent non-zero exit and nothing cleaned up. Bracket tricks (`"[w]rangler"`) are unreliable here too, because the command may be re-quoted through an `eval` wrapper before pkill sees it. Path-anchored `ps | awk | kill` is the only form that has worked consistently.
+- **A previous smoke run left wrangler running.** The script spawns `wrangler dev` on port 8788 and traps SIGINT/SIGTERM to clean up, but a hard kill (timeout, `kill -9`, sandbox shutdown) leaves the process orphaned. Symptom: smoke prints `Address already in use (127.0.0.1:8788)` and bails. Fix: `pkill -9 -f wrangler && pkill -9 -f workerd` (and confirm with `lsof -i :8788`), then re-run.
 - **Cold-start wrangler can take 30–60s** in slow environments. The script's internal `READY_TIMEOUT_MS` is 30s; if your wrapper has its own timeout, give smoke at least 2 minutes end-to-end.
 - **Build is stale.** Smoke reads `dist/client/` plus on-demand routes from the worker bundle. If you tweak source files and run smoke without rebuilding, you're testing the previous build. Always `npm run build && npm run smoke` together (or use the chained commands above).
-- **An orphaned wrangler also breaks the *next build*, not just the next smoke.** Same root cause as the bullet above; entirely different-looking failure. The build's prerender step boots its own workerd via `@astrojs/cloudflare`, and if a stray `wrangler dev` is still alive holding miniflare's local SQLite state in `.wrangler/state`, the build's runtime collides with it and dies. Symptom is a build failure that reads like a broken binary rather than a stale process:
-
-  ```
-  *** Fatal uncaught kj::Exception: workerd/util/sqlite.c++:844: failed: SENTRY_DO SQLite failed;
-  dbErrorMessage(...) = table _cf_ALARM has 3 columns but 2 values were supplied: SQLITE_ERROR
-  MiniflareCoreError [ERR_RUNTIME_FAILURE]: The Workers runtime failed to start.
-  ```
-
-  Note the misdirection: the build that fails is the one *after* the smoke run, so the source change you just made looks like the cause and isn't.
-
-  **Fix in this order — the order is the whole trick.**
-
-  1. Kill the processes using the `ps | awk | kill` form above, and **verify the count is zero.**
-  2. `rm -rf .wrangler /tmp/miniflare-*` — both. `.wrangler` is gitignored and safe to delete; miniflare also leaves scratch directories in `/tmp` that outlive the run.
-  3. Rebuild.
-
-  Each step alone looks like it works and then doesn't, which is why this took three passes to pin down. Deleting the directories while a stray process is alive is useless — it recreates them and the next build fails identically. Killing without deleting leaves the poisoned SQLite behind. And checking for stray processes *before* a failed build tells you nothing, because the failed build spawns its own that linger for the next one.
-
-  Note also that a **successful** `npm run smoke` leaves workerd running. This is routine, not a crash artifact, so assume you need step 1 every time rather than only after something has gone wrong. Observed on Astro 7 / wrangler 4 in the Linux sandbox; CI starts from a clean checkout with no long-lived processes, so it never hits this.
 
 ### Preview deploys
 

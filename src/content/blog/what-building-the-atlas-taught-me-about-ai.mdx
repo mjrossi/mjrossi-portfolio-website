@@ -5,6 +5,8 @@ pubDate: 2026-08-11
 tags: ["urban-mobility", "urbanist-atlas", "artificial-intelligence", "software-engineering", "open-source"]
 ---
 
+<small>This concludes a three-part series. If you're starting here, I'd recommend reading the [first post](/blog/i-used-ai-to-build-the-urbanist-atlas/) before continuing.</small>
+
 Over the last two posts I wrote about the thought process behind the Urbanist Atlas: [the code](/blog/i-used-ai-to-build-the-urbanist-atlas/) — the Go API and the React frontend — and then [the data](/blog/the-atlas-data-was-the-hard-part/), where modeling cities and verifying organizations turned out to be the harder half.
 
 This is the third and final part, where I step away from the technical and get to what I actually learned.
@@ -19,14 +21,14 @@ Despite all the human review I built into the process, not writing the code myse
 
 And the end result isn't the only thing that has to be right. I still had to flesh out the security parameters, and make the deploy strategy robust enough to survive an intermittent failure. I still had to decide how third-party libraries got imported and used, and how the abstractions across the network, database, and hardware layers fit together. None of that shows up in a demo that works.
 
-The AI can do it. It's probably good enough, and it does work. But is it _really_ the best for _your_ specific problem? That's hard to answer with AI-assisted coding like this.
+AI can do all of that. It's often good enough, and it does work. But is it _really_ the best for _your_ specific problem? That's hard to answer with AI-assisted coding like this.
 
 ### The energy and environmental cost
 
 I paid for one month of a Claude Max subscription to do this. That's $100. To say nothing of the fact that many people can't afford that sort of spend, there are a lot of tokens spent on each subagent, each feature, each AI-assisted review cycle or organizational pass. Data centers are expanding rapidly to meet increased demand. In my home state of Michigan, at least thirteen data centers are in various planning stages, and [residents are organizing against them](https://www.reuters.com/world/us/americans-are-angry-about-data-centers-politicians-are-feeling-pressure-2026-07-16/). They cite impacts on their towns' water supply, power grid, and rural character.
 
 I did make some deliberate choices not to reach for the biggest hammer by default. Opus was my primary model, but simpler subagent work — a documentation pass, a formatting cleanup, a first read of a diff — went to Haiku or Sonnet instead. Those are smaller models: fewer calculations per word, and correspondingly less electricity to answer with. I tried to keep agents few and tightly scoped rather than spawning a swarm just because I could, and to batch review passes instead of re-running them every time I changed my mind.
-
+ƒ
 I had this in the back of my mind when writing the Atlas, and I admit it's a hard trade-off that I didn't have a good answer to. The concept of tokens often feels really abstract, so I can't piece together how compute-intensive these tasks are. It was restraint by instinct rather than by instrumentation, which is a weaker answer than the question deserves.
 
 ## Five lessons from building with AI
@@ -75,7 +77,7 @@ So the practical version is: delegate the ordinary parts hard, and before you st
 
 The fact is that these are machines with limitations. It's important not to anthropomorphize them: they can make mistakes, just like the humans whose work they learned from.
 
-The mistakes aren't really the point, though. The six inclusion criteria from the second post were the easy half. No training corpus was going to tell me that housing and YIMBY work — a neighboring movement, and a friendly one — sits outside the Atlas's scope, and Open New York is a group I like and left out anyway. That's a decision about what the directory is for and who it owes something to, and I'd make it again.
+The mistakes aren't the point, though. The six inclusion criteria from the second post were the easy half. No training corpus was going to tell me that housing and YIMBY work — a neighboring movement, and a friendly one — sits outside the Atlas's scope, and Open New York is a group I like and left out anyway. That's a decision about what the directory is for and who it owes something to, and I'd make it again.
 
 The harder half is that the six rules don't cover their own edges. PedSafe Vegas clears every one of them and I excluded it regardless, because a program housed inside a university is the same call I'd already made about a chapter that doesn't incorporate separately from its state organization. Nothing in the published criteria says that. It's precedent I built one organization at a time, and I only found out what the next rule was when something forced it.
 
@@ -85,7 +87,7 @@ There's a reason I think about Data, the character from Star Trek: The Next Gene
 
 ## If you want to try something like this
 
-Getting from an idea to a working prototype has never been easier, and I do hope that means ideas come to life that otherwise wouldn't. But I'd be wary of anyone handing you a process to copy, mine included. The specific shape of this project came out of what I already had — thirteen years of backend work, almost no frontend, and a subject I care about enough to argue with a model about. Yours will come out of something different. Where you know the domain, hand off aggressively and review fast. Where you don't, slow down — or the AI's plausible answer will get expensive to untangle.
+Getting from an idea to a working prototype has never been easier, and I do hope that means ideas come to life that otherwise wouldn't. But I'd be wary of anyone handing you a process to copy, mine included. The specific shape of this project came out of what I already had — thirteen years of backend work, almost no frontend, and a subject I care about enough to argue with a model about. Yours will come out of something different. Where you know the domain, _hand off aggressively_ and _review fast_. Where you don't, slow down — or the AI's plausible answer will get expensive to untangle.
 
 Beyond the model choices I mentioned earlier, the tooling is all there to borrow. Since the code is open source, I'd encourage you to look at my `just` file if you want to take any of it — like the containerized link validation that checks every organization's website through a VPN and flags the dead ones.
 

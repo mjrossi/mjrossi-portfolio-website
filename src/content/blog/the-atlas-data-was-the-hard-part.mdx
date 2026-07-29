@@ -69,7 +69,7 @@ I'm proud of the region graph. But designing the shape was only half the job. It
 
 The region graph isn't hand-written. Underneath it is a pipeline that reads six staged upstream files and generates every data file the API ships with. Four are American: the US Census Bureau's metro delineation list, two crosswalks from the 2020 census tying ZCTAs (ZIP Code Tabulation Areas, the Census's stand-in for a ZIP code) to counties and places, and the Department of Housing and Urban Development's ZIP-to-county file. Two are Canadian, both Statistics Canada boundary shapefiles. One command per country rebuilds all of it: 393 US metros and 41 Canadian ones, 530 rows once the cross-border portions are counted separately, plus the anchors for over 40,000 postal codes.
 
-I was insistent on one property. The generator had to be deterministic — same source data in, byte-identical files out — which is what makes the data reviewable. When a regenerated file comes back with a diff (a line-by-line comparison of what it used to say against what it says now), the upstream data really changed. A check regenerates the region files and fails if the result doesn't match what's committed, so nobody, me included, can quietly hand-edit generated data and have it survive.
+I was insistent on one property here. The generator had to be deterministic — same source data in, byte-identical files out — which is what makes the data reviewable. When a regenerated file comes back with a diff (a line-by-line comparison of what it used to say against what it says now), the upstream data really changed. A check regenerates the region files and fails if the result doesn't match what's committed, so nobody, me included, can quietly hand-edit generated data and have it survive.
 
 This is how I ended up staring at Connecticut. I'd been asking everyone I knew in other cities to hammer on early versions — the fastest way to vet the model against places I couldn't check myself.
 
@@ -77,7 +77,7 @@ At lunch with some of my wife's extended family, who live up in Stamford, CT, I 
 
 Two of the federal datasets I was combining turned out to be different vintages of the same geography — snapshots of the same map taken years apart. The Census Bureau had swapped Connecticut's eight counties for nine new planning regions in 2022, and only one of the two files had caught up. Neither was wrong. They just disagreed about what year it was.
 
-The join between them returned nothing at all, which is the worst possible outcome, because the model still looked like it was working — it just returned the state. Hundreds of ZIP codes sat at the state line instead of in their actual metro, and they'd have stayed there if I hadn't gone looking. Writing the pass to reconcile the vintages didn't take long; once I understood the problem I could articulate it to Claude and get a fix deployed. No amount of AI review was going to catch it, though.
+The join between them returned nothing at all, which is the worst possible outcome, because the model still looked like it was working — it just returned the state. Hundreds of ZIP codes sat at the state line instead of in their actual metro, and they'd have stayed there if I hadn't gone looking. Writing the pass to reconcile the vintages didn't take very long; once I understood the problem I could articulate it to Claude and get a fix deployed. No amount of AI review was ever going to catch it, though.
 
 That was only half of it. The Stamford ZIPs now landed in their own metro, Bridgeport-Stamford-Danbury, and still surfaced no Tri-State orgs, because nothing in that metro's record pointed up at the Tri-State region. I gave it that parent, and it's the only Connecticut metro that has one. Hartford, New Haven, Waterbury and Norwich all stop at the state — the same line the New Jersey groups are on, drawn inside a single state this time. Fairfield County commutes into Manhattan; the rest of Connecticut, quite reasonably, does not consider itself part of the New York region.
 
@@ -91,7 +91,7 @@ That's the assumption that breaks, because the clipping library doesn't honor th
 
 Nothing crashes. Nothing throws an error. The number just comes back too big, and that number is what decides which metro an FSA belongs to.
 
-I found it by hand. I don't know many Canadian postal codes, so I was typing in ones I'd found online for cities I knew, like Windsor, Ontario, which I used to visit when I lived in Detroit. One of those runs came back wrong. Nothing had actually shipped wrong up to that point, but nothing in the run would have told me if it had, and that is a much worse feeling than a failing test.
+I found it by hand, and fairly close to by accident. I didn't really know all that many Canadian postal codes, so I was just typing in ones I'd found online for cities I knew, like Windsor, Ontario, which I used to visit occasionally when I still lived in Detroit. One of those runs came back wrong. Nothing had actually shipped wrong up to that point, but nothing in the run would have told me if it had, and that is a much worse feeling than a failing test.
 
 Claude and I fixed it by throwing out the drawing direction entirely and reading the nesting instead. The code counts how many of the other outlines each outline sits inside. An odd number means it's a hole, so its area comes off the total. An even number, including zero, means it's solid, so it gets added. Which way it was drawn never enters the calculation.
 
@@ -101,7 +101,7 @@ The picture below uses a shape the Canadian data really produces: an FSA along t
 
 And then that fix had its own plausible-looking bug.
 
-To ask whether one outline sits inside another, you need a point that's definitely inside the first. The obvious candidate is one of its corners, and that's exactly the wrong choice, because two outlines in a clipped shape can meet at a corner. A code-review pass by a fresh agent that hadn't written any of it caught it on a test polygon: true area 9,200, measured 10,800. The hole had been counted as solid. I was already struggling to hold all of this in my head, so seeing that had me throw my hands up a bit.
+To ask whether one outline sits inside another, you need a point that's definitely inside the first. The obvious candidate is one of its corners, and that is exactly the wrong choice, because two outlines in a clipped shape can meet at a corner. A code-review pass by a fresh agent that hadn't written any of it caught it on a test polygon: true area 9,200, measured 10,800. The hole had been counted as solid. I was already struggling to hold all of this in my head, so seeing that had me throw my hands up a bit.
 
 The AI wrote plausible geometry code very fast, then wrote a plausible fix for it, and I signed off on both. Plausible is not the same thing as correct, and the only thing standing between the two was someone taking a deliberate second look: me on the first bug, a fresh review agent on the second.
 
@@ -122,13 +122,13 @@ Those six rules look like an implementation detail. They're closer to the defini
 
 In practice I hold "active" to a harder line: the evidence has to be on the organization's own site or social presence. External press alone doesn't clear the bar. A group other people still write about but that hasn't posted in two years isn't one I can confidently send someone to.
 
-The typical workflow for adding organizations:
+So, using the rules above, here's the typical workflow for adding new organizations.
 
 1. Prompt: "Please do a deep dive into organizations that are focused on advocating for safe, sustainable, and human-focused city design and transportation. Ensure that organizations follow the editorial rules defined. Review social media presence to determine activity. Ask me if you're unsure about a specific org."
-2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Then I'd review every org myself and run a custom-built `just verify-org-urls`, which spins up an Alpine Linux container routed through a WireGuard VPN tunnel, hits every URL in the dataset, and flags anything dead, redirected off-domain, or parked. Anything I couldn't verify came out. Deliberately boring tooling: rather than asking an AI whether a URL looks valid, I ask a machine whether it resolves.
+2. Prompt (new agent): "Review all of the orgs found in the recent pass. Ensure they meet the criteria. Check the websites and social media presence for activity". Then I'd review every org myself and run a custom-built `just verify-org-urls`, which spins up an Alpine Linux container routed through a WireGuard VPN tunnel, hits every URL in the dataset, and flags anything dead, redirected off-domain, or parked. Anything I couldn't verify came out. This is deliberately boring, deterministic tooling: rather than asking an AI whether a URL looks valid, I ask a machine whether it actually resolves.
 3. Prompt: "Do another pass to look for orgs in `<region>`, seeing if we missed any or falsely flagged any that we should exclude based on the criteria." Then another review step.
 
-AI was good at the first half of that loop, surfacing candidates I'd never have found. It was never the authority on whether an organization belonged. That call, and the verification behind it, will always be mine.
+AI was genuinely good at the first half of that loop, surfacing candidates I'd never have found. It was never the authority on whether an organization actually belonged. That call, and the verification behind it, will always be mine.
 
 Around the same time I added a submission desk. When I approve a visitor-submitted org, a worker opens a GitHub pull request adding it to the dataset, so I review a diff instead of a raw report. Because the data is baked into the binary, it goes live on the next deployment.
 
@@ -138,7 +138,7 @@ Yes, occasionally. I didn't encounter organizations that appeared to be entirely
 
 ## Closing thoughts
 
-Every one of those 236 entries is a room full of people somewhere, arguing about a bus route. I spent a month building a machine to find those rooms, and it's good at it. I found Riders Alliance the slow way, in an online thread full of New York transit obsessives, which is exactly the errand the Atlas now runs for you in about a second.
+Every one of those 236 entries is a room full of people somewhere, arguing about a bus route. I spent a month building a machine to find those rooms, and it's genuinely good at it. I found Riders Alliance the slow way, in an online thread full of New York transit obsessives, which is exactly the errand the Atlas now runs for you in about a second.
 
 But finding them was never the hard part. Joining was: turning up to meetings, going to the gala, giving them money. No directory does that step for you, and it's the only step that has ever changed a bus route.
 

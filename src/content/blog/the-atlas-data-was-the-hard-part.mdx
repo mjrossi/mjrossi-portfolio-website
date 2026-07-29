@@ -57,7 +57,7 @@ A search from downtown Chicago picks up both nodes. A search from Gary, Indiana 
 
 None of it is hard-coded to the US. Canada gets the same graph with no county layer to lean on, so postal codes anchor at the FSA (Forward Sortation Area, the smallest postal geography Canada publishes boundaries for) and match to the CMA (census metropolitan area, Canada's equivalent of an MSA) whose boundary they overlap most — unless I've curated a city underneath, which takes precedence.
 
-I modeled Portugal because I was about to move to Lisbon and wanted to understand where I was going and because nobody designed Portuguese administrative geography with North America in mind. The Área Metropolitana de Lisboa is a real authority of eighteen municipalities, but the EU's 2024 statistical revision cut that same ground in two at the Tejo: Grande Lisboa to the north, Península de Setúbal to the south. So the metro has two parents, for the same reason Brooklyn does. Madeira needs the reverse — an autonomous region sitting parallel to that tier, with no parent at all. None of it is live, though: the seed sits in the repo next to the US and Canadian ones, but the running API won't load it until the editorial coverage is there.
+I modeled Portugal because I was about to move to Lisbon and wanted to understand where I was going, and because nobody designed Portuguese administrative geography with North America in mind. The Área Metropolitana de Lisboa is a real authority of eighteen municipalities, but the EU's 2024 statistical revision cut that same ground in two at the Tejo: Grande Lisboa to the north, Península de Setúbal to the south. So the metro has two parents, for the same reason Brooklyn does. Madeira needs the reverse — an autonomous region sitting parallel to that tier, with no parent at all. None of it is live, though: the seed sits in the repo next to the US and Canadian ones, but the running API won't load it until the editorial coverage is there.
 
 I'm proud of the region graph. But designing the shape was only half the job — it still had to be *built*, out of real government data rather than a few hand-picked cities I happened to know.
 
@@ -101,7 +101,7 @@ The AI wrote plausible geometry code very fast, then wrote a plausible fix for i
 
 Cataloging 236 organizations across two countries could easily have taken months. AI let me do it in a little over a month. The data still had to be verified, though.
 
-First I had to decide what belonged, so I defined a set of criteria that went into every request to AI (full list [on the About page](https://urbanistatlas.com/about)).
+First I had to decide what belonged, so I defined a set of criteria that went into every request to AI (the published list is [on the About page](https://urbanistatlas.com/about)).
 
 1. Geographic focus — a defined region, because the best advocacy happens locally
 2. Active advocacy — visible public-facing work in the last 12 months, including campaigns, hearings, testimony, organizing
@@ -112,15 +112,22 @@ First I had to decide what belonged, so I defined a set of criteria that went in
 
 Those six rules look like an implementation detail. They're closer to the definition of the Atlas itself — what belongs, what doesn't, and therefore what the whole thing is *for*. Every one is a call I had to make before any AI research was worth anything.
 
-Frankly, having to cut any organization doing good work from this list was a difficult choice. Looking at housing and YIMBY groups explicitly, they have so many overlapping parallels. More housing brings down living costs, and can reduce car dependency. They often do show up right alongside safe streets groups who advocate for environmentally sustainable land use. It's two sides of the same coin in many ways, but the idea was to allow the housing groups to focus exclusively on housing, and keep the Atlas tight. It's an editorial decision I could see being challenged on in the future.
+Frankly, having to cut any organization doing good work from this list was a difficult choice. Housing and YIMBY groups are the ones I keep second-guessing. More housing brings down living costs and can reduce car dependency, and those groups often show up right alongside safe streets advocates arguing for the same sustainable land use. But a directory that indexes everything adjacent stops being useful for the thing you came to it for, so I kept the scope narrow. It's an editorial decision I could see being challenged on in the future.
+
+{/* Optional: name one housing/YIMBY org you left out. I didn't add one because
+    I don't know which you actually considered, and inventing a name here would
+    be worse than leaving it abstract. One real name would do for this paragraph
+    what PedSafe does for the one below. */}
 
 In practice I hold "active" to a harder line: the evidence has to be on the organization's own site or social presence, not in external press. A group other people still write about but that hasn't posted in two years isn't one I can confidently send someone to.
 
 That test has a bias worth naming, though. It measures *visible* activity, which isn't quite the same as activity: a volunteer-run group doing real work with a neglected website reads as dead to me. So the Atlas skews toward organizations with the capacity to keep a web presence up — bigger, newer, better resourced, English-language. It's a proxy, and I haven't found a better one that a single person can actually check.
 
-An example of an organization that was difficult is PedSafe Vegas. It passes all six published rules, but it was excluded. I made an editorial decision to treat university-housed programs the same way as regional sub-committees of a larger nonprofit. Bike Walk Chattanooga exists under Bike Walk Tennessee without independent incorporation, so it doesn't get its own entry.
+PedSafe Vegas is the one I found hardest. It's a pedestrian-safety program run out of UNLV's transportation research center, and it clears all six of the rules above: it's local, it's active, it's squarely on topic. UNLV is a public university, but rule four is about transportation agencies — DOTs, transit boards — not every organization with public money behind it. I excluded PedSafe anyway.
 
-Southern Nevada Bicycle Coalition was admitted for Vegas instead. A user looking up a Vegas postal code would never know PedSafe was considered. These are challenging calls to make as one person working against an editorial line. Ideally, with the addition of the submission desk and a growing userbase, this process begins to shift towards something more democratized.
+The reason isn't in the six. Bike Walk Chattanooga sits under Bike Walk Tennessee without incorporating separately, so it doesn't get its own entry, and once I'd decided that, I had to decide the same way about a program housed inside a university. That's what the About page doesn't tell you: underneath those six rules is a pile of precedent I built one organization at a time, and I only find out what the next rule is when something like PedSafe forces it.
+
+Southern Nevada Bicycle Coalition was admitted for Vegas instead, so the city still has coverage and nobody looking up a Vegas postal code would ever know PedSafe was considered. That's the part that nags at me — the cost of an editorial line is invisible to the people it lands on. These are hard calls to be making alone, and where I'd like this to end up is somewhere more democratic than one person's judgment. I don't yet know what that looks like in practice. The submission desk I describe below is a small start, and it's still me approving.
 
 So, using the rules above, here's the typical workflow for adding new organizations.
 

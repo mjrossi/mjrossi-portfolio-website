@@ -31,7 +31,9 @@ The [region-graph design doc](https://github.com/mjrossi/urbanist-atlas/blob/mai
 
 It breaks as soon as you push on it. What about an organization that covers a hundred zip codes? I wasn't going to build something as brute-forced as:
 - [Riders Alliance](https://urbanistatlas.com/orgs/riders-alliance): 10001, 10002, ...
-- [Transportation Alternatives](https://urbanistatlas.com/orgs/transportation-alternatives): 10001, 10002, ...
+
+Or with zip code as the key:
+- 10036: Riders Alliance, [Transportation Alternatives](https://urbanistatlas.com/orgs/transportation-alternatives), etc.
 
 I needed something that could hold all the layers a real place stacks up in — neighborhood, borough, city, county, transit district, metro — without enumerating every combination by hand. What Claude and I landed on was a directed acyclic graph (DAG): every one of those layers is a node, and each node declares its parents. A postal code anchors to the smallest region I've curated for it, and a lookup then *walks* the graph upward from there, collecting the advocacy orgs attached to every region it passes through.
 
@@ -55,9 +57,9 @@ A search from downtown Chicago picks up both nodes. A search from Gary, Indiana 
 
 <RegionGraphChicago />
 
-None of it is hard-coded to the US. Canada gets the same graph with no county layer to lean on, so postal codes anchor at the FSA (Forward Sortation Area, the smallest postal geography Canada publishes boundaries for) and match to the CMA (census metropolitan area, Canada's equivalent of an MSA) whose boundary they overlap most — unless I've curated a city underneath, which takes precedence.
+None of it is hard-coded to the US. Canada gets the same graph with no county layer to lean on, so postal codes anchor at the FSA (Forward Sortation Area, the smallest postal geography Canada publishes boundaries for) and match to the CMA (census metropolitan area, Canada's equivalent of an MSA) whose boundary they overlap most — unless I've curated a city underneath, which takes precedence. Ottawa-Gatineau, straddling Ontario and Quebec, reuses the cross-border shape from NYC and Chicago.
 
-I modeled Portugal because I was about to move to Lisbon and wanted to understand where I was going, and because nobody designed Portuguese administrative geography with North America in mind. The Área Metropolitana de Lisboa is a real authority of eighteen municipalities, but the EU's 2024 statistical revision cut that same ground in two at the Tejo: Grande Lisboa to the north, Península de Setúbal to the south. So the metro has two parents, for the same reason Brooklyn does. Madeira needs the reverse — an autonomous region sitting parallel to that tier, with no parent at all. None of it is live, though: the seed sits in the repo next to the US and Canadian ones, but the running API won't load it until the editorial coverage is there.
+I modeled Portugal because I was about to move to Lisbon and wanted to understand where I was going, and because nobody designed Portuguese administrative geography with North America in mind. The Área Metropolitana de Lisboa is a real authority of eighteen municipalities, but for EU statistical reporting Portugal split that same ground in two at the Tejo in 2024: Grande Lisboa to the north, Península de Setúbal to the south. So the metro has two parents, for the same reason Brooklyn does. Madeira needs the reverse — an autonomous region sitting parallel to that tier, with no parent at all. None of it is live, though: the seed sits in the repo next to the US and Canadian ones, but the running API won't load it until the editorial coverage is there.
 
 I'm proud of the region graph. But designing the shape was only half the job — it still had to be *built*, out of real government data rather than a few hand-picked cities I happened to know.
 
@@ -99,7 +101,7 @@ The AI wrote plausible geometry code very fast, then wrote a plausible fix for i
 
 ## Cataloging the organizations
 
-Cataloging 236 organizations across two countries could easily have taken months. AI let me do it in a little over a month. The data still had to be verified, though.
+Cataloging 236 organizations across two countries could easily have taken months on its own. AI let me do it, along with the rest of this project, in a little over a month. The data still had to be verified, though.
 
 First I had to decide what belonged, so I defined a set of criteria that went into every request to AI (the published list is [on the About page](https://urbanistatlas.com/about)).
 
@@ -134,7 +136,7 @@ So, using the rules above, here's the typical workflow for adding new organizati
 
 AI was genuinely good at the first half of that loop, casting a far wider net than I could have alone. It was never the authority on whether an organization actually belonged. That call, and the verification behind it, will always be mine.
 
-Around the same time I added a submission desk. When I approve a visitor-submitted org, a worker opens a GitHub pull request adding it to the dataset, so I review a diff instead of a raw report. Because the data is baked into the binary, it goes live on the next deployment.
+I also added a submission desk. When I approve a visitor-submitted org, a worker opens a GitHub pull request adding it to the dataset, so I review a diff instead of a raw report. Because the data is baked into the binary, it goes live on the next deployment.
 
 ## Did Claude hallucinate?
 

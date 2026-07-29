@@ -290,6 +290,15 @@ CI handles this via `MISE_ENV=ci` in `.github/workflows/build.yml`, so the issue
 - **A previous smoke run left wrangler running.** The script spawns `wrangler dev` on port 8788 and traps SIGINT/SIGTERM to clean up, but a hard kill (timeout, `kill -9`, sandbox shutdown) leaves the process orphaned. Symptom: smoke prints `Address already in use (127.0.0.1:8788)` and bails. Fix: `pkill -9 -f wrangler && pkill -9 -f workerd` (and confirm with `lsof -i :8788`), then re-run.
 - **Cold-start wrangler can take 30–60s** in slow environments. The script's internal `READY_TIMEOUT_MS` is 30s; if your wrapper has its own timeout, give smoke at least 2 minutes end-to-end.
 - **Build is stale.** Smoke reads `dist/client/` plus on-demand routes from the worker bundle. If you tweak source files and run smoke without rebuilding, you're testing the previous build. Always `npm run build && npm run smoke` together (or use the chained commands above).
+- **A previous smoke run poisoned `.wrangler`, and the failure lands on the *next build*.** Not yet root-caused — treat this as a known workaround, not a designed behaviour. Running smoke can leave miniflare's local SQLite state in `.wrangler/state` in a shape the next `npm run build` refuses to start against, because the build's prerender step boots workerd via `@astrojs/cloudflare`. Symptom is a build failure that reads like a broken binary rather than stale state:
+
+  ```
+  *** Fatal uncaught kj::Exception: workerd/util/sqlite.c++:844: failed: SENTRY_DO SQLite failed;
+  dbErrorMessage(...) = table _cf_ALARM has 3 columns but 2 values were supplied: SQLITE_ERROR
+  MiniflareCoreError [ERR_RUNTIME_FAILURE]: The Workers runtime failed to start.
+  ```
+
+  Note the misdirection: the build that fails is the one *after* the smoke run, so the change you just made looks like the cause and isn't. Fix is `rm -rf .wrangler` (gitignored, safe to delete) and rebuild. If you're running build+smoke in a loop, just prefix each build with it. Reproduced twice on Astro 7 / wrangler 4 in the Linux sandbox; not confirmed on macOS or in CI, where each run starts from a clean checkout and so would never hit it.
 
 ### Preview deploys
 

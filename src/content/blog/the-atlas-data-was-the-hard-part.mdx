@@ -17,19 +17,17 @@ I expected the data to be the easy half. I've lived in three of the cities in th
 
 ## The region graph
 
-Cities are complicated and their boundaries move. The Atlas has to take a postal code and hand back the advocacy groups whose work actually covers it, so all of that has to fit into a data model. This was my favorite part of the project, because it's the subject of the career I'm moving into — after thirteen years as a backend engineer, I've just started a master's in sustainable urban mobility in Lisbon.
+Cities are complicated and their boundaries move, and all of that has to fit into a data model that turns a postal code into the advocacy groups covering it. This was my favorite part of the project, because it's the subject of the career I'm moving into — after thirteen years as a backend engineer, I've just started a master's in sustainable urban mobility in Lisbon.
 
 I modeled the United States first, because it's where I'm from and I could check the results against places I know. ZIP codes were the obvious anchor — it's what a visitor types in. But a ZIP code is a postal delivery route, not a place anyone organizes around, so it can't be the unit the whole model hangs off.
 
-The Census publishes a ready-made alternative: the Metropolitan Statistical Area, a city plus the counties that commute into it. For a while I assumed that was my answer. It isn't, because advocacy is more local than that. 11217 is Brooklyn, but it's also Park Slope, and Park Slope has no border you can look up anywhere. Brooklyn is New York City, but 11217 also sits inside the New York-Newark-Jersey City metro area, which the Census draws across two states. And Stamford, Connecticut is close enough to commute into Manhattan but sits outside that metro's boundary, while Hartford, two hours further up I-91, plainly isn't part of the New York region at all.
+The Census publishes a ready-made alternative: the Metropolitan Statistical Area, a city plus the counties that commute into it. For a while I assumed that was my answer. It isn't, because advocacy is more local than that. 11217 is Brooklyn, but it's also Park Slope, which has no border you can look up anywhere. And 11217 sits inside the New York-Newark-Jersey City metro area, which the Census draws across two states — while Stamford, Connecticut commutes into Manhattan from outside that boundary, and Hartford, two hours further up I-91, isn't part of the New York region at all.
 
-I needed a way to represent geographic relationships that aren't strictly hierarchical.
-
-So I opened a brainstorming session with Claude: "let's start by modeling New York City, Chicago, and San Francisco." I picked those three because I've lived in or visited each of them enough to know when an answer was wrong.
+I needed a way to represent geographic relationships that aren't strictly hierarchical, so I opened a brainstorming session with Claude: "let's start by modeling New York City, Chicago, and San Francisco." I picked those three because I've lived in or visited each enough to know when an answer was wrong.
 
 I went in with two rules for myself. No hard-coding zip codes to organizations, because that doesn't scale. And no national organizations. That one was an editorial call rather than a technical one: a national group has a communications budget and will find you on its own, while the point of the Atlas is the chapter meeting eight blocks away that you'd otherwise never hear about.
 
-The [region-graph design doc](https://github.com/mjrossi/urbanist-atlas/blob/main/docs/region-graph.md) has the thorough version of the model, but here's the high-level summary:
+The [region-graph design doc](https://github.com/mjrossi/urbanist-atlas/blob/main/docs/region-graph.md) has the thorough version; here's the summary:
 
 Claude's first proposal was a stack of tiers. A ZIP code sits inside a city (or a borough, in New York's case), and a city sits inside a state. That's a reasonable place to start — it's how an envelope is addressed, it's how most people picture the relationship, and it handles Brooklyn fine.
 
@@ -41,13 +39,13 @@ Or with zip code as the key:
 
 I needed something that could hold all the layers a real place stacks up in — neighborhood, borough, city, county, transit district, metro — and roll them up to a state or province without enumerating every combination by hand.
 
-So back to the drawing board. What Claude and I landed on was a directed acyclic graph (DAG). Every region is a node — a borough, a city, a metro, a state, a transit district, a multi-state coalition — and each declares its parents. A postal code anchors to the smallest region I've curated for it, and a lookup then *walks* the graph from there, stepping up to its parents, then to theirs, collecting the advocacy orgs attached to every region it passes through.
+So back to the drawing board. What Claude and I landed on was a directed acyclic graph (DAG). Every one of those layers is a node, and each node declares its parents. A postal code anchors to the smallest region I've curated for it, and a lookup then *walks* the graph from there, stepping up to its parents, then to theirs, collecting the advocacy orgs attached to every region it passes through.
 
-Take my own ZIP code. Park Slope has no boundary I could curate against, so 11217 anchors at Brooklyn, the smallest unit around it with a real border. Brooklyn declares two parents: New York City and New York State. New York City's own parent is the New York metro, and above that sits the Tri-State Region. New York State has no parent at all. So Brooklyn reaches the state by its own direct edge instead of climbing there through the metro, and that asymmetry is the whole trick.
+Take my own ZIP code. With no Park Slope border to curate against, 11217 anchors at Brooklyn, the smallest unit around it with a real one. Brooklyn declares two parents: New York City and New York State. New York City's parent is the New York metro, and above that sits the Tri-State Region. New York State has no parent at all — so Brooklyn reaches the state by its own direct edge instead of climbing through the metro, and that asymmetry is the whole trick.
 
 A lookup for 11217 returns Brooklyn groups, then citywide New York City groups, then New York State groups. On the way up it also collects the regional organizations sitting above them — [TransitCenter](https://urbanistatlas.com/orgs/transitcenter) at the metro tier, and the [Tri-State Transportation Campaign](https://urbanistatlas.com/orgs/tri-state-transportation-campaign) above that.
 
-That last part is correct, not a bug that quietly widens the search. The Tri-State Transportation Campaign's remit also covers New Jersey and Connecticut, and if you're searching from Brooklyn it's a group you should know about. What a Brooklyn search doesn't return is New Jersey's *own* advocacy groups. [Bike JC](https://urbanistatlas.com/orgs/bike-jc), the [New Jersey Bike & Walk Coalition](https://urbanistatlas.com/orgs/new-jersey-bike-walk-coalition) and [Trenton Cycling Revolution](https://urbanistatlas.com/orgs/trenton-cycling-revolution) hang off the New Jersey state node, which is not an ancestor of Brooklyn, so they never surface.
+That last part is correct, not a bug that quietly widens the search. The Tri-State Transportation Campaign's remit also covers New Jersey and Connecticut, so from Brooklyn it's a group you should know about. What a Brooklyn search doesn't return is New Jersey's *own* groups: [Bike JC](https://urbanistatlas.com/orgs/bike-jc), the [New Jersey Bike & Walk Coalition](https://urbanistatlas.com/orgs/new-jersey-bike-walk-coalition) and [Trenton Cycling Revolution](https://urbanistatlas.com/orgs/trenton-cycling-revolution) hang off the New Jersey state node, which isn't an ancestor of Brooklyn, so they never surface.
 
 Tri-State in, Bike JC out. If I'd parented New York State under the metro instead, both would come back, and you only catch that by naming real organizations and asking whether you'd actually want them in the results.
 
@@ -55,15 +53,15 @@ Tri-State in, Bike JC out. If I'd parented New York State under the metro instea
 
 The same shape handles messier cases without special-casing any of them. Chicago is the clearest example of why tiers refuse to line up. Chicagoland spills across the state line into northwest Indiana, so the Census metro area is officially an Illinois-Indiana one.
 
-The RTA, the transit district that actually funds the trains and buses there, stops dead at the Illinois border: Cook County plus five collar counties and nothing else. I only knew that boundary existed because I spent years in Chicago's advocacy world. Two different shapes over roughly the same place, so they became two different nodes instead of one blurred tier. (Illinois has since folded the RTA into the new Northern Illinois Transit Authority and the Atlas data still says RTA, which is its own small lesson about the year a dataset was frozen in.)
+The RTA, the transit district that funds the trains and buses there, stops dead at the Illinois border: Cook County plus five collar counties and nothing else. I only knew that boundary existed because I spent years in Chicago's advocacy world. Two different shapes over roughly the same place, so they became two different nodes instead of one blurred tier. (Illinois has since folded the RTA into the new Northern Illinois Transit Authority and the Atlas data still says RTA, which is its own small lesson about the year a dataset was frozen in.)
 
-A search from downtown Chicago picks up both nodes. A search from Gary, Indiana picks up the metro and Indiana's groups but never the RTA and never Illinois, which is right, because Gary sits inside the metro but outside the RTA's service area and its governance.
+A search from downtown Chicago picks up both nodes. A search from Gary, Indiana picks up the metro and Indiana's groups but never the RTA and never Illinois — right, because Gary sits inside the metro but outside the RTA's service area and its governance.
 
 <RegionGraphChicago />
 
-None of it is hard-coded to the US, either. Canada gets the same graph, tuned to its own geography. There's no county layer to lean on, so postal codes anchor at the FSA (Forward Sortation Area, the smallest postal geography Canada publishes boundaries for), and each FSA is matched to the CMA (census metropolitan area, Canada's rough equivalent of an MSA) whose boundary it overlaps most — unless I've curated a city underneath that CMA, which takes precedence. Ottawa-Gatineau, straddling Ontario and Quebec, just reuses the cross-border shape I'd already built for NYC and Chicago.
+None of it is hard-coded to the US. Canada gets the same graph, tuned to its own geography: there's no county layer to lean on, so postal codes anchor at the FSA (Forward Sortation Area, the smallest postal geography Canada publishes boundaries for) and match to the CMA (census metropolitan area, Canada's rough equivalent of an MSA) whose boundary they overlap most — unless I've curated a city underneath that CMA, which takes precedence. Ottawa-Gatineau, straddling Ontario and Quebec, just reuses the cross-border shape I'd built for NYC and Chicago.
 
-Portugal I modeled as a stress test, against an administrative geography nobody designed with North America in mind, and because I was about to move to Lisbon and wanted to understand it. The model held. Lisbon's metro area has two parents for the same structural reason Brooklyn does, and Madeira needs the reverse: as an autonomous region it sits parallel to that tier, with no parent at all. None of it is live, though — the seed sits in the repo next to the US and Canadian ones, but the running API doesn't load it and won't until the editorial coverage is there.
+Portugal I modeled as a stress test, against an administrative geography nobody designed with North America in mind, and because I was about to move to Lisbon and wanted to understand it. The model held: Lisbon's metro area has two parents for the same structural reason Brooklyn does, and Madeira needs the reverse, sitting parallel to that tier as an autonomous region with no parent at all. None of it is live, though — the seed sits in the repo next to the US and Canadian ones, but the running API doesn't load it and won't until the editorial coverage is there.
 
 I'm proud of the region graph. But designing the shape was only half the job. It still had to be *built*, out of real government data rather than a few hand-picked cities I happened to know.
 
@@ -145,5 +143,7 @@ Every one of those 236 entries is a room full of people somewhere, arguing about
 But finding them was never the hard part. Joining was: turning up to meetings, going to the gala, giving them money. No directory does that step for you, and it's the only step that has ever changed a bus route.
 
 So use AI, and use it aggressively where it makes you faster. It made me faster. On the two occasions in this post that actually mattered — a join that silently returned nothing, a polygon that measured too big — faster is precisely what would have shipped the error.
+
+Cities are made and remade every day by the people living in them, in ways no dataset fully captures, and the parts that matter most are usually the parts somebody has to tell you about.
 
 The last post in this series steps back from the Atlas itself: where AI fell short, what the month cost me in money and energy, and the five lessons I keep coming back to.

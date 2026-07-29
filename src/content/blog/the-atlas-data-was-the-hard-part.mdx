@@ -25,14 +25,14 @@ The Census publishes a ready-made alternative: the Metropolitan Statistical Area
 
 None of that is strictly hierarchical, so I started a brainstorming session with Claude: "let's start by modeling New York City, Chicago, and San Francisco." I've lived in or visited each enough to know when an answer was wrong.
 
-I went in with two rules for myself. No hard-coding zip codes to organizations, because that doesn't scale. And no national organizations. That one was an editorial call rather than a technical one: a national group has a communications budget and will find you on its own, while the point of the Atlas is the chapter meeting eight blocks away that you'd otherwise never hear about.
+I went in with two rules for myself. No hard-coding ZIP codes to organizations, because that doesn't scale. And no national organizations. That one was an editorial call rather than a technical one: a national group has a communications budget and will find you on its own, while the point of the Atlas is the chapter meeting eight blocks away that you'd otherwise never hear about.
 
 The [region-graph design doc](https://github.com/mjrossi/urbanist-atlas/blob/main/docs/region-graph.md) has the thorough version. Claude's first proposal was a stack of tiers: a ZIP code sits inside a city (or a borough, in New York's case), and a city sits inside a state. That's a reasonable place to start — it's how an envelope is addressed, and it handles Brooklyn fine.
 
-It breaks as soon as you push on it. What about an organization that covers a hundred zip codes? I wasn't going to build something as brute-forced as:
+It breaks as soon as you push on it. What about an organization that covers a hundred ZIP codes? I wasn't going to build something as brute-forced as:
 - [Riders Alliance](https://urbanistatlas.com/orgs/riders-alliance): 10001, 10002, ...
 
-Or with zip code as the key:
+Or with ZIP code as the key:
 - 10036: Riders Alliance, [Transportation Alternatives](https://urbanistatlas.com/orgs/transportation-alternatives), etc.
 
 I needed something that could hold all the layers a real place stacks up in — neighborhood, borough, city, county, transit district, metro — without enumerating every combination by hand. What Claude and I landed on was a directed acyclic graph (DAG): every one of those layers is a node, and each node declares its parents. A postal code anchors to the smallest region I've curated for it, and a lookup then *walks* the graph upward from there, collecting the advocacy orgs attached to every region it passes through.

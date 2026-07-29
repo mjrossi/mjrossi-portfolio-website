@@ -7,24 +7,48 @@ updates:
     groups:
       # Astro majors move in lockstep (astro + its integrations share peer
       # ranges); splitting them across PRs makes every PR fail ERESOLVE.
-      astro-major:
+      #
+      # `wrangler` belongs here too, even though it isn't an Astro package.
+      # @astrojs/cloudflare pulls @cloudflare/vite-plugin, which depends on a
+      # specific wrangler; when root wrangler drifts off that version npm stops
+      # deduping the two and installs a second, nested wrangler with its own
+      # workerd/miniflare (see the note below the groups for what that costs).
+      # A solo wrangler-major PR is exactly how they drift apart, so keep them
+      # in one PR where CI builds the combination. Minor/patch needs no rule:
+      # `npm-minor-patch` has no `patterns`, so it already sweeps both into a
+      # single PR.
+      astro-cloudflare-major:
         patterns:
           - astro
           - "@astrojs/*"
+          - wrangler
         update-types:
           - major
       npm-minor-patch:
         update-types:
           - minor
           - patch
-    ignore:
-      # wrangler 4.111.0 removed the `legacy_env` config field, but
-      # @astrojs/cloudflare (through 14.x, the latest) still injects
-      # `legacy_env: true` into the generated dist/server/wrangler.json, so
-      # newer wrangler hard-errors on `dev`/`deploy`. Hold at 4.110.x until the
-      # adapter stops emitting it (likely @astrojs/cloudflare 15).
-      - dependency-name: "wrangler"
-        versions: [">=4.111.0"]
+    # The wrangler >=4.111.0 hold is gone: it existed because wrangler 4.111.0
+    # removed the `legacy_env` config field while @cloudflare/vite-plugin (via
+    # @astrojs/cloudflare) still injected `legacy_env: true` into the generated
+    # dist/server/wrangler.json. @cloudflare/vite-plugin 1.48.0 stopped emitting
+    # it and now strips a stray one with a warning instead of hard-erroring, so
+    # wrangler 4.115.0 + @astrojs/cloudflare 14.1.6 run clean.
+    #
+    # Before re-pinning wrangler for any future incompatibility, know what the
+    # last pin cost: holding root wrangler off the version @cloudflare/vite-plugin
+    # depends on stops npm deduping them, so a SECOND wrangler gets installed
+    # nested under the plugin. That means two workerd/miniflare builds, and both
+    # default their local persistence root to `.wrangler/state/v3` — the build's
+    # prerenderer and `wrangler dev` then take turns handing the same
+    # metadata.sqlite to a workerd that didn't write it. Symptom: whichever of
+    # `npm run build` / `wrangler dev` runs second dies with a SQLite error, in
+    # either order, every time, until `.wrangler` is deleted by hand.
+    #
+    # If a pin is ever unavoidable, either match the version the plugin depends
+    # on, or set `persistState: false` on the adapter in astro.config.mjs so the
+    # build writes no local state at all (nothing here needs it — there are no
+    # stateful bindings, and the auto-provisioned SESSION KV store is unused).
 
   - package-ecosystem: github-actions
     directory: /

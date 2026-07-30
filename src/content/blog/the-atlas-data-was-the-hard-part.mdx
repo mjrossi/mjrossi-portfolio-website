@@ -21,11 +21,11 @@ Cities are complicated and their boundaries move, and all of that has to fit int
 
 I modeled the United States first, where I could check the results against places I know. ZIP codes were the obvious anchor, since that's what a visitor types in, but a ZIP code is a postal delivery route rather than a place anyone organizes around, so it can't be the unit the whole model hangs off.
 
-The Census publishes a ready-made alternative: the Metropolitan Statistical Area, a city plus the counties that commute into it. It's a *functional* geography — drawn from where people actually travel, rather than from an administrative line — and for a while I assumed it was my answer. It isn't, because advocacy is more local than that. 11217 is Brooklyn, but it's also Park Slope, which has no border you can look up anywhere. And 11217 sits inside the New York-Newark-Jersey City metro area, which the Census draws across two states — while Stamford, Connecticut commutes into Manhattan from outside that boundary, and Hartford, two hours further up I-91, isn't part of the New York region at all.
+The Census publishes a ready-made alternative: the Metropolitan Statistical Area (MSA), a city plus the counties that commute into it. It's a *functional* geography — drawn from where people actually travel, rather than from an administrative line — and for a while I assumed it was my answer. It isn't, because advocacy is more local than that. The 11217 ZIP code is Brooklyn, but it's also Park Slope, which has no border you can look up anywhere. And 11217 sits inside the New York-Newark-Jersey City metro area, which the Census draws across two states — while Stamford, Connecticut commutes into Manhattan from outside that boundary, and Hartford, two hours further up I-91, isn't part of the New York region at all.
 
-None of that is strictly hierarchical, so I started a brainstorming session with Claude: "let's start by modeling New York City, Chicago, and San Francisco." I've lived in or visited each enough to know when an answer was wrong.
+None of that is strictly hierarchical, so I started a brainstorming session with Claude: "let's start by modeling New York City, Chicago, and San Francisco." I've lived in or visited each city enough to know when an answer was wrong.
 
-I went in with two rules for myself. No hard-coding ZIP codes to organizations, because that doesn't scale. And no national organizations. That one was an editorial call rather than a technical one: a national group has a communications budget and will find you on its own, while the point of the Atlas is the chapter meeting eight blocks away that you'd otherwise never hear about.
+I went in with two rules for myself. No hard-coding ZIP codes to organizations, because that doesn't scale, and no national organizations. That second one was an editorial call rather than a technical one: a national group has a communications budget and will find you on its own, while the point of the Atlas is to discover the chapter meeting eight blocks away that you'd otherwise never hear about.
 
 The [region-graph design doc](https://github.com/mjrossi/urbanist-atlas/blob/main/docs/region-graph.md) has the thorough version. Claude's first proposal was a stack of tiers: a ZIP code sits inside a city (or a borough, in New York's case), and a city sits inside a state. That's a reasonable place to start — it's how an envelope is addressed, and it handles Brooklyn fine.
 
@@ -37,7 +37,7 @@ Or with ZIP code as the key:
 
 I needed something that could hold all the layers a real place stacks up in — neighborhood, borough, city, county, transit district, metro — without enumerating every combination by hand. What Claude and I landed on was a directed acyclic graph (DAG): every one of those layers is a node, and each node declares its parents. A postal code anchors to the smallest region I've curated for it, and a lookup then *walks* the graph upward from there, collecting the advocacy orgs attached to every region it passes through.
 
-Take my own ZIP code. With no Park Slope border to curate against, 11217 anchors at Brooklyn, the smallest unit around it with a real one. Brooklyn declares two parents: New York City and New York State. New York City's parent is the New York metro, and above that sits the Tri-State Region. New York State has no parent at all — so Brooklyn reaches the state by its own direct edge instead of climbing through the metro, and that asymmetry is the whole trick.
+Take my own ZIP code. With no Park Slope border to curate against, 11217 anchors at Brooklyn, the smallest unit around it with a real border. Brooklyn declares two parents: New York City and New York State. New York City's parent is the New York metro, and above that sits the Tri-State Region. New York State has no parent at all — so Brooklyn reaches the state by its own direct edge instead of climbing through the metro, and that asymmetry is the whole trick.
 
 A lookup for 11217 returns Brooklyn groups, then citywide New York City groups, then New York State groups, and the regional organizations above them — [TransitCenter](https://urbanistatlas.com/orgs/transitcenter) at the metro tier, and the [Tri-State Transportation Campaign](https://urbanistatlas.com/orgs/tri-state-transportation-campaign) above that.
 
@@ -53,13 +53,13 @@ The RTA, the transit district that funds the trains and buses there, stops dead 
 
 The RTA is itself mid-transition: Illinois's new Northern Illinois Transit Authority formally takes over on September 1st, a month after this post goes up. The Atlas data says RTA, which is right today and won't be for long.
 
-A search from downtown Chicago picks up both nodes. A search from Gary, Indiana picks up the metro and Indiana's groups but never the RTA and never Illinois — right, because Gary sits inside the metro but outside the RTA's service area and its governance.
+A search from downtown Chicago picks up both nodes. A search from Gary, Indiana picks up the metro and Indiana's groups but never the RTA and never Illinois — this is right, because Gary sits inside the metro but outside the RTA's service area and its governance.
 
 <RegionGraphChicago />
 
 None of it is hard-coded to the US. Canada gets the same graph with no county layer to lean on, so postal codes anchor at the FSA (Forward Sortation Area, the smallest postal geography Canada publishes boundaries for) and match to the CMA (census metropolitan area, Canada's equivalent of an MSA) whose boundary they overlap most — unless I've curated a city underneath, which takes precedence. Ottawa-Gatineau, straddling Ontario and Quebec, reuses the cross-border shape from NYC and Chicago.
 
-I modeled Portugal because I was about to move to Lisbon and wanted to understand where I was going, and because nobody designed Portuguese administrative geography with North America in mind. The Área Metropolitana de Lisboa is a real authority of eighteen municipalities, but for EU statistical reporting Portugal split that same ground in two at the Tejo in 2024: Grande Lisboa to the north, Península de Setúbal to the south. So the metro has two parents, for the same reason Brooklyn does. Madeira needs the reverse — an autonomous region sitting parallel to that tier, with no parent at all. None of it is live, though: the seed sits in the repo next to the US and Canadian ones, but the running API won't load it until the editorial coverage is there.
+I modeled Portugal because I was about to move to Lisbon and wanted to understand where I was going, and because nobody designed Portuguese administrative geography with North America in mind. The Área Metropolitana de Lisboa is a real authority of eighteen municipalities, but for EU statistical reporting Portugal split that same ground in two at the Tejo in 2024: Grande Lisboa to the north, Península de Setúbal to the south. So the metro has two parents, for the same reason Brooklyn does. Madeira needs the reverse — it's an autonomous region sitting parallel to that tier, with no parent at all. None of it is live, though: the seed sits in the repo next to the US and Canadian ones, but the running API won't load it until the editorial coverage is there.
 
 I'm proud of the region graph. But designing the shape was only half the job — it still had to be *built*, out of real government data rather than a few hand-picked cities I happened to know.
 
@@ -77,7 +77,7 @@ The join between them returned nothing at all, which is the worst possible outco
 
 That was only half of it. The Stamford ZIPs now landed in their own metro, Bridgeport-Stamford-Danbury, and still surfaced no Tri-State orgs, because nothing in that metro's record pointed up at the Tri-State region. I gave it that parent, and it's the only Connecticut metro that has one — Hartford, New Haven, Waterbury and Norwich all stop at the state. Fairfield County commutes into Manhattan; the rest of Connecticut, quite reasonably, does not consider itself part of the New York region.
 
-The Canadian side broke differently. Matching each FSA to the CMA it overlaps most sounds like a lookup but is really a measurement: clip the FSA's boundary against the metro's, then measure how much shape is left over. A library does the clipping. Nothing in it measures the area, so that part I had to write.
+The Canadian side broke differently. Matching each FSA to the CMA it overlaps with most sounds like a lookup but is really a measurement: clip the FSA's boundary against the metro's, then measure how much shape is left over. A library does the clipping. Nothing in it measures the area, so that part I had to write.
 
 A clipped shape isn't one outline. It's several — an outer boundary, anything punched out of the middle like a lake or a river, and any islands sitting inside those. So something has to decide which outlines are holes, because those come off the total rather than onto it.
 
@@ -124,9 +124,9 @@ That test has a bias worth naming, though. It measures *visible* activity, which
 
 PedSafe Vegas is the one I found hardest. It's a pedestrian-safety program run out of UNLV's transportation research center, and it clears all six of the rules above: it's local, it's active, it's squarely on topic. UNLV is a public university, but rule four is about transportation agencies — DOTs, transit boards — not every organization with public money behind it. I excluded PedSafe anyway.
 
-The reason isn't in the six. Bike Walk Chattanooga sits under Bike Walk Tennessee without incorporating separately, so it doesn't get its own entry, and once I'd decided that, I had to decide the same way about a program housed inside a university. That's what the About page doesn't tell you: underneath those six rules is a pile of precedent I built one organization at a time, and I only find out what the next rule is when something like PedSafe forces it.
+The reason isn't in the six. Bike Walk Chattanooga sits under [Bike Walk Tennessee](https://urbanistatlas.com/orgs/bike-walk-tennessee) without incorporating separately, so it doesn't get its own entry, and once I'd decided that, I had to decide the same way about a program housed inside a university. Underneath those six rules is a pile of precedent I built one organization at a time, and I only find out what the next rule is when something like PedSafe forces it.
 
-Southern Nevada Bicycle Coalition was admitted for Vegas instead, so the city still has coverage and nobody looking up a Vegas postal code would ever know PedSafe was considered. That's the part that nags at me — the cost of an editorial line is invisible to the people it lands on. These are hard calls to be making alone, and where I'd like this to end up is somewhere more democratic than one person's judgment. I don't yet know what that looks like in practice. The submission desk I describe below is a small start, and it's still me approving.
+The [Southern Nevada Bicycle Coalition](https://urbanistatlas.com/orgs/southern-nevada-bicycle-coalition) was admitted for Vegas instead, so the city still has coverage and nobody looking up a Vegas postal code would ever know PedSafe was considered. That's the part that nags at me — the cost of an editorial line is invisible to the people it lands on. These are hard calls to be making alone, and where I'd like this to end up is somewhere more democratic than one person's judgment. I don't yet know what that looks like in practice. The submission desk I describe below is a small start, and it's still me approving.
 
 So, using the rules above, here's the typical workflow for adding new organizations.
 
@@ -146,7 +146,7 @@ Yes, occasionally. I didn't encounter organizations that appeared to be entirely
 
 Every one of those 236 entries is a room full of people somewhere, arguing about a bus route. I spent a month building a machine to find those rooms, and it's genuinely good at it. I found Riders Alliance the slow way, in an online thread full of New York transit obsessives, which is exactly the errand the Atlas now runs for you in about a second.
 
-But finding them was never the hard part. Joining was: turning up to meetings, going to the gala, giving them money. No directory does that step for you, and it's the only step that has ever changed a bus route.
+Finding these groups is only the first step, and it's the one I could automate. Joining them is harder: turning up to meetings, going to the gala, giving them money. No directory does that step for you, and it's the only step that has ever changed a bus route.
 
 So use AI, and use it aggressively where it makes you faster. It made me faster. On the two occasions in this post that actually mattered — a join that silently returned nothing, a polygon that measured too big — faster is precisely what would have shipped the error.
 

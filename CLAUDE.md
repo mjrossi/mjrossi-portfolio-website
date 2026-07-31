@@ -179,7 +179,7 @@ wrangler secret put PREVIEW_SIGNING_KEY   # same value, production
 
 If `PREVIEW_SIGNING_KEY` is unset the worker rejects every link and only the `*.workers.dev` unlock remains — nothing else breaks.
 
-Wherever a scheduled post is visible, it carries a `Scheduled · <date>` badge (`.post-scheduled`). The badge keys off `isPublished`, not the preview flag, so it can only ever appear on a post that isn't live.
+Wherever a scheduled post is visible, it carries a `Scheduled` badge (`.post-scheduled`). The badge keys off `isPublished`, not the preview flag, so it can only ever appear on a post that isn't live.
 
 ### Publishing
 

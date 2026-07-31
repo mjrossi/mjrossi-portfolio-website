@@ -15,7 +15,7 @@ const scheduled = !isPublished(post.data.pubDate);
 <article class="post-entry">
   <div class="post-entry-meta">
     {scheduled && (
-      <span class="post-scheduled">Scheduled · {dateFormatter.format(post.data.pubDate)}</span>
+      <span class="post-scheduled">Scheduled</span>
     )}
     <time datetime={isoDate(post.data.pubDate)}>
       {dateFormatter.format(post.data.pubDate)}

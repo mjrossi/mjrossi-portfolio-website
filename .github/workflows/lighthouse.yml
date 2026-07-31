@@ -185,22 +185,23 @@ jobs:
         if: always() && steps.lhci.outputs.has_credentials == 'true'
         run: |
           shopt -s nullglob
-          # `lhci collect` names its reports `<url-slug>--<timestamp>.report.json`.
-          # The `lhr-*.json` names appear only during `lhci upload`'s "Dumping
-          # reports to disk" phase, which is disabled here — globbing for those
-          # silently matches nothing and redacts nothing. assertion-results.json
-          # is a top-level array and is deliberately skipped: `has(...)` against
-          # it is a type error, not a no-op.
-          for f in .lighthouseci/*.report.json; do
+          # lhci leaves TWO sets of reports here and both carry the headers:
+          # `<url-slug>--<timestamp>.report.json` from collect (one per run) and
+          # `lhr-<ms>.json` dumped by upload. Match every .json rather than
+          # either naming scheme — a glob that covers only one silently redacts
+          # nothing, which is indistinguishable from success without the guard
+          # below. The type test skips assertion-results.json, a top-level array
+          # against which `has(...)` is an error rather than a no-op.
+          for f in .lighthouseci/*.json; do
             tmp=$(mktemp)
             jq 'if type == "object" and has("configSettings")
                 then .configSettings.extraHeaders = null else . end' "$f" > "$tmp"
             mv "$tmp" "$f"
           done
-          # The HTML reports embed the unredacted LHR as inline JSON; the
-          # summary step below only reads the JSON, so drop them entirely
-          # rather than trying to rewrite markup.
-          rm -f .lighthouseci/*.report.html
+          # Every HTML report embeds the unredacted LHR as inline JSON; the
+          # summary step below only reads the JSON, so drop them all rather
+          # than trying to rewrite markup.
+          rm -f .lighthouseci/*.html
           # Fail closed. This step is the only thing standing between a
           # service token and a public artifact, so verify rather than assume:
           # if the header name survived anywhere, abort before the upload step.

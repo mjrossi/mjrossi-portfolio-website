@@ -21,6 +21,13 @@ permissions:
   pull-requests: write
   checks: write
 
+# numberOfRuns is 3, so an audit is several minutes of Lighthouse. Rapid
+# pushes would otherwise leave two jobs racing to rewrite the same sticky
+# comment, and the loser's scores win.
+concurrency:
+  group: lighthouse-${{ github.event.check_suite.head_sha || inputs.url || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   lighthouse:
     if: >-
@@ -37,6 +44,7 @@ jobs:
           DISPATCH_URL: ${{ inputs.url }}
           HEAD_BRANCH: ${{ github.event.check_suite.head_branch }}
           HEAD_SHA: ${{ github.event.check_suite.head_sha }}
+          CF_APP_SLUG: ${{ github.event.check_suite.app.slug }}
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
@@ -57,37 +65,89 @@ jobs:
               # branches, which is an illegal hostname: Chrome could not
               # resolve it and `lhci collect` aborted with
               # CHROME_INTERSTITIAL_ERROR before writing a single report.
-              SUMMARY=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs" \
-                --jq '.check_runs[] | select(.app.slug == "cloudflare-workers-and-pages") | .output.summary')
+              # Sorted by completed_at with the newest match winning: a re-run
+              # leaves several Cloudflare check runs on one SHA, and picking an
+              # arbitrary one can name a superseded deployment. per_page=100
+              # keeps this to a single page. The app slug comes from the event
+              # that triggered us rather than being spelled out a second time,
+              # so it cannot drift from the job-level `if`.
+              # Piped to jq rather than using `gh --jq`, so the slug can come
+              # in through --arg: gh's embedded jq is gojq and takes no --arg.
+              SUMMARY=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs?per_page=100" \
+                | jq -r --arg slug "$CF_APP_SLUG" \
+                  '[.check_runs[] | select(.app.slug == $slug)]
+                   | sort_by(.completed_at // "") | last | .output.summary // ""')
               URL=$(printf '%s' "$SUMMARY" | grep -oE 'Preview Alias URL: \S+' | head -1 | cut -d' ' -f4)
               # Version-scoped URL is the fallback; it is always short and
               # points at exactly the deployment this check suite reported.
               [ -n "$URL" ] || URL=$(printf '%s' "$SUMMARY" | grep -oE 'Preview URL: \S+' | head -1 | cut -d' ' -f3)
               if [ -z "$URL" ]; then
                 echo "::error::No preview URL in the Cloudflare check run for ${SHA}. Expected a 'Preview Alias URL:' or 'Preview URL:' line in its summary; check that preview_urls is still true in wrangler.jsonc."
+                # Print what we actually received. Both greps above depend on
+                # Cloudflare emitting those labels as plain text; if that
+                # summary is ever reformatted (markdown bold, a table, a
+                # [text](url) link) they go quiet, and the dump is the only
+                # thing distinguishing "format changed" from "nothing deployed".
+                echo "--- Cloudflare check-run summary as received ---"
+                printf '%s\n' "$SUMMARY" | head -40
+                echo "--- end of summary ---"
                 exit 1
               fi
             fi
           fi
           URL="${URL%/}"
-          PR_NUMBER=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
-          # main enforces all four categories strictly. PR previews relax
-          # SEO (CF preview URLs ship `x-robots-tag: noindex`) and perf
-          # (simulate throttling on shared CI runners produces high TBT
-          # variance — real regressions still show up in the posted
-          # scores, just without blocking the check).
-          if [ "$BRANCH" = "main" ]; then
-            CONFIG=".github/lighthouserc.main.json"
-          else
-            CONFIG=".github/lighthouserc.json"
+          HOST="${URL#*://}"
+          HOST="${HOST%%/*}"
+
+          PR_JSON=$(gh pr list --head "$BRANCH" --state open \
+            --json number,headRepositoryOwner --jq '.[0] // {}')
+          PR_NUMBER=$(printf '%s' "$PR_JSON" | jq -r '.number // empty')
+          PR_OWNER=$(printf '%s' "$PR_JSON" | jq -r '.headRepositoryOwner.login // empty')
+
+          # Fork guard. The audit target is a deployed Worker, and on a preview
+          # host we hand that Worker the Cloudflare Access service token as a
+          # request header. Code built from a fork is attacker-controlled and
+          # can read the header straight off the request, which would turn
+          # "open a PR" into "read this repo's secrets". Refuse loudly rather
+          # than audit a fork uncredentialed — that would fail at preflight
+          # with an Access error naming entirely the wrong cause.
+          if [ -n "$PR_OWNER" ] && [ "$PR_OWNER" != "${GITHUB_REPOSITORY%%/*}" ]; then
+            echo "::error::PR #${PR_NUMBER} comes from a fork (${PR_OWNER}). Fork previews are not audited: doing so would send the Cloudflare Access service token to code this repository does not control."
+            exit 1
           fi
+
+          # Both of the choices below key off the TARGET HOST, not the branch.
+          # The workflow_dispatch escape hatch is normally fired from main
+          # against a preview URL, and keying off the ref would then pick
+          # main's strict config *and* withhold the Access credentials that
+          # preview needs — the documented escape hatch could never work.
+          #
+          # Production enforces all four categories strictly. Previews relax
+          # SEO (CF preview URLs ship `x-robots-tag: noindex`) and perf
+          # (simulated throttling on shared CI runners produces high TBT
+          # variance — real regressions still show up in the posted scores,
+          # just without blocking the check).
+          case "$HOST" in
+            mjrossi.com|www.mjrossi.com) CONFIG=".github/lighthouserc.main.json" ;;
+            *)                           CONFIG=".github/lighthouserc.json" ;;
+          esac
+          # Only *.workers.dev preview hosts sit behind Cloudflare Access, so
+          # only they are given the token. Matching the parsed host rather than
+          # the whole URL is load-bearing: a `case "$URL" in https://*.workers.dev)`
+          # pattern also matches https://attacker.example/.workers.dev, which
+          # would hand a dispatcher's typo'd or hostile URL the credentials.
+          case "$HOST" in
+            *.workers.dev) NEEDS_CREDS=true ;;
+            *)             NEEDS_CREDS=false ;;
+          esac
+
           echo "base=$URL" >> "$GITHUB_OUTPUT"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "pr=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "config=$CONFIG" >> "$GITHUB_OUTPUT"
-          echo "is_main=$([ "$BRANCH" = "main" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "Auditing $BRANCH → $URL (PR #${PR_NUMBER:-none}, sha ${SHA:0:7}, config $CONFIG)"
+          echo "needs_creds=$NEEDS_CREDS" >> "$GITHUB_OUTPUT"
+          echo "Auditing $BRANCH → $URL (host $HOST, PR #${PR_NUMBER:-none}, sha ${SHA:0:7}, config $CONFIG, credentials $NEEDS_CREDS)"
 
       # Preview deploys sit behind Cloudflare Access. Without credentials every
       # request 302s to link00seven.cloudflareaccess.com and Lighthouse happily
@@ -102,10 +162,14 @@ jobs:
           CONFIG: ${{ steps.ctx.outputs.config }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-          IS_MAIN: ${{ steps.ctx.outputs.is_main }}
+          NEEDS_CREDS: ${{ steps.ctx.outputs.needs_creds }}
         run: |
-          # mjrossi.com is not behind Access, so main needs no credentials.
-          if [ "$IS_MAIN" != "true" ] && [ -n "$CF_ACCESS_CLIENT_ID" ]; then
+          # NEEDS_CREDS is true only for *.workers.dev preview hosts;
+          # mjrossi.com is not behind Access and needs no credentials.
+          # Both halves of the token are required — an ID with an empty secret
+          # produces a header pair that Access rejects, and failing here names
+          # the cause better than the preflight's generic Access message.
+          if [ "$NEEDS_CREDS" = "true" ] && [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; then
             jq --arg id "$CF_ACCESS_CLIENT_ID" --arg secret "$CF_ACCESS_CLIENT_SECRET" \
               '.ci.collect.settings.extraHeaders = {"CF-Access-Client-Id": $id, "CF-Access-Client-Secret": $secret}' \
               "$CONFIG" > lighthouserc.runtime.json
@@ -114,8 +178,8 @@ jobs:
           else
             cp "$CONFIG" lighthouserc.runtime.json
             echo "has_credentials=false" >> "$GITHUB_OUTPUT"
-            if [ "$IS_MAIN" != "true" ]; then
-              echo "::warning::CF_ACCESS_CLIENT_ID is unset — the preview audit will be blocked by Cloudflare Access."
+            if [ "$NEEDS_CREDS" = "true" ]; then
+              echo "::warning::CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are not both set — the preview audit will be blocked by Cloudflare Access."
             fi
           fi
 
@@ -169,8 +233,9 @@ jobs:
             ${{ steps.ctx.outputs.base }}/blog/why-im-pivoting
           configPath: ./lighthouserc.runtime.json
           # Credential containment. Lighthouse records `settings.extraHeaders`
-          # verbatim into `configSettings` in every lhr-*.json, and the
-          # lhr-*.html reports embed that same JSON. This repo is PUBLIC, so
+          # verbatim into `configSettings` in every report JSON it writes (both
+          # naming schemes — see the redact step), and the HTML reports embed
+          # that same JSON inline. This repo is PUBLIC, so
           # both of this action's upload paths would publish the Access service
           # token: temporaryPublicStorage writes to a world-readable GCS URL
           # that is printed in the logs, and artifacts on a public repo are
@@ -183,6 +248,8 @@ jobs:
       - name: Redact credentials from reports
         id: redact
         if: always() && steps.lhci.outputs.has_credentials == 'true'
+        env:
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           shopt -s nullglob
           # lhci leaves TWO sets of reports here and both carry the headers:
@@ -202,16 +269,30 @@ jobs:
           # summary step below only reads the JSON, so drop them all rather
           # than trying to rewrite markup.
           rm -f .lighthouseci/*.html
-          # Fail closed. This step is the only thing standing between a
-          # service token and a public artifact, so verify rather than assume:
-          # if the header name survived anywhere, abort before the upload step.
-          offenders=$(grep -rIl 'CF-Access-Client' .lighthouseci/ 2>/dev/null || true)
+          # Fail closed. This step is the only thing standing between a service
+          # token and a public artifact, so verify rather than assume: if the
+          # header name survived anywhere, abort before the upload step.
+          # `-a` rather than `-I`, because grep treats any file containing a NUL
+          # byte as binary and silently skips it — a report with one stray NUL
+          # would pass a check it never actually ran. `-i` because the casing is
+          # Lighthouse's to choose, not ours.
+          offenders=$(grep -rlai 'CF-Access-Client' .lighthouseci/ 2>/dev/null || true)
           if [ -n "$offenders" ]; then
             echo "::error::Redaction failed — Access credentials are still present in .lighthouseci. Refusing to upload."
             echo "Offending files (header names only, values withheld):"
             while IFS= read -r f; do
-              printf '  %s: %s\n' "$f" "$(grep -o 'CF-Access-Client[A-Za-z-]*' "$f" | sort -u | tr '\n' ' ')"
+              printf '  %s: %s\n' "$f" "$(grep -oai 'CF-Access-Client[A-Za-z-]*' "$f" | sort -u | tr '\n' ' ')"
             done <<< "$offenders"
+            exit 1
+          fi
+          # Second, independent check on the secret VALUE. The check above only
+          # knows about the header name, so anything that recorded the token
+          # under a different key — a redirect chain, a future Lighthouse field,
+          # an error message quoting the request — would sail past it. Quiet and
+          # fixed-string: this must never echo what it is searching for.
+          if [ -n "$CF_ACCESS_CLIENT_SECRET" ] \
+             && grep -rlaqF -e "$CF_ACCESS_CLIENT_SECRET" .lighthouseci/ >/dev/null 2>&1; then
+            echo "::error::Redaction failed — the Access client secret appears verbatim in .lighthouseci under some field the header-name check does not cover. Refusing to upload."
             exit 1
           fi
 
@@ -262,29 +343,53 @@ jobs:
           } > /tmp/lh-body.md
 
           # numberOfRuns is 3, so there are three reports per URL. Collapse each
-          # URL to its median-by-performance run — the same "one representative
-          # run" LHCI asserts against — otherwise the table would list every URL
-          # three times and the averages would be dominated by whichever page
-          # happened to produce extra runs.
+          # URL to its median-by-performance run — the same run LHCI asserts
+          # against, because both config files pin `aggregationMethod` to
+          # "median-run" (leave that pinned: the LHCI default is `optimistic`,
+          # best-of-N, which would make this table disagree with the gate by
+          # several points in the direction that looks worse). Without the
+          # collapse the table would list every URL three times and the
+          # averages would be dominated by whichever page produced extra runs.
+          #
+          # `round`, not `floor`: floats make 0.58 * 100 land just under 58, so
+          # floor renders a real 58 as 57 — harmless at 0.9+, wrong exactly
+          # where a degraded score is being read closely.
+          #
+          # A category whose audits errored has `score: null`, and `null * 100`
+          # is a hard jq error that would abort this step under `bash -e`,
+          # taking the whole table with it. Carry the null through and render
+          # it, so one broken category costs one cell rather than the report.
           jq -s '
+            def pct($c): if ($c | type) == "object" and ($c.score != null)
+                         then ($c.score * 100 | round) else null end;
             map({
               url:  (.finalDisplayedUrl // .finalUrl),
-              perf: (.categories.performance.score * 100 | floor),
-              a11y: (.categories.accessibility.score * 100 | floor),
-              bp:   (.categories["best-practices"].score * 100 | floor),
-              seo:  (.categories.seo.score * 100 | floor)
+              perf: pct(.categories.performance),
+              a11y: pct(.categories.accessibility),
+              bp:   pct(.categories["best-practices"]),
+              seo:  pct(.categories.seo)
             })
             | group_by(.url)
-            | map(sort_by(.perf) | .[length / 2 | floor])
+            | map(sort_by(.perf // -1) | .[length / 2 | floor])
           ' "${reports[@]}" > /tmp/lh-median.json
 
-          jq -r '.[] | "| \(.url) | \(.perf) | \(.a11y) | \(.bp) | \(.seo) |"' \
-            /tmp/lh-median.json >> /tmp/lh-body.md
+          jq -r '
+            def cell($v): if $v == null then "—" else ($v | tostring) end;
+            .[] | "| \(.url) | \(cell(.perf)) | \(cell(.a11y)) | \(cell(.bp)) | \(cell(.seo)) |"
+          ' /tmp/lh-median.json >> /tmp/lh-body.md
 
-          read -r avg_perf avg_a11y avg_bp avg_seo < <(jq -r '
-            [.[] | .perf], [.[] | .a11y], [.[] | .bp], [.[] | .seo]
-            | (add / length | floor) | tostring
-          ' /tmp/lh-median.json | paste -sd' ' -)
+          # Averaged over the URLs that actually scored the category. Written to
+          # a file rather than read from a process substitution: `< <(...)`
+          # discards jq's exit status, so a jq failure would surface as a bare
+          # `read` returning 1 and `bash -e` aborting with no message at all.
+          jq -r '
+            def avg($xs): ($xs | map(select(. != null))) as $v
+                          | if ($v | length) == 0 then "—"
+                            else ($v | add / length | round | tostring) end;
+            [avg([.[] | .perf]), avg([.[] | .a11y]),
+             avg([.[] | .bp]),   avg([.[] | .seo])] | @tsv
+          ' /tmp/lh-median.json > /tmp/lh-averages.tsv
+          IFS=$'\t' read -r avg_perf avg_a11y avg_bp avg_seo < /tmp/lh-averages.tsv
 
           {
             echo ""

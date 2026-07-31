@@ -739,7 +739,6 @@ em {
   border: 1px solid var(--border);
   border-radius: 2px;
   padding: 0.05rem 0.4rem;
-  white-space: nowrap;
 }
 
 .post-entry-title {

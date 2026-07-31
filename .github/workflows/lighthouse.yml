@@ -181,9 +181,12 @@ jobs:
           temporaryPublicStorage: ${{ steps.lhci.outputs.has_credentials != 'true' }}
 
       - name: Redact credentials from reports
+        id: redact
         if: always() && steps.lhci.outputs.has_credentials == 'true'
         run: |
           shopt -s nullglob
+          echo "--- .lighthouseci contents ---"
+          ls -la .lighthouseci/ 2>&1 || echo "(directory missing)"
           # Only the lhr-*.json reports carry configSettings. assertion-results
           # .json is a top-level array and is deliberately left alone — running
           # `has(...)` against it is a type error, not a no-op.
@@ -200,17 +203,27 @@ jobs:
           # Fail closed. This step is the only thing standing between a
           # service token and a public artifact, so verify rather than assume:
           # if the header name survived anywhere, abort before the upload step.
-          if grep -rIl 'CF-Access-Client' .lighthouseci/ 2>/dev/null | grep -q .; then
+          offenders=$(grep -rIl 'CF-Access-Client' .lighthouseci/ 2>/dev/null || true)
+          if [ -n "$offenders" ]; then
             echo "::error::Redaction failed — Access credentials are still present in .lighthouseci. Refusing to upload."
+            echo "Offending files (header names only, values withheld):"
+            while IFS= read -r f; do
+              printf '  %s: %s\n' "$f" "$(grep -o 'CF-Access-Client[A-Za-z-]*' "$f" | sort -u | tr '\n' ' ')"
+            done <<< "$offenders"
             exit 1
           fi
 
+      # Gated on the redaction step SUCCEEDING, not on always(): an always()
+      # here would upload the unredacted reports the guard just refused, which
+      # defeats the entire point of the guard. .lighthouseci is a dotted
+      # directory, so include-hidden-files is required or nothing is collected.
       - name: Upload redacted reports
-        if: always() && steps.lhci.outputs.has_credentials == 'true'
+        if: always() && steps.redact.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: lighthouse-results
           path: .lighthouseci
+          include-hidden-files: true
           if-no-files-found: ignore
       - name: Build summary + averages
         if: always()

@@ -49,13 +49,24 @@ jobs:
             if [ "$HEAD_BRANCH" = "main" ]; then
               URL="https://mjrossi.com"
             else
-              # Cloudflare Workers per-branch preview alias:
-              # <branch-alias>-<worker-name>.<subdomain>.workers.dev
-              # Alias = lowercase, non-alphanumerics collapsed to dashes, trimmed.
-              ALIAS=$(printf '%s' "$HEAD_BRANCH" \
-                | tr '[:upper:]' '[:lower:]' \
-                | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
-              URL="https://${ALIAS}-mjrossi-portfolio-website.link00seven.workers.dev"
+              # Read the preview hostname out of Cloudflare's own check run
+              # rather than deriving it. Cloudflare does NOT simply slugify the
+              # branch — it truncates the alias to 32 chars plus a 4-char hash
+              # (`dependabot-npm-and-yarn-npm-mino-ad6f-…`). Reconstructing it
+              # by hand produced a >63-character DNS label for long dependabot
+              # branches, which is an illegal hostname: Chrome could not
+              # resolve it and `lhci collect` aborted with
+              # CHROME_INTERSTITIAL_ERROR before writing a single report.
+              SUMMARY=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs" \
+                --jq '.check_runs[] | select(.app.slug == "cloudflare-workers-and-pages") | .output.summary')
+              URL=$(printf '%s' "$SUMMARY" | grep -oE 'Preview Alias URL: \S+' | head -1 | cut -d' ' -f4)
+              # Version-scoped URL is the fallback; it is always short and
+              # points at exactly the deployment this check suite reported.
+              [ -n "$URL" ] || URL=$(printf '%s' "$SUMMARY" | grep -oE 'Preview URL: \S+' | head -1 | cut -d' ' -f3)
+              if [ -z "$URL" ]; then
+                echo "::error::No preview URL in the Cloudflare check run for ${SHA}. Expected a 'Preview Alias URL:' or 'Preview URL:' line in its summary; check that preview_urls is still true in wrangler.jsonc."
+                exit 1
+              fi
             fi
           fi
           URL="${URL%/}"
@@ -75,7 +86,77 @@ jobs:
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "pr=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "config=$CONFIG" >> "$GITHUB_OUTPUT"
+          echo "is_main=$([ "$BRANCH" = "main" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "Auditing $BRANCH → $URL (PR #${PR_NUMBER:-none}, sha ${SHA:0:7}, config $CONFIG)"
+
+      # Preview deploys sit behind Cloudflare Access. Without credentials every
+      # request 302s to link00seven.cloudflareaccess.com and Lighthouse happily
+      # audits the LOGIN PAGE — scoring a flat A11y 77 / BP 93 / SEO 54 on all
+      # six URLs, which can never satisfy the minScore:1 assertions. The
+      # service token is injected as request headers rather than baked into the
+      # committed config; see "Credential containment" below for why the upload
+      # settings change alongside it.
+      - name: Prepare LHCI config
+        id: lhci
+        env:
+          CONFIG: ${{ steps.ctx.outputs.config }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          IS_MAIN: ${{ steps.ctx.outputs.is_main }}
+        run: |
+          # mjrossi.com is not behind Access, so main needs no credentials.
+          if [ "$IS_MAIN" != "true" ] && [ -n "$CF_ACCESS_CLIENT_ID" ]; then
+            jq --arg id "$CF_ACCESS_CLIENT_ID" --arg secret "$CF_ACCESS_CLIENT_SECRET" \
+              '.ci.collect.settings.extraHeaders = {"CF-Access-Client-Id": $id, "CF-Access-Client-Secret": $secret}' \
+              "$CONFIG" > lighthouserc.runtime.json
+            echo "has_credentials=true" >> "$GITHUB_OUTPUT"
+            echo "Injected Cloudflare Access service-token headers."
+          else
+            cp "$CONFIG" lighthouserc.runtime.json
+            echo "has_credentials=false" >> "$GITHUB_OUTPUT"
+            if [ "$IS_MAIN" != "true" ]; then
+              echo "::warning::CF_ACCESS_CLIENT_ID is unset — the preview audit will be blocked by Cloudflare Access."
+            fi
+          fi
+
+      # Both failures this guard catches used to be silent: one audited a
+      # Cloudflare Access login screen, the other an unresolvable hostname.
+      # Fail here, naming the cause, instead of 90s later as bogus findings.
+      - name: Preflight target
+        env:
+          BASE_URL: ${{ steps.ctx.outputs.base }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          HAS_CREDENTIALS: ${{ steps.lhci.outputs.has_credentials }}
+        run: |
+          if [ "$HAS_CREDENTIALS" = "true" ]; then
+            set -- -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+                   -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"
+          else
+            set --
+          fi
+          if ! OUT=$(curl -sSL --max-time 30 -o /dev/null \
+              -w '%{http_code} %{url_effective}' "$@" "${BASE_URL}/"); then
+            echo "::error::Could not reach ${BASE_URL}/ — the hostname may not resolve."
+            exit 1
+          fi
+          CODE="${OUT%% *}"
+          FINAL="${OUT#* }"
+          case "$FINAL" in
+            "$BASE_URL"/*|"$BASE_URL") ;;
+            *)
+              # Report the origin only — an Access redirect carries a multi-KB
+              # JWT in the query string and would bury the message.
+              echo "::error::${BASE_URL}/ redirected off-origin to $(printf '%s' "$FINAL" | cut -d/ -f1-3) — Cloudflare Access is blocking the audit. Check the CF_ACCESS_* secrets and that the Access app has a Service Auth policy for this token."
+              exit 1
+              ;;
+          esac
+          if [ "$CODE" != "200" ]; then
+            echo "::error::${BASE_URL}/ returned HTTP ${CODE}, expected 200."
+            exit 1
+          fi
+          echo "Preflight OK — ${FINAL} returned ${CODE}."
+
       - name: Audit with Lighthouse
         uses: treosh/lighthouse-ci-action@v12
         with:
@@ -86,9 +167,51 @@ jobs:
             ${{ steps.ctx.outputs.base }}/urban-mobility
             ${{ steps.ctx.outputs.base }}/blog
             ${{ steps.ctx.outputs.base }}/blog/why-im-pivoting
-          configPath: ./${{ steps.ctx.outputs.config }}
-          uploadArtifacts: true
-          temporaryPublicStorage: true
+          configPath: ./lighthouserc.runtime.json
+          # Credential containment. Lighthouse records `settings.extraHeaders`
+          # verbatim into `configSettings` in every lhr-*.json, and the
+          # lhr-*.html reports embed that same JSON. This repo is PUBLIC, so
+          # both of this action's upload paths would publish the Access service
+          # token: temporaryPublicStorage writes to a world-readable GCS URL
+          # that is printed in the logs, and artifacts on a public repo are
+          # downloadable by anyone. When credentials are in play we therefore
+          # let the action upload nothing and hand off to the redact + upload
+          # steps below. main injects no headers and keeps both, unchanged.
+          uploadArtifacts: ${{ steps.lhci.outputs.has_credentials != 'true' }}
+          temporaryPublicStorage: ${{ steps.lhci.outputs.has_credentials != 'true' }}
+
+      - name: Redact credentials from reports
+        if: always() && steps.lhci.outputs.has_credentials == 'true'
+        run: |
+          shopt -s nullglob
+          # Only the lhr-*.json reports carry configSettings. assertion-results
+          # .json is a top-level array and is deliberately left alone — running
+          # `has(...)` against it is a type error, not a no-op.
+          for f in .lighthouseci/lhr-*.json; do
+            tmp=$(mktemp)
+            jq 'if type == "object" and has("configSettings")
+                then .configSettings.extraHeaders = null else . end' "$f" > "$tmp"
+            mv "$tmp" "$f"
+          done
+          # The HTML reports embed the unredacted LHR as inline JSON; the
+          # summary step below only reads the JSON, so drop them entirely
+          # rather than trying to rewrite markup.
+          rm -f .lighthouseci/*.html
+          # Fail closed. This step is the only thing standing between a
+          # service token and a public artifact, so verify rather than assume:
+          # if the header name survived anywhere, abort before the upload step.
+          if grep -rIl 'CF-Access-Client' .lighthouseci/ 2>/dev/null | grep -q .; then
+            echo "::error::Redaction failed — Access credentials are still present in .lighthouseci. Refusing to upload."
+            exit 1
+          fi
+
+      - name: Upload redacted reports
+        if: always() && steps.lhci.outputs.has_credentials == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-results
+          path: .lighthouseci
+          if-no-files-found: ignore
       - name: Build summary + averages
         if: always()
         id: scores
@@ -106,7 +229,7 @@ jobs:
               echo ""
               echo "Audited: <$BASE_URL>"
               echo ""
-              echo "No Lighthouse reports were produced (run failed before collect)."
+              echo "No Lighthouse reports were produced — the run failed before collect. Check the preflight step: the target may be unreachable or blocked by Cloudflare Access."
             } | tee -a "$GITHUB_STEP_SUMMARY" > /tmp/lh-body.md
             exit 0
           fi
@@ -120,25 +243,30 @@ jobs:
             echo "| --- | ---: | ---: | ---: | ---: |"
           } > /tmp/lh-body.md
 
-          sum_perf=0; sum_a11y=0; sum_bp=0; sum_seo=0; n=0
-          for f in "${reports[@]}"; do
-            url=$(jq -r '.finalDisplayedUrl // .finalUrl' "$f")
-            perf=$(jq -r '(.categories.performance.score * 100) | floor' "$f")
-            a11y=$(jq -r '(.categories.accessibility.score * 100) | floor' "$f")
-            bp=$(jq -r '(.categories["best-practices"].score * 100) | floor' "$f")
-            seo=$(jq -r '(.categories.seo.score * 100) | floor' "$f")
-            echo "| $url | $perf | $a11y | $bp | $seo |" >> /tmp/lh-body.md
-            sum_perf=$((sum_perf + perf))
-            sum_a11y=$((sum_a11y + a11y))
-            sum_bp=$((sum_bp + bp))
-            sum_seo=$((sum_seo + seo))
-            n=$((n + 1))
-          done
+          # numberOfRuns is 3, so there are three reports per URL. Collapse each
+          # URL to its median-by-performance run — the same "one representative
+          # run" LHCI asserts against — otherwise the table would list every URL
+          # three times and the averages would be dominated by whichever page
+          # happened to produce extra runs.
+          jq -s '
+            map({
+              url:  (.finalDisplayedUrl // .finalUrl),
+              perf: (.categories.performance.score * 100 | floor),
+              a11y: (.categories.accessibility.score * 100 | floor),
+              bp:   (.categories["best-practices"].score * 100 | floor),
+              seo:  (.categories.seo.score * 100 | floor)
+            })
+            | group_by(.url)
+            | map(sort_by(.perf) | .[length / 2 | floor])
+          ' "${reports[@]}" > /tmp/lh-median.json
 
-          avg_perf=$((sum_perf / n))
-          avg_a11y=$((sum_a11y / n))
-          avg_bp=$((sum_bp / n))
-          avg_seo=$((sum_seo / n))
+          jq -r '.[] | "| \(.url) | \(.perf) | \(.a11y) | \(.bp) | \(.seo) |"' \
+            /tmp/lh-median.json >> /tmp/lh-body.md
+
+          read -r avg_perf avg_a11y avg_bp avg_seo < <(jq -r '
+            [.[] | .perf], [.[] | .a11y], [.[] | .bp], [.[] | .seo]
+            | (add / length | floor) | tostring
+          ' /tmp/lh-median.json | paste -sd' ' -)
 
           {
             echo ""

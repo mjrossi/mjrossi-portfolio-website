@@ -190,24 +190,36 @@ if (existsSync(headersPath)) {
   );
 }
 
+// Astro's emitted CSS filename is an internal detail, not a contract. 7.1.3
+// shipped this bundle twice — Base.<hash>.css from the SSR build and
+// 404-astro-<hash>.css from the prerender build — because /404 is prerendered
+// and every other route is SSR, and both pull global.css through Base.astro.
+// 7.1.4 deduplicated them, keeping only the prerender name (withastro/astro
+// #17488), which failed a check pinned to `Base.*.css` on a patch bump that
+// changed nothing user-visible. Match on the extension instead, and assert
+// against every stylesheet shipped so the negative guards below can't be
+// dodged by a rule landing in a second bundle.
 const astroDir = resolve(DIST, '_astro');
-const cssFile = existsSync(astroDir)
-  ? readdirSync(astroDir).find((f) => /^Base\..*\.css$/.test(f))
-  : null;
-check('css: Base.*.css exists', !!cssFile, cssFile ?? 'not found');
+const cssFiles = existsSync(astroDir)
+  ? readdirSync(astroDir).filter((f) => f.endsWith('.css'))
+  : [];
+check('css: a stylesheet is emitted to _astro/', cssFiles.length > 0, 'no .css file found');
 
-if (cssFile) {
-  const css = readFileSync(join(astroDir, cssFile), 'utf8');
-  check('css: --accent is #8f5520 (AA contrast)', /--accent:\s*#8f5520/i.test(css));
-  check('css: --max token present',               /--max:\s*1100px/.test(css));
-  check('css: no inline SVG data URIs',           !css.includes('data:image/svg+xml'));
-  // Guards a prior masthead design (condensed variant + home-link/page-label
-  // bar) that was reverted. The rules below assert those classes never
-  // reappear in the built CSS or rendered HTML — without these, a copy-paste
-  // from the old design could ship unnoticed.
-  check('css: condensed masthead rules gone',
-    !/\.masthead\.condensed|\.masthead-home-link|\.masthead-page-label/.test(css));
-}
+// Not guarded by `cssFiles.length` — when no bundle is found these must fail,
+// not silently skip. The condensed-masthead rule is a regression guard, and a
+// guard that vanishes from the run whenever the CSS can't be located is worse
+// than no guard at all: the suite stays green through exactly the build
+// breakage it exists to catch.
+const css = cssFiles.map((f) => readFileSync(join(astroDir, f), 'utf8')).join('\n');
+check('css: --accent is #8f5520 (AA contrast)', /--accent:\s*#8f5520/i.test(css));
+check('css: --max token present',               /--max:\s*1100px/.test(css));
+check('css: no inline SVG data URIs',           !css.includes('data:image/svg+xml'));
+// Guards a prior masthead design (condensed variant + home-link/page-label
+// bar) that was reverted. The rules below assert those classes never
+// reappear in the built CSS or rendered HTML — without these, a copy-paste
+// from the old design could ship unnoticed.
+check('css: condensed masthead rules gone',
+  !/\.masthead\.condensed|\.masthead-home-link|\.masthead-page-label/.test(css));
 
 // ── Live routes ──────────────────────────────────────
 

@@ -37,13 +37,13 @@
       The Chicago metro area and the RTA service area as separate regions
     </title>
     <desc id="dg-chi-desc">
-      A directed graph with two paths. From Chicago, the walk goes up through
+      A directed graph with two paths. From Chicago, the lookup climbs through
       Cook County, which has two parents: the Chicago Metro area, and the RTA
       Service Area, whose parent is Illinois. So a search from the Loop reaches
-      both the metro and the transit district. From Gary, Indiana, the walk goes
-      up through Lake County, Indiana, whose parents are the Chicago Metro area
-      and the state of Indiana. Gary therefore reaches the metro but never the
-      RTA and never Illinois, because the metro has no edge to either state.
+      both the metro and the transit district. From Gary, Indiana, the lookup
+      climbs through Lake County, Indiana, whose parents are the Chicago Metro
+      area and the state of Indiana. Gary therefore reaches the metro but never
+      the RTA and never Illinois, because the metro has no edge to either state.
       Both paths converge on Chicago Metro and then Chicagoland.
     </desc>
 
@@ -142,9 +142,9 @@
     {/* ---- legend ---- */}
     <g class="dg-legend">
       <path class="dg-edge dg-edge--a" d="M20 578 H 56" fill="none" />
-      <text x="64" y="582" class="dg-note dg-note--start">the walk up from 60601</text>
+      <text x="64" y="582" class="dg-note dg-note--start">lookup from 60601 (the Loop)</text>
       <path class="dg-edge" d="M250 578 H 286" fill="none" />
-      <text x="294" y="582" class="dg-note dg-note--start">the walk up from 46402</text>
+      <text x="294" y="582" class="dg-note dg-note--start">lookup from 46402 (Gary, IN)</text>
     </g>
   </svg>
 

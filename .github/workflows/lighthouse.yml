@@ -185,12 +185,13 @@ jobs:
         if: always() && steps.lhci.outputs.has_credentials == 'true'
         run: |
           shopt -s nullglob
-          echo "--- .lighthouseci contents ---"
-          ls -la .lighthouseci/ 2>&1 || echo "(directory missing)"
-          # Only the lhr-*.json reports carry configSettings. assertion-results
-          # .json is a top-level array and is deliberately left alone — running
-          # `has(...)` against it is a type error, not a no-op.
-          for f in .lighthouseci/lhr-*.json; do
+          # `lhci collect` names its reports `<url-slug>--<timestamp>.report.json`.
+          # The `lhr-*.json` names appear only during `lhci upload`'s "Dumping
+          # reports to disk" phase, which is disabled here — globbing for those
+          # silently matches nothing and redacts nothing. assertion-results.json
+          # is a top-level array and is deliberately skipped: `has(...)` against
+          # it is a type error, not a no-op.
+          for f in .lighthouseci/*.report.json; do
             tmp=$(mktemp)
             jq 'if type == "object" and has("configSettings")
                 then .configSettings.extraHeaders = null else . end' "$f" > "$tmp"
@@ -199,7 +200,7 @@ jobs:
           # The HTML reports embed the unredacted LHR as inline JSON; the
           # summary step below only reads the JSON, so drop them entirely
           # rather than trying to rewrite markup.
-          rm -f .lighthouseci/*.html
+          rm -f .lighthouseci/*.report.html
           # Fail closed. This step is the only thing standing between a
           # service token and a public artifact, so verify rather than assume:
           # if the header name survived anywhere, abort before the upload step.
@@ -234,7 +235,10 @@ jobs:
           SHA: ${{ steps.ctx.outputs.sha }}
         run: |
           shopt -s nullglob
-          reports=(.lighthouseci/lhr-*.json)
+          # Use the collect-time filenames, not `lhr-*.json`: those are written
+          # only by `lhci upload`, which is disabled on credentialed runs. These
+          # are one file per run (3 per URL), collapsed to a median below.
+          reports=(.lighthouseci/*.report.json)
           if [ ${#reports[@]} -eq 0 ]; then
             echo "status=no-reports" >> "$GITHUB_OUTPUT"
             {

@@ -9,6 +9,9 @@ dist/
 .env*
 !.env.example
 
+# lighthouse report output (lhci writes this wherever it runs)
+.lighthouseci/
+
 # vscode
 .vscode/
 

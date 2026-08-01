@@ -41,10 +41,10 @@ new MDX → git push → Cloudflare build → /blog/rss.xml → Buttondown polls
 
 **Performance auditing:**
 - Lighthouse CI — `treosh/lighthouse-ci-action@v12` in `.github/workflows/lighthouse.yml`
-  - Audits 6 pages per deploy (/, /work, /education, /urban-mobility, /blog, /blog/why-im-pivoting)
-  - Config: `.github/lighthouserc.json` (PR previews, relaxed SEO/perf thresholds) and `.github/lighthouserc.main.json` (main branch, strict)
-  - Results uploaded to temporary public storage; sticky PR comment via `marocchino/sticky-pull-request-comment@v3`
-  - Triggered by Cloudflare check_suite completion events
+  - Audits 6 pages on production only (/, /work, /education, /urban-mobility, /blog, /blog/why-im-pivoting)
+  - Config: `.github/lighthouserc.json` — one file, all four categories strict; `numberOfRuns: 3` with `aggregationMethod: "median"`
+  - Results uploaded to temporary public storage and a run artifact; no PR comment, no custom check run
+  - Triggered by Cloudflare check_suite completion on `main` (or manual `workflow_dispatch`); PR previews are deliberately not audited — see docs/ARCHITECTURE.md
 
 ## Data Storage
 

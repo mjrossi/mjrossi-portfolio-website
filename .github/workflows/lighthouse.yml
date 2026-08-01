@@ -1,185 +1,68 @@
 name: Lighthouse
-run-name: "Lighthouse · ${{ github.event.check_suite.head_branch || inputs.url || github.ref_name }}"
+run-name: "Lighthouse · mjrossi.com"
+
+# Audits PRODUCTION ONLY, after Cloudflare has finished deploying main.
+#
+# Auditing PR preview deploys instead is the obvious-looking design and was
+# tried; it is not worth what it costs. Preview hosts sit behind Cloudflare
+# Access, so the audit needs a service token — which Lighthouse then copies
+# verbatim into `configSettings` in every report JSON and inlines into every
+# HTML report. On a public repo that means the workflow also has to own a
+# redaction pass, gate both of the action's upload paths, refuse fork PRs
+# (whose Worker could read the token straight off the request), and anchor a
+# host allowlist so a free-text `workflow_dispatch` URL can't be handed the
+# credentials. That was ~350 lines of security-critical shell guarding a
+# preview audit that had never once produced a valid score.
+#
+# Production needs none of it: mjrossi.com is public, so there is no token,
+# nothing to redact, and nothing to leak. The trade is that a regression is
+# caught just after it ships rather than just before. On a static site with
+# instant deploys and revert-as-rollback, that is the cheaper failure.
 
 on:
-  # Cloudflare Workers Builds reports deploys via check runs. When the CF
-  # app's check_suite completes we audit whichever URL got deployed:
-  # mjrossi.com for main, or the per-branch preview alias for PR branches.
+  # Cloudflare Workers Builds reports deploys via check runs. When the CF app's
+  # check_suite completes successfully on main, the new code is live.
   check_suite:
     types: [completed]
-  # Manual escape hatch for auditing an arbitrary URL (e.g. a PR's
-  # Workers preview URL) on demand.
+  # Manual re-run, e.g. after a Cloudflare-side change. Takes no input: the
+  # target is always production. A free-text URL input is what previously
+  # forced scheme/port validation and a credential host allowlist.
   workflow_dispatch:
-    inputs:
-      url:
-        description: "URL to audit (e.g. a Workers preview URL)"
-        required: true
-        type: string
 
 permissions:
   contents: read
-  pull-requests: write
-  checks: write
+
+# numberOfRuns is 3, so an audit is several minutes of Lighthouse. Rapid merges
+# would otherwise leave two jobs auditing the same origin at once, each adding
+# load that degrades the other's numbers.
+concurrency:
+  group: lighthouse
+  cancel-in-progress: true
 
 jobs:
   lighthouse:
+    # `head_branch == 'main'` is what keeps this to production. Cloudflare's
+    # check suite also completes for every PR branch deploy; those are ignored.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.check_suite.conclusion == 'success' &&
+       github.event.check_suite.head_branch == 'main' &&
        contains(github.event.check_suite.app.slug, 'cloudflare'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Resolve target URL and PR context
-        id: ctx
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          DISPATCH_URL: ${{ inputs.url }}
-          HEAD_BRANCH: ${{ github.event.check_suite.head_branch }}
-          HEAD_SHA: ${{ github.event.check_suite.head_sha }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            URL="$DISPATCH_URL"
-            BRANCH="${GITHUB_REF_NAME}"
-            SHA="${GITHUB_SHA}"
-          else
-            SHA="$HEAD_SHA"
-            BRANCH="$HEAD_BRANCH"
-            if [ "$HEAD_BRANCH" = "main" ]; then
-              URL="https://mjrossi.com"
-            else
-              # Cloudflare Workers per-branch preview alias:
-              # <branch-alias>-<worker-name>.<subdomain>.workers.dev
-              # Alias = lowercase, non-alphanumerics collapsed to dashes, trimmed.
-              ALIAS=$(printf '%s' "$HEAD_BRANCH" \
-                | tr '[:upper:]' '[:lower:]' \
-                | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
-              URL="https://${ALIAS}-mjrossi-portfolio-website.link00seven.workers.dev"
-            fi
-          fi
-          URL="${URL%/}"
-          PR_NUMBER=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
-          # main enforces all four categories strictly. PR previews relax
-          # SEO (CF preview URLs ship `x-robots-tag: noindex`) and perf
-          # (simulate throttling on shared CI runners produces high TBT
-          # variance — real regressions still show up in the posted
-          # scores, just without blocking the check).
-          if [ "$BRANCH" = "main" ]; then
-            CONFIG=".github/lighthouserc.main.json"
-          else
-            CONFIG=".github/lighthouserc.json"
-          fi
-          echo "base=$URL" >> "$GITHUB_OUTPUT"
-          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "pr=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "config=$CONFIG" >> "$GITHUB_OUTPUT"
-          echo "Auditing $BRANCH → $URL (PR #${PR_NUMBER:-none}, sha ${SHA:0:7}, config $CONFIG)"
-      - name: Audit with Lighthouse
-        uses: treosh/lighthouse-ci-action@v12
+      # Keep this list in sync with docs/ARCHITECTURE.md. /projects is excluded
+      # because it is noindex and would fail SEO by design. The blog pair covers
+      # the newsletter form's Turnstile script and the BlogPost layout.
+      - uses: treosh/lighthouse-ci-action@v12
         with:
           urls: |
-            ${{ steps.ctx.outputs.base }}/
-            ${{ steps.ctx.outputs.base }}/work
-            ${{ steps.ctx.outputs.base }}/education
-            ${{ steps.ctx.outputs.base }}/urban-mobility
-            ${{ steps.ctx.outputs.base }}/blog
-            ${{ steps.ctx.outputs.base }}/blog/why-im-pivoting
-          configPath: ./${{ steps.ctx.outputs.config }}
+            https://mjrossi.com/
+            https://mjrossi.com/work
+            https://mjrossi.com/education
+            https://mjrossi.com/urban-mobility
+            https://mjrossi.com/blog
+            https://mjrossi.com/blog/why-im-pivoting
+          configPath: ./.github/lighthouserc.json
           uploadArtifacts: true
           temporaryPublicStorage: true
-      - name: Build summary + averages
-        if: always()
-        id: scores
-        env:
-          BRANCH: ${{ steps.ctx.outputs.branch }}
-          BASE_URL: ${{ steps.ctx.outputs.base }}
-          SHA: ${{ steps.ctx.outputs.sha }}
-        run: |
-          shopt -s nullglob
-          reports=(.lighthouseci/lhr-*.json)
-          if [ ${#reports[@]} -eq 0 ]; then
-            echo "status=no-reports" >> "$GITHUB_OUTPUT"
-            {
-              echo "## Lighthouse · \`$BRANCH\`"
-              echo ""
-              echo "Audited: <$BASE_URL>"
-              echo ""
-              echo "No Lighthouse reports were produced (run failed before collect)."
-            } | tee -a "$GITHUB_STEP_SUMMARY" > /tmp/lh-body.md
-            exit 0
-          fi
-
-          {
-            echo "## Lighthouse · \`$BRANCH\`"
-            echo ""
-            echo "Audited: <$BASE_URL> (commit \`${SHA:0:7}\`)"
-            echo ""
-            echo "| URL | Perf | A11y | BP | SEO |"
-            echo "| --- | ---: | ---: | ---: | ---: |"
-          } > /tmp/lh-body.md
-
-          sum_perf=0; sum_a11y=0; sum_bp=0; sum_seo=0; n=0
-          for f in "${reports[@]}"; do
-            url=$(jq -r '.finalDisplayedUrl // .finalUrl' "$f")
-            perf=$(jq -r '(.categories.performance.score * 100) | floor' "$f")
-            a11y=$(jq -r '(.categories.accessibility.score * 100) | floor' "$f")
-            bp=$(jq -r '(.categories["best-practices"].score * 100) | floor' "$f")
-            seo=$(jq -r '(.categories.seo.score * 100) | floor' "$f")
-            echo "| $url | $perf | $a11y | $bp | $seo |" >> /tmp/lh-body.md
-            sum_perf=$((sum_perf + perf))
-            sum_a11y=$((sum_a11y + a11y))
-            sum_bp=$((sum_bp + bp))
-            sum_seo=$((sum_seo + seo))
-            n=$((n + 1))
-          done
-
-          avg_perf=$((sum_perf / n))
-          avg_a11y=$((sum_a11y / n))
-          avg_bp=$((sum_bp / n))
-          avg_seo=$((sum_seo / n))
-
-          {
-            echo ""
-            echo "**Averages** · Perf $avg_perf · A11y $avg_a11y · BP $avg_bp · SEO $avg_seo"
-          } >> /tmp/lh-body.md
-
-          cat /tmp/lh-body.md >> "$GITHUB_STEP_SUMMARY"
-
-          echo "avg_perf=$avg_perf" >> "$GITHUB_OUTPUT"
-          echo "avg_a11y=$avg_a11y" >> "$GITHUB_OUTPUT"
-          echo "avg_bp=$avg_bp" >> "$GITHUB_OUTPUT"
-          echo "avg_seo=$avg_seo" >> "$GITHUB_OUTPUT"
-          echo "status=ok" >> "$GITHUB_OUTPUT"
-      - name: Post sticky PR comment
-        if: always() && steps.ctx.outputs.pr != ''
-        uses: marocchino/sticky-pull-request-comment@v3
-        with:
-          number: ${{ steps.ctx.outputs.pr }}
-          header: lighthouse
-          path: /tmp/lh-body.md
-      - name: Publish check run with averages
-        if: always() && steps.scores.outputs.status == 'ok'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ steps.ctx.outputs.sha }}
-          AVG_PERF: ${{ steps.scores.outputs.avg_perf }}
-          AVG_A11Y: ${{ steps.scores.outputs.avg_a11y }}
-          AVG_BP: ${{ steps.scores.outputs.avg_bp }}
-          AVG_SEO: ${{ steps.scores.outputs.avg_seo }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          TITLE="Perf ${AVG_PERF} · A11y ${AVG_A11Y} · BP ${AVG_BP} · SEO ${AVG_SEO}"
-          SUMMARY=$(cat /tmp/lh-body.md)
-          jq -n \
-            --arg name "Lighthouse scores" \
-            --arg head_sha "$SHA" \
-            --arg status "completed" \
-            --arg conclusion "neutral" \
-            --arg details_url "$RUN_URL" \
-            --arg title "$TITLE" \
-            --arg summary "$SUMMARY" \
-            '{name: $name, head_sha: $head_sha, status: $status, conclusion: $conclusion, details_url: $details_url, output: {title: $title, summary: $summary}}' \
-            | gh api "repos/${REPO}/check-runs" --method POST --input -

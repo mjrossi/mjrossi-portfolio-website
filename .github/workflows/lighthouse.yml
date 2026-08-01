@@ -24,8 +24,15 @@ permissions:
 # numberOfRuns is 3, so an audit is several minutes of Lighthouse. Rapid
 # pushes would otherwise leave two jobs racing to rewrite the same sticky
 # comment, and the loser's scores win.
+#
+# Keyed on the event as well as the SHA. Concurrency is evaluated BEFORE the
+# job-level `if`, so every check_suite completion on a commit enters this group
+# whether or not it is Cloudflare's. Today that is harmless (Actions' own check
+# suites do not trigger workflows, leaving only the Cloudflare app), but adding
+# a third GitHub App would otherwise let an unrelated check suite cancel a
+# running audit — and a manual dispatch must never cancel one either.
 concurrency:
-  group: lighthouse-${{ github.event.check_suite.head_sha || inputs.url || github.run_id }}
+  group: lighthouse-${{ github.event_name }}-${{ github.event.check_suite.head_sha || inputs.url || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -73,7 +80,17 @@ jobs:
               # so it cannot drift from the job-level `if`.
               # Piped to jq rather than using `gh --jq`, so the slug can come
               # in through --arg: gh's embedded jq is gojq and takes no --arg.
-              SUMMARY=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs?per_page=100" \
+              # Two statements, not one pipeline: GitHub Actions runs this with
+              # `bash -e` but WITHOUT `pipefail`, so a failing `gh api` inside a
+              # pipe is invisible — jq reads empty input, exits 0, and the run
+              # lands in the "no preview URL" branch below telling the operator
+              # to go check `preview_urls` in wrangler.jsonc, which is entirely
+              # the wrong place to look for an API outage or a token problem.
+              if ! CHECK_RUNS=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs?per_page=100"); then
+                echo "::error::Could not list check runs for ${SHA}. This is a GitHub API failure, not a Cloudflare one."
+                exit 1
+              fi
+              SUMMARY=$(printf '%s' "$CHECK_RUNS" \
                 | jq -r --arg slug "$CF_APP_SLUG" \
                   '[.check_runs[] | select(.app.slug == $slug)]
                    | sort_by(.completed_at // "") | last | .output.summary // ""')
@@ -96,21 +113,52 @@ jobs:
             fi
           fi
           URL="${URL%/}"
+          # Everything downstream splits the host off this string, so reject a
+          # URL that has no scheme rather than mis-parse it. `mjrossi.com` with
+          # no scheme leaves HOST as the whole string, curl silently upgrades it
+          # to https://, and the preflight then reports the origin mismatch as
+          # "Cloudflare Access is blocking the audit" — a wrong cause for what
+          # is really a malformed dispatch input. A `:port` is rejected for the
+          # same reason: it would defeat the credential host match below and
+          # silently drop the token.
+          case "$URL" in
+            https://*|http://*) ;;
+            *)
+              echo "::error::Target URL '${URL}' has no http:// or https:// scheme. Pass a full URL to workflow_dispatch."
+              exit 1
+              ;;
+          esac
           HOST="${URL#*://}"
           HOST="${HOST%%/*}"
+          case "$HOST" in
+            *:*)
+              echo "::error::Target host '${HOST}' carries a port. This workflow audits public https origins only."
+              exit 1
+              ;;
+          esac
 
           PR_JSON=$(gh pr list --head "$BRANCH" --state open \
             --json number,headRepositoryOwner --jq '.[0] // {}')
           PR_NUMBER=$(printf '%s' "$PR_JSON" | jq -r '.number // empty')
           PR_OWNER=$(printf '%s' "$PR_JSON" | jq -r '.headRepositoryOwner.login // empty')
 
-          # Fork guard. The audit target is a deployed Worker, and on a preview
-          # host we hand that Worker the Cloudflare Access service token as a
-          # request header. Code built from a fork is attacker-controlled and
-          # can read the header straight off the request, which would turn
-          # "open a PR" into "read this repo's secrets". Refuse loudly rather
-          # than audit a fork uncredentialed — that would fail at preflight
-          # with an Access error naming entirely the wrong cause.
+          # Fork guard, as a BACKSTOP rather than the primary control. The audit
+          # target is a deployed Worker, and on a preview host we hand that
+          # Worker the Cloudflare Access service token as a request header. Code
+          # built from a fork is attacker-controlled and can read the header
+          # straight off the request, which would turn "open a PR" into "read
+          # this repo's secrets". Refuse loudly rather than audit a fork
+          # uncredentialed — that would fail at preflight with an Access error
+          # naming entirely the wrong cause.
+          #
+          # What actually keeps forks out is upstream of here: a fork's check
+          # suites are created on the fork, and Workers Builds does not build
+          # forks into this account, so no fork deploy ever reaches this
+          # workflow. This check is deliberately cheap and has two known holes
+          # it does not need to close — `.[0]` of a name-filtered list resolves
+          # by list order if a fork PR and an upstream PR share a head branch
+          # name, and a fork branch with no open PR yields an empty PR_OWNER
+          # and passes.
           if [ -n "$PR_OWNER" ] && [ "$PR_OWNER" != "${GITHUB_REPOSITORY%%/*}" ]; then
             echo "::error::PR #${PR_NUMBER} comes from a fork (${PR_OWNER}). Fork previews are not audited: doing so would send the Cloudflare Access service token to code this repository does not control."
             exit 1
@@ -131,14 +179,24 @@ jobs:
             mjrossi.com|www.mjrossi.com) CONFIG=".github/lighthouserc.main.json" ;;
             *)                           CONFIG=".github/lighthouserc.json" ;;
           esac
-          # Only *.workers.dev preview hosts sit behind Cloudflare Access, so
-          # only they are given the token. Matching the parsed host rather than
-          # the whole URL is load-bearing: a `case "$URL" in https://*.workers.dev)`
-          # pattern also matches https://attacker.example/.workers.dev, which
-          # would hand a dispatcher's typo'd or hostile URL the credentials.
+          # Only THIS ACCOUNT's workers.dev preview hosts sit behind our
+          # Cloudflare Access app, so only they are given the token. Two things
+          # about this pattern are load-bearing:
+          #
+          # - It matches the parsed host, not the whole URL. A
+          #   `case "$URL" in https://*.workers.dev)` pattern also matches
+          #   https://attacker.example/.workers.dev.
+          # - It is anchored on the account subdomain, not on `.workers.dev`.
+          #   workers.dev is a shared namespace anyone can deploy to, and
+          #   `workflow_dispatch` takes a free-text URL, so a bare
+          #   `*.workers.dev` would let anyone with repo write access — who can
+          #   fire this workflow but cannot otherwise read secrets — POST a URL
+          #   on their own account and have the preflight curl hand it the
+          #   service token. (curl forwards custom -H headers across redirects
+          #   too, so `-L` would replay it to wherever that host pointed.)
           case "$HOST" in
-            *.workers.dev) NEEDS_CREDS=true ;;
-            *)             NEEDS_CREDS=false ;;
+            *.link00seven.workers.dev) NEEDS_CREDS=true ;;
+            *)                         NEEDS_CREDS=false ;;
           esac
 
           echo "base=$URL" >> "$GITHUB_OUTPUT"
@@ -164,8 +222,17 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           NEEDS_CREDS: ${{ steps.ctx.outputs.needs_creds }}
         run: |
-          # NEEDS_CREDS is true only for *.workers.dev preview hosts;
-          # mjrossi.com is not behind Access and needs no credentials.
+          # Write the SAFE answer to both outputs first, then overwrite (a later
+          # line for the same key wins in $GITHUB_OUTPUT). Every other guard in
+          # this file fails closed and these must too: if this step dies partway
+          # — between the jq and its echo, say — the defaults leave the audit
+          # publishing nothing and still run the redaction guard. Note the two
+          # flags are not each other's negation for that reason; `publish` is
+          # phrased positively so that "no value at all" means "do not publish".
+          echo "has_credentials=true" >> "$GITHUB_OUTPUT"
+          echo "publish_reports=false" >> "$GITHUB_OUTPUT"
+          # NEEDS_CREDS is true only for this account's workers.dev preview
+          # hosts; mjrossi.com is not behind Access and needs no credentials.
           # Both halves of the token are required — an ID with an empty secret
           # produces a header pair that Access rejects, and failing here names
           # the cause better than the preflight's generic Access message.
@@ -173,11 +240,11 @@ jobs:
             jq --arg id "$CF_ACCESS_CLIENT_ID" --arg secret "$CF_ACCESS_CLIENT_SECRET" \
               '.ci.collect.settings.extraHeaders = {"CF-Access-Client-Id": $id, "CF-Access-Client-Secret": $secret}' \
               "$CONFIG" > lighthouserc.runtime.json
-            echo "has_credentials=true" >> "$GITHUB_OUTPUT"
             echo "Injected Cloudflare Access service-token headers."
           else
             cp "$CONFIG" lighthouserc.runtime.json
             echo "has_credentials=false" >> "$GITHUB_OUTPUT"
+            echo "publish_reports=true" >> "$GITHUB_OUTPUT"
             if [ "$NEEDS_CREDS" = "true" ]; then
               echo "::warning::CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are not both set — the preview audit will be blocked by Cloudflare Access."
             fi
@@ -242,27 +309,46 @@ jobs:
           # downloadable by anyone. When credentials are in play we therefore
           # let the action upload nothing and hand off to the redact + upload
           # steps below. main injects no headers and keeps both, unchanged.
-          uploadArtifacts: ${{ steps.lhci.outputs.has_credentials != 'true' }}
-          temporaryPublicStorage: ${{ steps.lhci.outputs.has_credentials != 'true' }}
+          # Gated on a positive flag, so an unset output reads as "don't".
+          uploadArtifacts: ${{ steps.lhci.outputs.publish_reports == 'true' }}
+          temporaryPublicStorage: ${{ steps.lhci.outputs.publish_reports == 'true' }}
 
       - name: Redact credentials from reports
         id: redact
         if: always() && steps.lhci.outputs.has_credentials == 'true'
         env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           shopt -s nullglob
           # lhci leaves TWO sets of reports here and both carry the headers:
-          # `<url-slug>--<timestamp>.report.json` from collect (one per run) and
-          # `lhr-<ms>.json` dumped by upload. Match every .json rather than
-          # either naming scheme — a glob that covers only one silently redacts
-          # nothing, which is indistinguishable from success without the guard
-          # below. The type test skips assertion-results.json, a top-level array
-          # against which `has(...)` is an error rather than a no-op.
+          # `lhr-<ms>.json` written by `lhci collect` (saveLHR, one per run) and
+          # `<host>-<path>-<datetime>.report.json` written by
+          # `lhci upload --target=filesystem`. Do not "simplify" this glob on
+          # the theory that disabling the upload toggles removes one of them:
+          # treosh/lighthouse-ci-action runs that filesystem upload
+          # UNCONDITIONALLY (src/index.js — it sits outside the
+          # `if (serverToken || temporaryPublicStorage || uploadArtifacts)`
+          # block), so both sets are present on every run either way.
+          # Match every .json rather than either naming scheme — a glob that
+          # covers only one silently redacts nothing, which is indistinguishable
+          # from success without the guard below, and that is precisely the bug
+          # this guard caught twice while this workflow was being written.
+          # The type test skips the two top-level ARRAYS lhci also drops here,
+          # assertion-results.json and manifest.json, against which `has(...)`
+          # is a hard error rather than a no-op.
           for f in .lighthouseci/*.json; do
             tmp=$(mktemp)
-            jq 'if type == "object" and has("configSettings")
-                then .configSettings.extraHeaders = null else . end' "$f" > "$tmp"
+            # Check jq explicitly instead of leaning on `bash -e`. A report that
+            # doesn't parse still fails closed either way, but as a bare
+            # "jq: parse error ... at line 1" with no filename and no hint that
+            # a credential is the reason the job stopped. Name it.
+            if ! jq 'if type == "object" and has("configSettings")
+                     then .configSettings.extraHeaders = null else . end' "$f" > "$tmp"; then
+              rm -f "$tmp"
+              echo "::error::${f} could not be parsed as JSON, so it could not be redacted. Refusing to upload — assume it still carries the Access token."
+              exit 1
+            fi
             mv "$tmp" "$f"
           done
           # Every HTML report embeds the unredacted LHR as inline JSON; the
@@ -285,16 +371,20 @@ jobs:
             done <<< "$offenders"
             exit 1
           fi
-          # Second, independent check on the secret VALUE. The check above only
-          # knows about the header name, so anything that recorded the token
-          # under a different key — a redirect chain, a future Lighthouse field,
-          # an error message quoting the request — would sail past it. Quiet and
+          # Second, independent check on the credential VALUES. The check above
+          # only knows about the header name, so anything that recorded the
+          # token under a different key — a redirect chain, a future Lighthouse
+          # field, an error message quoting the request — would sail past it.
+          # Both halves are checked: the ID alone is not usable, but it is half
+          # of a service token and there is no reason to publish it. Quiet and
           # fixed-string: this must never echo what it is searching for.
-          if [ -n "$CF_ACCESS_CLIENT_SECRET" ] \
-             && grep -rlaqF -e "$CF_ACCESS_CLIENT_SECRET" .lighthouseci/ >/dev/null 2>&1; then
-            echo "::error::Redaction failed — the Access client secret appears verbatim in .lighthouseci under some field the header-name check does not cover. Refusing to upload."
-            exit 1
-          fi
+          for value in "$CF_ACCESS_CLIENT_ID" "$CF_ACCESS_CLIENT_SECRET"; do
+            [ -n "$value" ] || continue
+            if grep -rlaqF -e "$value" .lighthouseci/ >/dev/null 2>&1; then
+              echo "::error::Redaction failed — an Access credential appears verbatim in .lighthouseci under some field the header-name check does not cover. Refusing to upload."
+              exit 1
+            fi
+          done
 
       # Gated on the redaction step SUCCEEDING, not on always(): an always()
       # here would upload the unredacted reports the guard just refused, which
@@ -317,9 +407,12 @@ jobs:
           SHA: ${{ steps.ctx.outputs.sha }}
         run: |
           shopt -s nullglob
-          # Use the collect-time filenames, not `lhr-*.json`: those are written
-          # only by `lhci upload`, which is disabled on credentialed runs. These
-          # are one file per run (3 per URL), collapsed to a median below.
+          # `*.report.json` is what `lhci upload --target=filesystem` writes,
+          # and treosh/lighthouse-ci-action runs that upload unconditionally —
+          # including when the assertions FAILED, since it ignores the exit
+          # status of its `assert` child. So these exist on every run that got
+          # past collect, red or green, which is what makes the `always()` on
+          # this step useful. One file per run (3 per URL), collapsed below.
           reports=(.lighthouseci/*.report.json)
           if [ ${#reports[@]} -eq 0 ]; then
             echo "status=no-reports" >> "$GITHUB_OUTPUT"
@@ -343,34 +436,63 @@ jobs:
           } > /tmp/lh-body.md
 
           # numberOfRuns is 3, so there are three reports per URL. Collapse each
-          # URL to its median-by-performance run — the same run LHCI asserts
-          # against, because both config files pin `aggregationMethod` to
-          # "median-run" (leave that pinned: the LHCI default is `optimistic`,
-          # best-of-N, which would make this table disagree with the gate by
-          # several points in the direction that looks worse). Without the
-          # collapse the table would list every URL three times and the
-          # averages would be dominated by whichever page produced extra runs.
+          # URL to one row so the table isn't every URL three times and the
+          # averages aren't dominated by whichever page produced extra runs.
+          #
+          # `median` below reimplements LHCI's own aggregation byte-for-byte
+          # (`getValueForAggregationMethod` in @lhci/utils/src/assertions.js):
+          # sort ascending, odd N takes the middle element, even N averages the
+          # two middle ones. That is the whole point — both config files pin
+          # `aggregationMethod: "median"`, so this table now reports exactly the
+          # number the gate asserted on.
+          #
+          # Leave that pinned, and do NOT "fix" it back to "median-run".
+          # `median-run` looks like the right setting and is a no-op here: it
+          # swaps in the median LHRs only on the audit path, while a
+          # `categories:*` assertion goes through getCategoryAssertionResults(),
+          # which is handed the full LHR set and falls through to
+          # `Math.max(...)` — i.e. identical to the `optimistic` default,
+          # best-of-3. Verified against @lhci/utils 0.15.1: for runs scoring
+          # .87/.84/.72, `median-run` and `optimistic` both assert 0.87 while
+          # `median` asserts 0.84. That gap is what previously gated a run on
+          # 0.87 while this table showed 84.
+          #
+          # Because the gate aggregates each category independently, so does
+          # this: a row is four per-category medians, not one run's scorecard.
           #
           # `round`, not `floor`: floats make 0.58 * 100 land just under 58, so
           # floor renders a real 58 as 57 — harmless at 0.9+, wrong exactly
-          # where a degraded score is being read closely.
+          # where a degraded score is being read closely. Rounding happens after
+          # the median, matching the order LHCI does it in.
           #
           # A category whose audits errored has `score: null`, and `null * 100`
           # is a hard jq error that would abort this step under `bash -e`,
           # taking the whole table with it. Carry the null through and render
           # it, so one broken category costs one cell rather than the report.
           jq -s '
-            def pct($c): if ($c | type) == "object" and ($c.score != null)
-                         then ($c.score * 100 | round) else null end;
+            def median($xs):
+              ($xs | map(select(. != null)) | sort) as $v
+              | ($v | length) as $n
+              | if   $n == 0      then null
+                elif $n % 2 == 1  then $v[(($n - 1) / 2 | floor)]
+                else (($v[($n / 2) - 1] + $v[($n / 2)]) / 2) end;
+            def pct: if . == null then null else (. * 100 | round) end;
+            def score($c): if ($c | type) == "object" then $c.score else null end;
             map({
               url:  (.finalDisplayedUrl // .finalUrl),
-              perf: pct(.categories.performance),
-              a11y: pct(.categories.accessibility),
-              bp:   pct(.categories["best-practices"]),
-              seo:  pct(.categories.seo)
+              perf: score(.categories.performance),
+              a11y: score(.categories.accessibility),
+              bp:   score(.categories["best-practices"]),
+              seo:  score(.categories.seo)
             })
             | group_by(.url)
-            | map(sort_by(.perf // -1) | .[length / 2 | floor])
+            | map({
+                url:  .[0].url,
+                perf: (median([.[].perf]) | pct),
+                a11y: (median([.[].a11y]) | pct),
+                bp:   (median([.[].bp])   | pct),
+                seo:  (median([.[].seo])  | pct)
+              })
           ' "${reports[@]}" > /tmp/lh-median.json
 
           jq -r '

@@ -31,7 +31,7 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece 
 - `src/pages/blog/index.astro`, `src/pages/blog/[...slug].astro`, `src/pages/blog/tag/[tag].astro`, `src/pages/blog/rss.xml.ts` — list, post, per-tag, and RSS routes.
 - `src/styles/global.css` — all styles, imported once via `Base.astro`. Uses CSS custom properties.
 - `astro.config.mjs` — Cloudflare adapter, MDX integration (for the blog), sitemap integration, Astro `Font` integration for Inter / Fraunces / Source Serif 4.
-- `wrangler.jsonc` — Worker config; `ASSETS` binding points at `dist/client`.
+- `wrangler.jsonc` — Worker config; `ASSETS` binding points at `dist/client`. Also declares `SESSION` (KV). **`SESSION` is not a feature this site uses** — `@astrojs/cloudflare` injects it into the generated `dist/server/wrangler.json` whenever `config.session.driver` is unset, which is unconditional and has no clean off switch, so the binding exists on the deployed Worker either way. It is declared here so the resource is visible in the repo rather than only in generated output and the dashboard. `smoke.mjs` asserts the two configs agree, so a future adapter release that injects another binding fails the build.
 - `src/lib/schedule.js` — `isPublished(pubDate, now?)`, the scheduled-publishing predicate. Plain JS (like `csp.js`) so `node --test` can import it without `astro:content`. Unit-tested in `src/lib/schedule.test.js`; see "Scheduled publishing" under Blog.
 - `src/lib/preview.js` — the two scheduled-post preview unlocks: `isPreviewHost(hostname)` (`*.workers.dev` branch/version hosts → show drafts, but **not** the Worker's own production alias) and `signPreviewToken` / `verifyPreviewToken` (signed, expiring, single-post links). Also exports `WORKER_NAME`, which must stay equal to `name` in `wrangler.jsonc` — smoke asserts it. Plain JS on `globalThis.crypto.subtle`, so the same module runs in the worker, under `node --test`, and in `scripts/preview-link.mjs` — the code that mints links is the code that verifies them. Unit-tested in `src/lib/preview.test.js`; see "Previewing a scheduled post".
 - `scripts/preview-link.mjs` — mints a signed preview link (`npm run preview-link -- <slug> [--hours N] [--host URL]`). Reads `PREVIEW_SIGNING_KEY` from the environment or `.dev.vars`; validates the slug against real content before signing. URL on stdout, metadata on stderr.
@@ -244,6 +244,8 @@ That separation is intentional: keeping worker secrets out of shell env means on
 
 **One documented exception.** `PREVIEW_SIGNING_KEY` lives in `.dev.vars` like the others, but `scripts/preview-link.mjs` also reads it directly from that file when minting a link. HMAC has no way around this — the signing side and the verifying side must hold the same key, and the signing side is a local script. The exception is deliberately narrow: it's a signing key for unpublished blog drafts, not a credential for any external service, so the cost of the leak-surface it adds is small. Don't generalise from it — `BUTTONDOWN_API_KEY` and `TURNSTILE_SECRET_KEY` stay wrangler-only.
 
+**`mise.local.toml` is the one file that can break this silently.** It is gitignored, so nothing in review or CI can see what it sets, and mise's `[env]` wins for shell-level vars — which means a worker secret pasted there is invisible *and* inert. Inert because `wrangler dev` injects `.dev.vars` into the Worker's `env` binding regardless, and `src/pages/api/subscribe.ts` only ever reads `env.TURNSTILE_SECRET_KEY`, never `process.env`. A copy in `mise.local.toml` therefore does nothing except widen the blast radius: a production secret exported into every process on the machine. This happened with `TURNSTILE_SECRET_KEY` and was removed. If you are debugging a runtime secret, check `.dev.vars` — adding it to `mise.local.toml` will not help and should not be tried.
+
 ### Local development workflow
 
 Both env files have `.example` siblings; copy and edit:
@@ -299,6 +301,24 @@ CI handles this via `MISE_ENV=ci` in `.github/workflows/build.yml`, so the issue
 ### Preview deploys
 
 PR branches get preview URLs from Cloudflare Workers Builds. **Preview deploys currently share production secrets** — a subscription via a preview URL lands in the production Buttondown account. Acceptable for a personal site (preview URLs are `noindex`'d). `wrangler.jsonc` carries a commented scaffold for isolating preview into its own environment if that ever needs to change.
+
+## Cloudflare account inventory
+
+What exists in the Cloudflare account beyond what `wrangler.jsonc` declares. Recorded so the next audit is a diff rather than a rediscovery. Account `079ebfb1215a574f5e38da4b29e97753`; last reconciled 2026-08-02.
+
+| Resource | Detail |
+|---|---|
+| Workers | `mjrossi-portfolio-website` → `mjrossi.com`, `www.mjrossi.com`. `urbanist-atlas` → `urbanistatlas.com`, `www.urbanistatlas.com` (separate repo) |
+| KV | `mjrossi-portfolio-website-session` — the adapter-injected `SESSION` binding |
+| D1 | `mjrossi-galley` — exists in the account, not bound by this `wrangler.jsonc` |
+| Turnstile | one widget, "Portfolio site verification", domains `mjrossi.com` + `link00seven.workers.dev` |
+| Access | app on `*-mjrossi-portfolio-website.link00seven.workers.dev`, policy "Cloudflare Workers Preview URLs". **This, not `isPreviewHost`, is what keeps drafts on preview hosts non-public.** No Access service tokens exist — the one the Lighthouse preview audit used was deleted 2026-08-01 |
+| Web Analytics | auto-install on `mjrossi.com` and `urbanistatlas.com`. Dashboard-only, not configured in either repo |
+| Zones | `mjrossi.com`, `urbanistatlas.com` |
+
+**No Cloudflare credential exists in CI for this repo.** It has zero GitHub Actions secrets: `build.yml` only builds and smokes, `lighthouse.yml` audits public production, and deploys run through the Workers Builds git integration, which authenticates itself. The only Cloudflare credential in play is `CLOUDFLARE_API_TOKEN` in `mise.local.toml`, used by the wrangler CLI on your machine for `just deploy` and `just secret`.
+
+**"Last used" in the API-token dashboard does not track R2.** R2's S3-compatible API authenticates via SigV4 against `<account>.r2.cloudflarestorage.com` and never calls the REST API v4, which is what that column reflects. A token uploading nightly backups therefore reads as never used. Confirm from the audit log and the objects a token actually produces before revoking anything R2-shaped — the sibling `urbanist-atlas` repo has exactly such a token.
 
 ## Syndication (social)
 

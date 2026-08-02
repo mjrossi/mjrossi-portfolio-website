@@ -158,6 +158,71 @@ if (existsSync(wranglerConfig)) {
   );
 }
 
+// Every binding the deployed Worker carries must be declared in wrangler.jsonc.
+//
+// The build does NOT deploy wrangler.jsonc — it deploys dist/server/wrangler.json,
+// which @astrojs/cloudflare generates from it and is free to add to. It already
+// does: when `config.session.driver` is unset the adapter injects a SESSION KV
+// binding unconditionally, which is how a KV namespace came to exist in the
+// account without this repo mentioning it. That is invisible locally — the
+// binding only shows up in generated output and the Cloudflare dashboard — so
+// without this check the next adapter release can quietly add another one and
+// nothing fails until someone audits the account by hand.
+//
+// Compares binding NAMES only. Secrets never appear in the generated config
+// (`vars` is `{}` and there is no secret list), so this cannot leak one or trip
+// over a missing .dev.vars.
+function bindingNames(config) {
+  const names = new Set();
+  if (config?.assets?.binding) names.add(config.assets.binding);
+  for (const key of [
+    'kv_namespaces',
+    'd1_databases',
+    'r2_buckets',
+    'services',
+    'workflows',
+    'hyperdrive',
+    'vectorize',
+    'analytics_engine_datasets',
+    'mtls_certificates',
+    'dispatch_namespaces',
+  ]) {
+    for (const entry of config?.[key] ?? []) if (entry?.binding) names.add(entry.binding);
+  }
+  // Durable Objects and send_email key the binding as `name`, not `binding`.
+  for (const entry of config?.durable_objects?.bindings ?? []) if (entry?.name) names.add(entry.name);
+  for (const entry of config?.send_email ?? []) if (entry?.name) names.add(entry.name);
+  for (const entry of config?.queues?.producers ?? []) if (entry?.binding) names.add(entry.binding);
+  if (config?.ai?.binding) names.add(config.ai.binding);
+  return names;
+}
+
+const generatedConfig = resolve('dist/server/wrangler.json');
+if (existsSync(wranglerConfig) && existsSync(generatedConfig)) {
+  let declared;
+  let generated;
+  try {
+    // stripComments only removes lines that START with `//`, so URLs inside
+    // string values survive. Trailing commas are legal in JSONC but not JSON,
+    // so drop them too rather than failing on a legal config.
+    const asJson = stripComments(readFileSync(wranglerConfig, 'utf8')).replace(/,(\s*[}\]])/g, '$1');
+    declared = bindingNames(JSON.parse(asJson));
+    generated = bindingNames(JSON.parse(readFileSync(generatedConfig, 'utf8')));
+  } catch (err) {
+    declared = null;
+    check('wrangler configs parse as JSON', false, String(err));
+  }
+  if (declared) {
+    const undeclared = [...generated].filter((name) => !declared.has(name));
+    check(
+      'wrangler.jsonc declares every binding in the built worker',
+      undeclared.length === 0,
+      `${undeclared.join(', ')} present in dist/server/wrangler.json but not declared in wrangler.jsonc` +
+        ' — the deployed Worker would carry a binding this repo never wrote down',
+    );
+  }
+}
+
 for (const asset of [
   'noise.webp',
   'profile-avatar.webp',

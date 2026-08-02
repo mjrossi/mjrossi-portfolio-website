@@ -318,7 +318,25 @@ What exists in the Cloudflare account beyond what `wrangler.jsonc` declares. Rec
 
 **No Cloudflare credential exists in CI for this repo.** It has zero GitHub Actions secrets: `build.yml` only builds and smokes, `lighthouse.yml` audits public production, and deploys run through the Workers Builds git integration, which authenticates itself. The only Cloudflare credential in play is `CLOUDFLARE_API_TOKEN` in `mise.local.toml`, used by the wrangler CLI on your machine for `just deploy` and `just secret`.
 
-**"Last used" in the API-token dashboard does not track R2.** R2's S3-compatible API authenticates via SigV4 against `<account>.r2.cloudflarestorage.com` and never calls the REST API v4, which is what that column reflects. A token uploading nightly backups therefore reads as never used. Confirm from the audit log and the objects a token actually produces before revoking anything R2-shaped — the sibling `urbanist-atlas` repo has exactly such a token.
+### API tokens
+
+Four exist across both repos. Reconciled 2026-08-02.
+
+| Token | Kind | Configuration |
+|---|---|---|
+| `mjrossi-portfolio-site local dev` | User | `D1:Edit`, `Workers R2 Storage:Edit`, `Workers KV Storage:Edit`, `Workers Scripts:Edit`, `Account Settings:Read` on this account; `Zone:Read` on `mjrossi.com`. This is `CLOUDFLARE_API_TOKEN` in `mise.local.toml` |
+| `urbanist-atlas-backup-uploader` | **Account** | `Object Read & Write`, scoped to the `urbanist-atlas-backups` bucket. Supplies `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` in the sibling repo |
+| `mjrossi-portfolio-website build token` | — | Workers Builds' own credential. **Leave alone** — revoking it breaks deploy-on-push, and not visibly until the next push |
+| `urbanist-atlas build token` | — | Same, for the sibling repo |
+
+User vs account is a lifecycle decision, not a permissions one. A user token "becomes inactive if your user is removed from the account" and inherits that user's permissions, so it suits a local CLI credential that *should* die with your access. Unattended CI must not depend on a person's account membership — hence the account token for the backup uploader. Reach is controlled separately, by the resource scope.
+
+Two traps here cost real time once each. Both are properties of Cloudflare, not of this setup:
+
+- **"Last used" does not track R2.** R2's S3-compatible API authenticates via SigV4 against `<account>.r2.cloudflarestorage.com` and never calls the REST API v4, which is what that column reflects. A token uploading nightly backups reads as *never used*. Confirm from the audit log and the objects a token actually produces before revoking anything R2-shaped. The decisive test is running the backup workflow and checking a new dated object lands — a wrong scope 403s on `PutObject`.
+- **You cannot infer a token's permissions by probing GET endpoints, and neither credential can list tokens.** Both the CLI token and the Claude MCP OAuth grant return `9109 Unauthorized` on every `/user/tokens` and `/accounts/*/tokens` route, including fetching one token by ID — so the dashboard is the only inventory. Probing is worse than useless: an empty `200` proves nothing (no queues exist, so `/queues` answers `200` regardless), several account-level reads such as Turnstile come along with `Account Settings:Read`, and `/zones` lists **every** zone in the account even when `Zone:Read` is scoped to one. GETs cannot distinguish `Read` from `Edit` either. Read the token summary screen instead.
+
+Account-scoped audit logs cover account tokens only — user API tokens generate no `token_create` events there, so that log is not an inventory either.
 
 ## Syndication (social)
 

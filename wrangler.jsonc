@@ -31,7 +31,29 @@
   "assets": {
     "binding": "ASSETS",
     "directory": "dist/client"
-  }
+  },
+
+  // Astro sessions. NOT a feature this site uses — no route calls
+  // `Astro.session`. It is declared because @astrojs/cloudflare injects it
+  // whether we ask for it or not: when `config.session.driver` is unset the
+  // adapter enables the Cloudflare KV session driver unconditionally and
+  // writes `kv_namespaces: [{binding: "SESSION"}]` into
+  // dist/server/wrangler.json at build time. There is no clean way to turn
+  // that off, so the namespace exists on the deployed Worker either way.
+  //
+  // Declaring it here means the resource is visible in the repo rather than
+  // only in generated output and the Cloudflare dashboard — the drift this
+  // line exists to close. `id` is an account-scoped identifier, not a
+  // credential. scripts/smoke.mjs asserts every binding in the generated
+  // config is declared here, so if a future adapter release injects another
+  // one, the build fails instead of the dashboard quietly growing a binding
+  // nobody wrote down.
+  "kv_namespaces": [
+    {
+      "binding": "SESSION",
+      "id": "0d4700ae1ed342579b0e0cb79cd8c4c1"
+    }
+  ]
 
   // ── Preview environment isolation (not active) ──────────────
   // Branch deploys currently share production secrets — the same
@@ -62,4 +84,13 @@
   //   4. PUBLIC_TURNSTILE_SITE_KEY in Cloudflare's Build config
   //      can stay the same (the test key works on *.workers.dev),
   //      or be overridden per branch.
+  //   5. Teach scripts/smoke.mjs about it. Its binding-drift walk
+  //      is recursive, so it still *sees* bindings nested under
+  //      "env" — the problem is the opposite of a false alarm: the
+  //      declared side silently becomes the union of every
+  //      environment, so a binding declared only under
+  //      env.preview would satisfy a check run against a
+  //      production build. The check gets laxer, not noisier, and
+  //      nothing goes red to say so. Scope the declared side to
+  //      the environment being built.
 }

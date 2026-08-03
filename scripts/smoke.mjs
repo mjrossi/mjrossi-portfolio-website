@@ -178,11 +178,23 @@ if (existsSync(wranglerConfig)) {
 // injecting something *new*, which by definition lands in a category nobody
 // thought to enumerate. Today's generated config already carries a dozen keys a
 // hand-written list would have missed (`pipelines`, `secrets_store_secrets`,
-// `ratelimits`, `ai_search`, `agent_memory`, `artifacts`, `worker_loaders`,
-// `vpc_services`, `logfwdr.bindings`, `previews.kv_namespaces`, plus the
-// object-shaped `browser` / `images` / `version_metadata` that aren't emitted
-// while unused). Wrangler keys every one of them off a `binding` property, so
-// walking for that property catches an invented `some_future_thing_2027` too.
+// `ai_search`, `agent_memory`, `artifacts`, `worker_loaders`, `vpc_services`,
+// `logfwdr.bindings`, `previews.kv_namespaces`, plus the object-shaped
+// `browser` / `images` / `version_metadata` that aren't emitted while unused).
+// Wrangler keys almost all of them off a `binding` property, so walking for that
+// property catches an invented `some_future_thing_2027` too.
+const NAME_KEYED_BINDINGS = [
+  'durable_objects.bindings',
+  'send_email',
+  'logfwdr.bindings',
+  'unsafe.bindings',
+  'ratelimits',
+];
+
+function atPath(config, path) {
+  return path.split('.').reduce((node, key) => node?.[key], config);
+}
+
 function bindingNames(config) {
   const names = new Set();
   const walk = (node) => {
@@ -192,19 +204,61 @@ function bindingNames(config) {
     for (const value of Object.values(node)) walk(value);
   };
   walk(config);
-  // Four collections key the binding as `name` rather than `binding`, so the
-  // structural walk cannot see them. This list is exhaustive against wrangler's
-  // current schema — but unlike a category allowlist, an omission here is not a
-  // hole in the check, only in these four.
-  for (const entries of [
-    config?.durable_objects?.bindings,
-    config?.send_email,
-    config?.logfwdr?.bindings,
-    config?.unsafe?.bindings,
-  ]) {
-    for (const entry of entries ?? []) if (typeof entry?.name === 'string') names.add(entry.name);
+  // The exceptions: five collections key the binding as `name` rather than
+  // `binding`, so the structural walk cannot see them. Unlike a category
+  // allowlist, an omission here is not a hole in the whole check, only in the
+  // collection omitted — but it is still a hole, so the assertion below
+  // re-derives the same set from wrangler's shipped JSON schema and fails if
+  // they diverge.
+  //
+  // `workflows` and `containers` carry a `name` too and are deliberately absent:
+  // workflows also carry a `binding` (the walk has them already, and adding the
+  // workflow's own name would be a false positive), and a container's `name` is
+  // an app identifier rather than an env binding — its Worker-visible binding is
+  // the Durable Object one, which is covered.
+  for (const path of NAME_KEYED_BINDINGS) {
+    for (const entry of atPath(config, path) ?? []) {
+      if (typeof entry?.name === 'string') names.add(entry.name);
+    }
   }
   return names;
+}
+
+// Re-derive NAME_KEYED_BINDINGS from wrangler's own config schema, so the list
+// above cannot quietly rot. A collection it misses is missed *silently* —
+// `ratelimits` sat in exactly that state until a review caught it — and nobody
+// re-derives a comment that claims to be exhaustive. A wrangler upgrade that
+// adds a name-keyed collection now goes red here instead. Skipped (not failed)
+// if the schema file ever stops shipping: that is a packaging change, not drift.
+const wranglerSchemaPath = resolve('node_modules/wrangler/config-schema.json');
+if (existsSync(wranglerSchemaPath)) {
+  try {
+    const schema = JSON.parse(readFileSync(wranglerSchemaPath, 'utf8'));
+    const found = new Set();
+    const scan = (props, prefix) => {
+      for (const [key, value] of Object.entries(props ?? {})) {
+        const item = value.items ?? value.anyOf?.map((a) => a.items).find(Boolean);
+        const fields = item?.properties;
+        if (fields) {
+          if ('name' in fields && !('binding' in fields)) found.add(`${prefix}${key}`);
+        } else if (value.properties && prefix === '') {
+          scan(value.properties, `${key}.`);
+        }
+      }
+    };
+    scan(schema.definitions?.RawConfig?.properties ?? schema.properties, '');
+    // Name-keyed but an app definition rather than an env binding — see above.
+    found.delete('containers');
+    const missing = [...found].filter((key) => !NAME_KEYED_BINDINGS.includes(key));
+    check(
+      'NAME_KEYED_BINDINGS still matches wrangler config schema',
+      missing.length === 0,
+      `${missing.join(', ')} key their binding off \`name\` in wrangler's schema but are not in` +
+        ' NAME_KEYED_BINDINGS — bindings in those collections are invisible to the drift check',
+    );
+  } catch (err) {
+    check('wrangler config schema parses', false, String(err));
+  }
 }
 
 // Locate the generated config the way wrangler itself does, then assert it
@@ -238,12 +292,22 @@ check(
   `no generated config at ${generatedConfig} — either the build did not run, or the adapter moved` +
     ' it and the binding-drift check below is no longer running at all',
 );
+// Asserted rather than merely guarded, for the same fail-open reason as the
+// generated config above: a bare existsSync here would delete the comparison
+// silently.
+check(
+  'wrangler.jsonc exists',
+  existsSync(wranglerConfig),
+  `no wrangler.jsonc at ${wranglerConfig} — the binding-drift check has nothing to compare against`,
+);
 if (existsSync(wranglerConfig) && existsSync(generatedConfig)) {
   let declared;
   let generated;
   try {
     // stripComments only removes lines that START with `//`, so URLs inside
-    // string values survive. Trailing commas are legal in JSONC but not JSON,
+    // string values survive — but a trailing `// comment` after a value would
+    // not be stripped and would break the parse. Keep comments on their own
+    // lines in wrangler.jsonc. Trailing commas are legal in JSONC but not JSON,
     // so drop them too rather than failing on a legal config.
     const asJson = stripComments(readFileSync(wranglerConfig, 'utf8')).replace(/,(\s*[}\]])/g, '$1');
     declared = bindingNames(JSON.parse(asJson));
@@ -253,6 +317,18 @@ if (existsSync(wranglerConfig) && existsSync(generatedConfig)) {
     check('wrangler configs parse as JSON', false, String(err));
   }
   if (declared) {
+    // Without this the comparison passes vacuously whenever the walk stops
+    // finding anything — a wrangler release renaming the `binding` property, or
+    // an adapter emitting a differently-shaped document, would leave every
+    // future binding undetected with the suite still green. ASSETS is
+    // structurally guaranteed for a Worker with static assets, so its absence
+    // means the walk broke rather than that a binding went away.
+    check(
+      'binding walk still finds bindings in the generated config',
+      generated.has('ASSETS'),
+      `generated config yielded [${[...generated].join(', ') || 'nothing'}] — ASSETS missing means` +
+        ' the walk no longer understands the config shape, and the drift check below proves nothing',
+    );
     const undeclared = [...generated].filter((name) => !declared.has(name));
     check(
       'wrangler.jsonc declares every binding in the built worker',

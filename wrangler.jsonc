@@ -84,4 +84,9 @@
   //   4. PUBLIC_TURNSTILE_SITE_KEY in Cloudflare's Build config
   //      can stay the same (the test key works on *.workers.dev),
   //      or be overridden per branch.
+  //   5. Teach scripts/smoke.mjs about it. Its binding-drift check
+  //      reads the top level of this file only, so bindings moved
+  //      under "env" would become invisible on the declared side
+  //      and the check would fail spuriously against a generated
+  //      config that still lists them.
 }

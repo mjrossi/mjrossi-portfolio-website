@@ -104,6 +104,35 @@ https://<branch-alias>-mjrossi-portfolio-website.link00seven.workers.dev
 
 where `<branch-alias>` is the lowercased branch name with non-alphanumerics collapsed to dashes — **and then truncated** to 32 characters plus a 4-character hash (`dependabot-npm-and-yarn-npm-mino-ad6f`). Do not reconstruct this hostname by hand: a long dependabot branch slugifies to a 76-character DNS label, and the limit is 63, so the guessed name is not merely wrong but illegal and fails to resolve at all. Read the real URL out of Cloudflare's own check-run summary (`Preview Alias URL:` / `Preview URL:` lines) or the PR's deploy check. Manual deploys: `npm run deploy` (`astro build && wrangler deploy`). Local preview against the worker: `npm run preview` (`astro build && wrangler dev`) — this is the only way to exercise `/` or the `/api/*` endpoints locally; `astro dev` doesn't run the worker.
 
+## Cloudflare account inventory
+
+What exists in the Cloudflare account beyond what `wrangler.jsonc` declares, recorded so the next audit is a diff rather than a rediscovery. Last reconciled 2026-08-02. This repo is public, so IDs and per-token scopes are deliberately **not** written down here — read them off the dashboard, which is the only inventory that can list tokens anyway (see the second trap below).
+
+| Resource | Detail |
+|---|---|
+| Workers | `mjrossi-portfolio-website` → `mjrossi.com`, `www.mjrossi.com`. `urbanist-atlas` → `urbanistatlas.com`, `www.urbanistatlas.com` (separate repo) |
+| KV | one namespace, the adapter-injected `SESSION` binding — see `wrangler.jsonc` |
+| D1 | `mjrossi-galley` — exists in the account, not bound by this `wrangler.jsonc` |
+| Turnstile | one widget, "Portfolio site verification", scoped to the production domain and the account's workers.dev subdomain |
+| Access | one app covering the preview-URL hostname pattern above, policy "Cloudflare Workers Preview URLs". **This, not `isPreviewHost`, is what keeps scheduled drafts on preview hosts non-public.** No Access service tokens exist — the one the Lighthouse preview audit used was deleted 2026-08-01 |
+| Web Analytics | auto-install on both zones. Dashboard-only, not configured in either repo |
+| Zones | `mjrossi.com`, `urbanistatlas.com` |
+
+**No Cloudflare credential exists in CI for this repo.** It has zero GitHub Actions secrets: `build.yml` only builds and smokes, `lighthouse.yml` audits public production, and deploys run through the Workers Builds git integration, which authenticates itself. The only Cloudflare credential in play is `CLOUDFLARE_API_TOKEN` in `mise.local.toml`, used by the wrangler CLI on your machine for `just deploy` and `just secret`.
+
+### API tokens
+
+Four exist across both repos, reconciled 2026-08-02: a **user** token for local wrangler CLI use (this repo), an **account** token supplying the sibling repo's R2 backup uploader, and the two Workers Builds credentials — one per repo — which are Cloudflare's own. **Leave the build tokens alone**; revoking one breaks deploy-on-push, and not visibly until the next push. Scopes are on the dashboard's token summary screen.
+
+User vs account is a lifecycle decision, not a permissions one. A user token "becomes inactive if your user is removed from the account" and inherits that user's permissions, so it suits a local CLI credential that *should* die with your access. Unattended CI must not depend on a person's account membership — hence the account token for the backup uploader. Reach is controlled separately, by the resource scope.
+
+Two traps here cost real time once each. Both are properties of Cloudflare, not of this setup:
+
+- **"Last used" does not track R2.** R2's S3-compatible API authenticates via SigV4 against `<account>.r2.cloudflarestorage.com` and never calls the REST API v4, which is what that column reflects. A token uploading nightly backups reads as *never used*. Confirm from the audit log and the objects a token actually produces before revoking anything R2-shaped. The decisive test is running the backup workflow and checking a new dated object lands — a wrong scope 403s on `PutObject`.
+- **You cannot infer a token's permissions by probing GET endpoints, and no credential here can list tokens.** Both the CLI token and the Claude MCP OAuth grant return `9109 Unauthorized` on every `/user/tokens` and `/accounts/*/tokens` route, including fetching one token by ID — so the dashboard is the only inventory. Probing is worse than useless: an empty `200` proves nothing (no queues exist, so `/queues` answers `200` regardless), several account-level reads such as Turnstile come along with `Account Settings:Read`, and `/zones` lists **every** zone in the account even when `Zone:Read` is scoped to one. GETs cannot distinguish `Read` from `Edit` either. Read the token summary screen instead.
+
+Account-scoped audit logs cover account tokens only — user API tokens generate no `token_create` events there, so that log is not an inventory either.
+
 ## CI workflows
 
 - `build.yml` — runs on PRs and pushes to `main`. `npm ci`, `npm test`, `npm run build`, `npm run smoke`. `npm test` runs first: it is the only gate over the preview-token HMAC and the scheduled-publishing predicate, which smoke cannot verify.

@@ -172,32 +172,72 @@ if (existsSync(wranglerConfig)) {
 // Compares binding NAMES only. Secrets never appear in the generated config
 // (`vars` is `{}` and there is no secret list), so this cannot leak one or trip
 // over a missing .dev.vars.
+//
+// The walk is structural rather than a list of known binding categories, and
+// that is the whole point: the case this check exists for is an adapter release
+// injecting something *new*, which by definition lands in a category nobody
+// thought to enumerate. Today's generated config already carries a dozen keys a
+// hand-written list would have missed (`pipelines`, `secrets_store_secrets`,
+// `ratelimits`, `ai_search`, `agent_memory`, `artifacts`, `worker_loaders`,
+// `vpc_services`, `logfwdr.bindings`, `previews.kv_namespaces`, plus the
+// object-shaped `browser` / `images` / `version_metadata` that aren't emitted
+// while unused). Wrangler keys every one of them off a `binding` property, so
+// walking for that property catches an invented `some_future_thing_2027` too.
 function bindingNames(config) {
   const names = new Set();
-  if (config?.assets?.binding) names.add(config.assets.binding);
-  for (const key of [
-    'kv_namespaces',
-    'd1_databases',
-    'r2_buckets',
-    'services',
-    'workflows',
-    'hyperdrive',
-    'vectorize',
-    'analytics_engine_datasets',
-    'mtls_certificates',
-    'dispatch_namespaces',
+  const walk = (node) => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== 'object') return;
+    if (typeof node.binding === 'string') names.add(node.binding);
+    for (const value of Object.values(node)) walk(value);
+  };
+  walk(config);
+  // Four collections key the binding as `name` rather than `binding`, so the
+  // structural walk cannot see them. This list is exhaustive against wrangler's
+  // current schema — but unlike a category allowlist, an omission here is not a
+  // hole in the check, only in these four.
+  for (const entries of [
+    config?.durable_objects?.bindings,
+    config?.send_email,
+    config?.logfwdr?.bindings,
+    config?.unsafe?.bindings,
   ]) {
-    for (const entry of config?.[key] ?? []) if (entry?.binding) names.add(entry.binding);
+    for (const entry of entries ?? []) if (typeof entry?.name === 'string') names.add(entry.name);
   }
-  // Durable Objects and send_email key the binding as `name`, not `binding`.
-  for (const entry of config?.durable_objects?.bindings ?? []) if (entry?.name) names.add(entry.name);
-  for (const entry of config?.send_email ?? []) if (entry?.name) names.add(entry.name);
-  for (const entry of config?.queues?.producers ?? []) if (entry?.binding) names.add(entry.binding);
-  if (config?.ai?.binding) names.add(config.ai.binding);
   return names;
 }
 
-const generatedConfig = resolve('dist/server/wrangler.json');
+// Locate the generated config the way wrangler itself does, then assert it
+// exists *before* reading it. Silently skipping the comparison on a missing
+// file would fail open on precisely the scenario this check guards — a future
+// adapter release that relocates its output would take the whole block out of
+// the suite with nothing going red.
+//
+// .wrangler/deploy/config.json is wrangler's redirected-configuration pointer:
+// the adapter writes it, and `wrangler dev`/`deploy` follow it rather than the
+// root wrangler.jsonc. Reading the path from there instead of hardcoding it
+// means a relocation is *followed*, not merely reported. The literal path stays
+// as a fallback for the case where the redirect itself is what disappeared.
+function resolveGeneratedConfig() {
+  const redirect = resolve('.wrangler/deploy/config.json');
+  if (existsSync(redirect)) {
+    try {
+      const { configPath } = JSON.parse(readFileSync(redirect, 'utf8'));
+      if (configPath) return resolve('.wrangler/deploy', configPath);
+    } catch {
+      // Fall through to the default path; the existence check below reports it.
+    }
+  }
+  return resolve('dist/server/wrangler.json');
+}
+
+const generatedConfig = resolveGeneratedConfig();
+check(
+  'generated wrangler config exists',
+  existsSync(generatedConfig),
+  `no generated config at ${generatedConfig} — either the build did not run, or the adapter moved` +
+    ' it and the binding-drift check below is no longer running at all',
+);
 if (existsSync(wranglerConfig) && existsSync(generatedConfig)) {
   let declared;
   let generated;
@@ -217,7 +257,7 @@ if (existsSync(wranglerConfig) && existsSync(generatedConfig)) {
     check(
       'wrangler.jsonc declares every binding in the built worker',
       undeclared.length === 0,
-      `${undeclared.join(', ')} present in dist/server/wrangler.json but not declared in wrangler.jsonc` +
+      `${undeclared.join(', ')} present in the generated config but not declared in wrangler.jsonc` +
         ' — the deployed Worker would carry a binding this repo never wrote down',
     );
   }
@@ -868,6 +908,17 @@ try {
   }
 } catch (err) {
   console.error(`smoke: ERROR — ${err.message}`);
+  // Static checks all run before wrangler is spawned, so anything they already
+  // found is the more useful diagnostic — and is often the cause. A missing
+  // generated config, for instance, also stops `wrangler dev` from resolving
+  // its redirected configuration, which surfaces here as a bare readiness
+  // timeout unless the recorded failure is printed alongside it.
+  if (fails.length) {
+    console.error(`smoke: ${fails.length} check(s) had already failed before this:`);
+    for (const f of fails) {
+      console.error(`  ✗ ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
+    }
+  }
 } finally {
   wrangler.kill('SIGTERM');
   await new Promise((r) => {

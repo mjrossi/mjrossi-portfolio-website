@@ -106,7 +106,9 @@ where `<branch-alias>` is the lowercased branch name with non-alphanumerics coll
 
 ## Cloudflare account inventory
 
-What exists in the Cloudflare account beyond what `wrangler.jsonc` declares, recorded so the next audit is a diff rather than a rediscovery. Last reconciled 2026-08-02. This repo is public, so IDs and per-token scopes are deliberately **not** written down here — read them off the dashboard, which is the only inventory that can list tokens anyway (see the second trap below).
+What exists in the Cloudflare account beyond what `wrangler.jsonc` declares, recorded so the next audit is a diff rather than a rediscovery. Last reconciled 2026-08-02. This repo is public, so token IDs and per-token scopes are deliberately **not** written down here — read them off the dashboard, which is the only inventory that can list tokens anyway (see the second trap below). (Resource IDs that wrangler config requires by design, such as the KV namespace `id`, do live in `wrangler.jsonc`; they are account-scoped identifiers and confer nothing without a token.)
+
+**Only the first two rows are enforced by CI.** `smoke.mjs` compares *bindings on the deployed Worker* against `wrangler.jsonc` — that covers the Worker and its KV namespace, and nothing else. The D1 database, Turnstile widget, Access app, Web Analytics, and zones produce no binding, so no check can see them drift; this table is the only record, and it goes stale the moment someone clicks something in the dashboard. Re-reconcile it by hand.
 
 | Resource | Detail |
 |---|---|
@@ -118,7 +120,7 @@ What exists in the Cloudflare account beyond what `wrangler.jsonc` declares, rec
 | Web Analytics | auto-install on both zones. Dashboard-only, not configured in either repo |
 | Zones | `mjrossi.com`, `urbanistatlas.com` |
 
-**No Cloudflare credential exists in CI for this repo.** It has zero GitHub Actions secrets: `build.yml` only builds and smokes, `lighthouse.yml` audits public production, and deploys run through the Workers Builds git integration, which authenticates itself. The only Cloudflare credential in play is `CLOUDFLARE_API_TOKEN` in `mise.local.toml`, used by the wrangler CLI on your machine for `just deploy` and `just secret`.
+**No Cloudflare credential exists in CI for this repo.** It has zero GitHub Actions secrets: `build.yml` only builds and smokes, `lighthouse.yml` audits public production, and deploys run through the Workers Builds git integration, which authenticates itself. The only Cloudflare credential *we* manage is `CLOUDFLARE_API_TOKEN` in `mise.local.toml`, used by the wrangler CLI on your machine for `just deploy` and `just secret` — the Workers Builds token below exists too, but Cloudflare issues and rotates it.
 
 ### API tokens
 

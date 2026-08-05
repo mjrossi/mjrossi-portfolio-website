@@ -1,9 +1,24 @@
 # mjrossi-portfolio-website — common dev commands.
 # Run `just` (no args) to list recipes, organized by group.
 #
-# `just`, node, and (under MISE_ENV=development) wrangler are all pinned
-# in mise.toml — a single `mise install` at the repo root provisions
-# everything below.
+# `just` and node are pinned in mise.toml — a single `mise install` at the
+# repo root provisions everything below.
+#
+# wrangler is pinned in package.json, NOT mise — see the note in
+# mise.development.toml for why it cannot be a mise tool. Every recipe that
+# runs it goes through `npx wrangler`, so it resolves to that pin, the same
+# one `npm run smoke`, `scripts/d1.mjs`, and Cloudflare Workers Builds use.
+# (mise.toml also puts ./node_modules/.bin on PATH, so a bare `wrangler`
+# typed in the shell is the same binary; `npx` here is belt-and-braces for
+# a shell where mise isn't active.) That single pin is deliberate: wrangler
+# bundles workerd, workerd owns the schema of `.wrangler/state`, and a
+# second wrangler on PATH will fail to open state a newer one wrote:
+#
+#   Fatal uncaught kj::Exception: table _cf_ALARM has 3 columns but 2
+#   values were supplied / The Workers runtime failed to start.
+#
+# That is a version-skew message, not a broken database — it means two
+# wranglers touched one state directory. One pin, in package.json.
 #
 # MISE_ENV convention (see CLAUDE.md "Newsletter" / "Running smoke"):
 #   - dev/build/preview/smoke/ci recipes force MISE_ENV=development (or
@@ -38,8 +53,13 @@ install:
 dev:
     MISE_ENV=development mise exec -- npm run dev
 
-# full build + wrangler dev — the only way to exercise the newsletter form
+# full build + wrangler dev on 127.0.0.1:8788 — the only way to exercise the
+# newsletter form, and the host a --local preview link must point at. The port
+# is pinned (in package.json) rather than left to wrangler's default so it
+# matches `just smoke` and the --host examples below are actually correct;
+# they used to name 8788 while this served 8787.
 [group('dev')]
+[doc('full build + wrangler dev on 127.0.0.1:8788 — the only way to exercise the form or the galley')]
 preview:
     MISE_ENV=development mise exec -- npm run preview
 
@@ -67,20 +87,131 @@ smoke: build
 [group('ops')]
 [doc('wrangler secret put NAME — set a production Worker secret')]
 secret name:
-    wrangler secret put {{name}}
+    npx wrangler secret put {{name}}
 
 # mint a signed, expiring link that reveals ONE scheduled post on its own
 # URL — not /blog, tag pages, or RSS (see CLAUDE.md "Previewing a scheduled
 # post"; that scoping is what keeps a review link away from the feed that
 # triggers the Buttondown send). Needs PREVIEW_SIGNING_KEY in .dev.vars or
 # the environment; without it the script exits with setup instructions.
-# usage: just preview-link my-draft
-#        just preview-link my-draft --hours 4
-#        just preview-link my-draft --host http://127.0.0.1:8788
+#
+# --reviewer LABEL adds permission to leave galley notes, attributed to that
+# label. One link per editor; they need no account and no GitHub. The label is
+# recorded on every note and lands in the committed review file, so use
+# initials — nothing anonymises it later.
+#
+# This is the ONLY command that issues access. The galley reads and applies
+# notes; it does not hand out links, which is why a link is withdrawn with
+# `just preview-revoke` whether or not it names a reviewer.
+#
+# The link is recorded in the preview_links allowlist as it is minted, so it
+# can be withdrawn later — see `just preview-roster` / `just preview-revoke`.
+# That means minting needs D1: --remote needs a token carrying D1:Edit, and
+# --local needs a migrated dev database (`just galley-migrate --local`).
+#
+# --remote or --local is REQUIRED. There is no default, because minting against
+# the wrong database is silent at the time and surfaces as a 404 in somebody
+# else's browser — see scripts/database-target.mjs.
+#
+# NOTE: a link you hand to someone else must point at production, not a branch
+# preview. *.workers.dev preview hosts sit behind Cloudflare Access, so an
+# editor without a service token gets a login page instead of the post. That is
+# why a draft is merged to main with a future pubDate before review — see
+# CLAUDE.md, "The galley".
+# usage: just preview-link my-draft --remote
+#        just preview-link my-draft --remote --hours 4
+#        just preview-link my-draft --remote --reviewer jd
+#        just preview-link my-draft --remote --reviewer mr --hours 96
+#        just preview-link my-draft --local --host http://127.0.0.1:8788
 [group('ops')]
-[doc('mint a signed preview link for one scheduled post (needs PREVIEW_SIGNING_KEY)')]
+[doc('mint a signed preview link for one scheduled post (--remote|--local); --reviewer LABEL to allow notes')]
 preview-link slug *flags:
     npm run preview-link -- {{slug}} {{flags}}
+
+# list every preview link minted for a post, with its state (live, expired, or
+# revoked). This is the ONLY inventory -- a token is recorded nowhere else, so
+# a link missing from this list cannot be revoked, only waited out.
+#
+# --remote or --local is REQUIRED. Listing the wrong database answers "no links
+# minted" for one you never looked at, which is the most reassuring possible
+# wrong answer — see scripts/database-target.mjs.
+# usage: just preview-roster my-draft --remote
+#        just preview-roster my-draft --local
+[group('ops')]
+[doc('list the preview links outstanding for one post (--remote|--local)')]
+preview-roster slug *flags:
+    npm run preview-roster -- {{slug}} {{flags}}
+
+# list EVERY preview link in the table, across all posts, grouped by post.
+#
+# The per-post scoping elsewhere is load-bearing in the worker — handing someone
+# one draft must not hand them the rest — but that does not reach a CLI already
+# authenticated as you. Without this, a link whose slug you have forgotten
+# cannot be revoked at all, only waited out: `just preview-roster` needs the
+# slug to answer, and a token is recorded nowhere else.
+#
+# Reading only. Revoking stays per-post (`just preview-revoke`), so a mistyped
+# id can never withdraw another draft's link.
+# usage: just preview-roster-all --remote
+#        just preview-roster-all --local
+[group('ops')]
+[doc('list every preview link across all posts (--remote|--local)')]
+preview-roster-all *flags:
+    npm run preview-roster -- --all {{flags}}
+
+# revoke a preview link. Takes READING away as well as writing: middleware
+# refuses the whole grant, so the post 404s for that link. Rows are kept, so a
+# revoked link stays visible in `just preview-roster`.
+#
+# Always scoped to the named post, so a mistyped id belonging to another draft
+# does nothing rather than withdrawing someone else's link. Reports what it
+# actually withdrew — "nothing to revoke" is a distinct outcome from success.
+#
+# --remote or --local is REQUIRED; revoking the wrong database leaves a live
+# link live while telling you it is gone.
+# usage: just preview-revoke my-draft a1b2c3d4e5f60718 --remote
+#        just preview-revoke my-draft --revoke-all --remote
+[group('ops')]
+[doc('revoke one preview link, or --revoke-all for a post (--remote|--local)')]
+preview-revoke slug id *flags:
+    npm run preview-roster -- {{slug}} {{ if id == "--revoke-all" { "--revoke-all" } else { "--revoke " + id } }} {{flags}}
+
+# apply the D1 schema in migrations/ to the galley database. Run once against
+# --remote before the first real review round, and against --local whenever a
+# new migration lands (`just smoke` migrates the local database itself, so this
+# is only needed for `just preview`/`just dev` sessions).
+#
+# --remote needs an API token carrying D1:Edit; without it wrangler reports
+# "not authorized to access this service [code: 7403]", which is a token-scope
+# problem rather than an account one — see CLAUDE.md, "The galley".
+#
+# The target is REQUIRED. This used to default to --local while every other D1
+# recipe defaulted to production, which is the single most confusing thing about
+# this command group: the same bare invocation meant "dev" here and "production"
+# three lines up.
+# usage: just galley-migrate --local
+#        just galley-migrate --remote
+[group('ops')]
+[doc('apply migrations/ to the galley D1 database (--local or --remote)')]
+galley-migrate target:
+    @case "{{target}}" in \
+      --local|--remote) ;; \
+      *) echo "galley-migrate: pass --local or --remote, got '{{target}}'" >&2; exit 1 ;; \
+    esac
+    npx wrangler d1 migrations apply mjrossi-galley {{target}}
+
+# pull editorial notes for a post into docs/galley/<slug>.md, ready to apply
+# alongside the .mdx. Reads D1 through wrangler, which is already authenticated
+# as you — there is no admin endpoint on the deployed worker.
+#
+# --remote or --local is REQUIRED. Pulling the wrong one reports "no notes" for
+# a post that has them, which reads like the editors never wrote any.
+# usage: just galley my-draft --remote
+#        just galley my-draft --local
+[group('ops')]
+[doc('pull galley notes for one post into docs/galley/ (--remote|--local)')]
+galley slug *flags:
+    npm run galley -- {{slug}} {{flags}}
 
 # manual fallback — Cloudflare Workers Builds deploys automatically on
 # git push (see CLAUDE.md's Newsletter env table / dashboard build
@@ -95,6 +226,12 @@ deploy:
 # recover from a hard-killed smoke run: `scripts/smoke.mjs` traps
 # SIGINT/SIGTERM to clean up wrangler dev, but a hard kill (timeout,
 # kill -9, sandbox shutdown) leaves it orphaned on :8788.
+#
+# EXPECT THE NEXT RUN TO BE FLAKY. SIGKILL leaves the local D1 SQLite WAL
+# uncheckpointed, and the following `wrangler dev` startup is unreliable
+# against it — a galley check fails with "got 500" on a path that never
+# touches D1, then the worker dies and the run ends "fetch failed". It
+# recovers on the run after. Re-run before investigating.
 [group('ops')]
 [doc('kill orphaned wrangler/workerd processes stuck on :8788')]
 kill-smoke:

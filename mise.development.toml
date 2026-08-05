@@ -14,9 +14,19 @@
 # Committed by design: the test keys are publicly documented and have no
 # security value. `mise.local.toml` (gitignored) is still available if you
 # need machine-specific overrides on top of this.
-
-[tools]
-wrangler = "4.90.1"
+#
+# NOTE: there is deliberately no `[tools] wrangler` here, and it should not
+# come back. mise's Node cookbook does endorse pinning npm CLIs as mise
+# tools, but that applies to tools the build merely *runs* (tsc, eslint).
+# wrangler is a peerDependency of @astrojs/cloudflare and is imported as a
+# library by @cloudflare/vite-plugin during `astro build`, so it has to be
+# resolvable from node_modules regardless — a mise pin could only ever be a
+# duplicate of the package.json one, never a replacement for it. This file
+# held 4.90.1 while package.json held 4.115.0; the older workerd then could
+# not open the `.wrangler/state` the newer one had written, and
+# `just galley-migrate --local` died before it reached the migration.
+# mise.toml puts ./node_modules/.bin on PATH instead, so a bare `wrangler`
+# in the shell is the pinned one.
 
 [env]
 # Turnstile's documented always-passes test site key.

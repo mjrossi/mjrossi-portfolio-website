@@ -7,8 +7,10 @@
     "build": "astro build && node scripts/gen-headers.mjs",
     "smoke": "node scripts/smoke.mjs",
     "test": "node --test 'src/**/*.test.js'",
-    "preview": "npm run build && wrangler dev",
+    "preview": "npm run build && wrangler dev --port 8788",
     "preview-link": "node scripts/preview-link.mjs",
+    "preview-roster": "node scripts/preview-roster.mjs",
+    "galley": "node scripts/galley-pull.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {

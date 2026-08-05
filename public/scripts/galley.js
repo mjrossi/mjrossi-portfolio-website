@@ -273,6 +273,20 @@
     addBtn.style.left = `${Math.max(8, found.rect.left + window.scrollX)}px`;
   });
 
+  // Keep the button from destroying the selection it acts on.
+  //
+  // mousedown on a button collapses the document selection, which queues a
+  // selectionchange whose handler resolves to nothing and calls hideAdd(). That
+  // task runs before mouseup at any human click speed, so the button is
+  // display:none by the time the click would land, the event is dispatched on
+  // the ancestor instead, and the listener below never fires: the editor selects
+  // a passage, sees the button, clicks it, and nothing happens. Suppressing the
+  // default mousedown action preserves the selection and the button both.
+  //
+  // This is the standard toolbar idiom for exactly this reason, and it is
+  // harmless where a UA would have kept the selection anyway.
+  addBtn.addEventListener('mousedown', (event) => event.preventDefault());
+
   addBtn.addEventListener('click', () => {
     if (!pending) return;
     hideAdd();

@@ -813,9 +813,10 @@ try {
   // listing surfaces. RSS is the one that matters most — it drives Buttondown's
   // email to real subscribers, so a link handed to a reviewer reaching it would
   // publish the post for real.
-  const [tokenIndex, tokenRss] = await Promise.all([
+  const [tokenIndex, tokenRss, tokenTag] = await Promise.all([
     fetch(`${BASE}/blog?${q}`).then((r) => r.text()),
     fetch(`${BASE}/blog/rss.xml?${q}`).then((r) => r.text()),
+    fetch(`${BASE}/blog/tag/${FIXTURE_TAG}?${q}`),
   ]);
   check(
     'preview: valid token does NOT add the post to /blog',
@@ -826,6 +827,11 @@ try {
     'preview: valid token does NOT add the post to RSS',
     !tokenRss.includes(FIXTURE_SLUG),
     'a signed preview link reached the feed — this would trigger the subscriber email',
+  );
+  check(
+    'preview: valid token does NOT create the fixture-only tag page',
+    tokenTag.status === 404,
+    `got ${tokenTag.status} — a signed preview link widened a tag listing`,
   );
 
   // 4. A token minted for one slug must not open a DIFFERENT post's URL.
@@ -963,9 +969,10 @@ try {
 
   // 4. THE ONE THAT MATTERS MOST. A review link grants writing; it must still
   // not put the draft anywhere a reader — or Buttondown's poller — can find it.
-  const [galleyIndex, galleyRss] = await Promise.all([
+  const [galleyIndex, galleyRss, galleyTag] = await Promise.all([
     fetch(`${BASE}/blog?${gq}`).then((r) => r.text()),
     fetch(`${BASE}/blog/rss.xml?${gq}`).then((r) => r.text()),
+    fetch(`${BASE}/blog/tag/${FIXTURE_TAG}?${gq}`),
   ]);
   check(
     'galley: a review link does NOT add the post to /blog',
@@ -976,6 +983,11 @@ try {
     'galley: a review link does NOT add the post to RSS',
     !galleyRss.includes(FIXTURE_SLUG),
     'a galley link reached the feed — this would trigger the subscriber email',
+  );
+  check(
+    'galley: a review link does NOT create the fixture-only tag page',
+    galleyTag.status === 404,
+    `got ${galleyTag.status} — a galley link widened a tag listing`,
   );
 
   // 5. Validation is actually wired to the endpoint. src/lib/galley.test.js

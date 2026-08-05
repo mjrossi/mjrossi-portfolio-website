@@ -672,23 +672,19 @@ const wrangler = spawn(
 // from a crash from an orderly exit, and none of the three is reachable from
 // the HTTP side, which sees the same connection error for all of them.
 // Exit code for "the runtime died", as distinct from "an assertion failed",
-// which stays 1. The distinction is what lets CI retry this and ONLY this.
+// which stays 1. Worth separating because the two need opposite responses, and
+// from the HTTP side they look identical -- a dead runtime turns every
+// remaining request into a 500 or a refused connection, which arrive as named
+// assertion failures about tokens and quotas.
 //
-// `wrangler dev` crashes here for a reason outside this repo: its ProxyWorker
-// loses its connection when a Durable-Object-backed endpoint is called
-// repeatedly, wrangler's ProxyController treats that as fatal, and the dev
-// server exits mid-run. Confirmed in CI, with `cause: { message: 'Network
-// connection lost.' }` -- cloudflare/workers-sdk#4562, still open, and no fix
-// through wrangler 4.119. Local D1 IS such a Durable Object (miniflare stores
-// it under .wrangler/state/v3/d1/miniflare-D1DatabaseObject/), so the galley
-// section trips it roughly one run in two on CI's slower cores. Nothing in this
-// repo can prevent it: the alternative is dropping the D1 binding from the
-// worker under test, which would take the quota and allowlist assertions with
-// it -- the two things the feature's design rests on.
-//
-// So a crash is retried rather than fixed. Scoped by exit code precisely so it
-// cannot mask a real failure: a genuine assertion failure exits 1, is never
-// retried, and the run stays red.
+// This is not a flake to be tolerated. `wrangler dev`'s ProxyWorker is left
+// holding any request body the Worker never reads, and after enough of them the
+// connection goes with "Network connection lost." and wrangler exits. The
+// galley branch hit it because /api/galley refused unauthorised POSTs without
+// draining them; `refuse` in src/lib/server.ts is the fix. If this code comes
+// back, look for a new handler that returns without reading its body -- do not
+// re-add the CI retry that was briefly here, which failed twice in a row
+// anyway.
 const RUNTIME_DIED_EXIT = 75; // EX_TEMPFAIL
 const WRANGLER_TAIL_LINES = 40;
 // Counted in log ENTRIES rather than lines — see tailWranglerLog. Generous,
@@ -781,10 +777,10 @@ async function reportRuntimeDiagnostics() {
         'actually violated. Debug the runtime, not the checks.',
     );
     console.error(
-      `  Exiting ${RUNTIME_DIED_EXIT} rather than 1. Usually cloudflare/` +
-        'workers-sdk#4562 (ProxyWorker: "Network connection lost." on a ' +
-        'repeatedly-called Durable Object, which local D1 is) — just run it ' +
-        'again. CI retries this exit code once, and only this one.',
+      `  Exiting ${RUNTIME_DIED_EXIT} rather than 1. The cause to look for ` +
+        'first is a handler that returns without reading a request body it ' +
+        'was sent — wrangler dev is left holding the stream and eventually ' +
+        'drops the connection. See `refuse` in src/lib/server.ts.',
     );
   }
   if (wranglerOutput.length) {

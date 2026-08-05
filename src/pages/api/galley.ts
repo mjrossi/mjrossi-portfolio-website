@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getEnv, jsonError, jsonOk, methodNotAllowed, parseJson } from '../../lib/server.ts';
+import { getEnv, jsonError, jsonOk, methodNotAllowed, parseJson, refuse } from '../../lib/server.ts';
 import { sha256Hex, validateNote } from '../../lib/galley.js';
 
 // Galley notes — inline editorial review on scheduled posts. See CLAUDE.md.
@@ -128,12 +128,17 @@ export const GET: APIRoute = async ({ locals }) => {
   return jsonOk({ slug: grant.slug, reviewer: grant.reviewer, notes: results ?? [] });
 };
 
+// Both early returns below go through `refuse`, which releases the request body
+// this handler has decided not to read. See src/lib/server.ts: an unread body
+// is free on production Cloudflare and fatal under `wrangler dev`, whose proxy
+// hop is left holding a stream nobody drains until the dev server falls over.
+// This is the path that gets hit — a revoked link's client keeps posting.
 export const POST: APIRoute = async ({ locals, request }) => {
   const grant = authorize(locals);
-  if (grant instanceof Response) return grant;
+  if (grant instanceof Response) return refuse(request, grant);
 
   const DB = db();
-  if (!DB) return jsonError(500, 'galley_db_missing');
+  if (!DB) return refuse(request, jsonError(500, 'galley_db_missing'));
 
   // Larger than /api/subscribe's 1KB default: a note carries the editor's
   // prose plus the quoted passage and its context.
@@ -214,4 +219,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
   return jsonOk({ ok: true });
 };
 
-export const ALL: APIRoute = () => methodNotAllowed('GET, POST');
+// Same reasoning as POST's early returns: a PUT or PATCH can carry a body, and
+// refusing it on the method alone must still release it.
+export const ALL: APIRoute = ({ request }) => refuse(request, methodNotAllowed('GET, POST'));

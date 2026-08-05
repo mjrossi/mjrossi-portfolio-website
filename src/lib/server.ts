@@ -38,6 +38,48 @@ export function tryGetEnv(): Env | null {
   }
 }
 
+/**
+ * Refuse a request without reading its body, releasing the body first.
+ *
+ * Every early return from a POST handler is one of these: a 403 decided from
+ * the token, a 415 decided from a header, a 413 decided from Content-Length.
+ * None of them needs the bytes, and on production Cloudflare abandoning them
+ * costs nothing.
+ *
+ * `wrangler dev` is where it costs something. Its ProxyWorker sits between the
+ * client and the Worker, and an unread request body leaves that hop holding a
+ * stream nobody will drain; after enough of them the connection is torn down
+ * with "Network connection lost.", wrangler's ProxyController treats that as
+ * fatal, and the whole dev server exits. Measured against `/api/galley`: 29
+ * unauthorised POSTs killed it, while 400 GETs and 400 POSTs whose body IS
+ * parsed left it healthy. That is a local-dev and CI failure, not a production
+ * one -- but it takes out `just preview` for anyone whose review link has been
+ * revoked, and it was the cause of the galley branch's CI flake.
+ *
+ * DRAINING, not cancelling, and the difference is the whole fix. Reading bytes
+ * we have already decided to ignore looks like the wasteful option, and
+ * `request.body.cancel()` looks like the tidy one — but cancelling does not
+ * release the proxy hop. Measured on the same probe: with `cancel()` the dev
+ * server still died, at request 20 of 400; with `arrayBuffer()` all 400 went
+ * through and it stayed up. Don't "optimise" this back to a cancel.
+ *
+ * Not used by parseJson's 413, which is the one refusal that is ABOUT the body
+ * being too big — draining it there would spend exactly what the check exists
+ * to refuse to spend. That path keeps the dev-proxy cost knowingly; no client
+ * hits it in a loop.
+ *
+ * Errors are swallowed because every one of them means the body is already
+ * gone, which is the desired state.
+ */
+export async function refuse(request: Request, response: Response): Promise<Response> {
+  try {
+    await request.arrayBuffer();
+  } catch {
+    // Already consumed, already errored, or never there. Nothing to release.
+  }
+  return response;
+}
+
 type ParseJsonOk<T> = { ok: true; data: T };
 type ParseJsonErr = { ok: false; response: Response };
 export type ParseJsonResult<T> = ParseJsonOk<T> | ParseJsonErr;
@@ -49,10 +91,11 @@ export async function parseJson<T>(
   const maxBytes = opts.maxBytes ?? 1024;
   const ctype = request.headers.get('content-type') || '';
   if (!ctype.toLowerCase().includes('application/json')) {
-    return { ok: false, response: jsonError(415, 'unsupported_media_type') };
+    return { ok: false, response: await refuse(request, jsonError(415, 'unsupported_media_type')) };
   }
   const declared = Number(request.headers.get('content-length') || '0');
   if (declared > maxBytes) {
+    // Deliberately NOT drained — see refuse().
     return { ok: false, response: jsonError(413, 'payload_too_large') };
   }
   let text: string;

@@ -21,6 +21,23 @@ export function getEnv(): Env {
   return env as Env;
 }
 
+// The fail-closed read. `cloudflare:workers` throws when touched outside the
+// worker runtime — during a prerender, or under a test harness — and several
+// callers would rather treat that as "no bindings" than 500 the route.
+//
+// It lives here rather than as a try/catch at each call site so the decision to
+// swallow that error is made once, in the module documented as the single seam
+// for runtime env. src/middleware.ts reads it once per request and passes the
+// individual bindings down; nothing in this codebase should be catching around
+// `getEnv()` itself.
+export function tryGetEnv(): Env | null {
+  try {
+    return getEnv();
+  } catch {
+    return null;
+  }
+}
+
 type ParseJsonOk<T> = { ok: true; data: T };
 type ParseJsonErr = { ok: false; response: Response };
 export type ParseJsonResult<T> = ParseJsonOk<T> | ParseJsonErr;

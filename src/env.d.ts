@@ -13,6 +13,11 @@ interface Env {
   ASSETS: Fetcher;
   BUTTONDOWN_API_KEY: string;
   TURNSTILE_SECRET_KEY: string;
+  // Galley notes — editorial feedback on scheduled posts. Holds the
+  // conversation ABOUT a post; the post itself stays in git as MDX. Optional
+  // so that a deploy without the binding degrades to "the galley 500s" rather
+  // than taking the whole worker down. See src/pages/api/galley.ts.
+  DB?: D1Database;
   // Signs and verifies scheduled-post preview links. Optional: when unset,
   // verifyPreviewToken() rejects every token and only the *.workers.dev host
   // unlock remains. See src/lib/preview.js.
@@ -39,6 +44,16 @@ declare namespace App {
      * preview link can never reach the blog index, tag pages, or RSS.
      */
     previewSlug?: string | null;
+    /**
+     * Reviewer label carried by a signed preview link, else null. Non-null
+     * means the link additionally authorises leaving galley notes on
+     * `previewSlug` — see CLAUDE.md, "The galley".
+     *
+     * Subject to the same scoping rule as previewSlug, and for the same
+     * reason: this must never reach src/lib/blog.ts or the RSS route, because
+     * RSS drives Buttondown's mailing. smoke.mjs greps for exactly that.
+     */
+    previewReviewer?: string | null;
   }
 }
 

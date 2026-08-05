@@ -2,7 +2,24 @@
 //
 //   npm run preview-link -- my-draft
 //   npm run preview-link -- my-draft --hours 4
-//   npm run preview-link -- my-draft --host http://127.0.0.1:8788
+//   npm run preview-link -- my-draft --host http://127.0.0.1:8788 --local
+//   npm run preview-link -- my-draft --reviewer jd
+//
+// Without --reviewer the link is read-only. With it, the holder can also leave
+// galley notes on that post, attributed to the label given. The label is
+// recorded on every note and ends up in the committed review file, so use
+// initials — that is the whole of the anonymisation story, and there is no
+// later step that strips names.
+//
+// EVERY link minted here is recorded in the preview_links allowlist, and
+// middleware refuses a token whose row is missing or revoked — so a link can be
+// withdrawn with `just preview-revoke <slug> <id>`, and `just preview-roster
+// <slug>` lists what is outstanding. The row is written BEFORE the URL prints:
+// a link that verifies but has no row looks exactly like a broken feature, so
+// a failed insert hands out nothing at all.
+//
+// That means minting needs D1 — a token carrying D1:Edit for production, or
+// --local for the database `just preview` and `just smoke` run against.
 //
 // Signs with PREVIEW_SIGNING_KEY, read from the environment or (more usually)
 // from .dev.vars. That file is the local home for worker-runtime secrets, and
@@ -12,14 +29,13 @@
 // The signing and verifying code is the same module the Worker uses
 // (src/lib/preview.js), so a link that verifies here verifies in production.
 
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { signPreviewToken, SLUG_RE } from '../src/lib/preview.js';
+import { newLinkId, signPreviewToken, SLUG_RE } from '../src/lib/preview.js';
+import { resolvePostSource } from './content.mjs';
 import { readDevVar } from './dev-vars.mjs';
+import { recordLinks } from './links-db.mjs';
 
 const DEFAULT_HOURS = 48;
 const DEFAULT_HOST = 'https://mjrossi.com';
-const CONTENT_DIR = resolve('src/content/blog');
 
 function die(message) {
   console.error(`preview-link: ${message}`);
@@ -32,10 +48,30 @@ const argv = process.argv.slice(2);
 let slug = null;
 let hours = DEFAULT_HOURS;
 let host = DEFAULT_HOST;
+let reviewer = null;
+let local = false;
 
 for (let i = 0; i < argv.length; i++) {
   const arg = argv[i];
-  if (arg === '--hours') {
+  if (arg === '--local') {
+    // Record against the local D1 that `just preview` and `just smoke` use,
+    // rather than production. Pair it with --host http://127.0.0.1:8788.
+    local = true;
+  } else if (arg === '--reviewer') {
+    reviewer = argv[++i];
+    if (!reviewer) die('--reviewer requires a value');
+    // Same shape as a slug, because both are fields in the dot-delimited
+    // signed payload. Rejected here rather than inside signPreviewToken so the
+    // message explains the constraint instead of showing a stack trace.
+    if (!SLUG_RE.test(reviewer)) {
+      die(
+        `reviewer ${JSON.stringify(reviewer)} cannot be signed — use lowercase ` +
+          'letters, digits, and dashes only.\n' +
+          '  This label is recorded on every note the editor leaves and ends up in ' +
+          'the committed review file, so initials are the usual choice: --reviewer jd',
+      );
+    }
+  } else if (arg === '--hours') {
     hours = Number(argv[++i]);
     // Must be > 0, not >= 0: `--hours 0` mints a token that is already expired
     // by the time it is printed, and verifyPreviewToken treats expiry as
@@ -55,7 +91,7 @@ for (let i = 0; i < argv.length; i++) {
 }
 
 if (!slug) {
-  die('usage: npm run preview-link -- <slug> [--hours N] [--host URL]');
+  die('usage: npm run preview-link -- <slug> [--hours N] [--host URL] [--reviewer LABEL] [--local]');
 }
 
 // ── validate the slug against real content ───────────
@@ -79,11 +115,7 @@ if (!SLUG_RE.test(slug)) {
   );
 }
 
-const candidates = [
-  resolve(CONTENT_DIR, `${slug}.mdx`),
-  resolve(CONTENT_DIR, slug, 'index.mdx'),
-];
-if (!candidates.some(existsSync)) {
+if (!resolvePostSource(slug)) {
   die(`no post found for slug ${JSON.stringify(slug)} (looked for ${slug}.mdx and ${slug}/index.mdx)`);
 }
 
@@ -107,11 +139,30 @@ if (!key) {
 // ── mint ─────────────────────────────────────────────
 
 const exp = Math.floor(Date.now() / 1000) + Math.round(hours * 3600);
-const token = await signPreviewToken(slug, exp, key);
+const linkId = newLinkId();
+const token = await signPreviewToken({ slug, exp, reviewer, linkId }, key);
 const url = new URL(`/blog/${slug}/`, host);
 url.searchParams.set('preview', token);
+
+// Record BEFORE printing. A link whose row failed to write verifies its
+// signature and is then refused by middleware, which looks exactly like the
+// feature being broken — so if this fails, no URL is handed out at all.
+try {
+  recordLinks([{ id: linkId, slug, reviewer, exp }], { local });
+} catch (err) {
+  die(
+    `minted a token but could not record it, so it would be refused on arrival:\n${err.message}\n` +
+      (local ? '' : '  (pass --local to mint against the dev database instead)'),
+  );
+}
 
 console.log(url.href);
 console.error(`\n  post:    ${slug}`);
 console.error(`  expires: ${new Date(exp * 1000).toISOString()} (${hours}h)`);
-console.error('  scope:   this post only — the link does not reveal anything else\n');
+console.error(
+  reviewer
+    ? `  grants:  read + leave galley notes, attributed to "${reviewer}"`
+    : '  grants:  read only — pass --reviewer LABEL to let them leave notes',
+);
+console.error('  scope:   this post only — the link does not reveal anything else');
+console.error(`  link id: ${linkId}  (just preview-revoke ${slug} ${linkId})\n`);

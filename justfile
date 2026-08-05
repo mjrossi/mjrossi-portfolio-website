@@ -1,9 +1,24 @@
 # mjrossi-portfolio-website — common dev commands.
 # Run `just` (no args) to list recipes, organized by group.
 #
-# `just`, node, and (under MISE_ENV=development) wrangler are all pinned
-# in mise.toml — a single `mise install` at the repo root provisions
-# everything below.
+# `just` and node are pinned in mise.toml — a single `mise install` at the
+# repo root provisions everything below.
+#
+# wrangler is pinned in package.json, NOT mise — see the note in
+# mise.development.toml for why it cannot be a mise tool. Every recipe that
+# runs it goes through `npx wrangler`, so it resolves to that pin, the same
+# one `npm run smoke`, `scripts/d1.mjs`, and Cloudflare Workers Builds use.
+# (mise.toml also puts ./node_modules/.bin on PATH, so a bare `wrangler`
+# typed in the shell is the same binary; `npx` here is belt-and-braces for
+# a shell where mise isn't active.) That single pin is deliberate: wrangler
+# bundles workerd, workerd owns the schema of `.wrangler/state`, and a
+# second wrangler on PATH will fail to open state a newer one wrote:
+#
+#   Fatal uncaught kj::Exception: table _cf_ALARM has 3 columns but 2
+#   values were supplied / The Workers runtime failed to start.
+#
+# That is a version-skew message, not a broken database — it means two
+# wranglers touched one state directory. One pin, in package.json.
 #
 # MISE_ENV convention (see CLAUDE.md "Newsletter" / "Running smoke"):
 #   - dev/build/preview/smoke/ci recipes force MISE_ENV=development (or
@@ -67,7 +82,7 @@ smoke: build
 [group('ops')]
 [doc('wrangler secret put NAME — set a production Worker secret')]
 secret name:
-    wrangler secret put {{name}}
+    npx wrangler secret put {{name}}
 
 # mint a signed, expiring link that reveals ONE scheduled post on its own
 # URL — not /blog, tag pages, or RSS (see CLAUDE.md "Previewing a scheduled
@@ -140,7 +155,7 @@ preview-revoke slug id *flags:
 [group('ops')]
 [doc('apply migrations/ to the galley D1 database (--local or --remote)')]
 galley-migrate target='--local':
-    wrangler d1 migrations apply mjrossi-galley {{target}}
+    npx wrangler d1 migrations apply mjrossi-galley {{target}}
 
 # pull editorial notes for a post into docs/galley/<slug>.md, ready to apply
 # alongside the .mdx. Reads D1 through wrangler, which is already authenticated

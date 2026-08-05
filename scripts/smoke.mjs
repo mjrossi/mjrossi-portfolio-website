@@ -777,7 +777,14 @@ async function reportRuntimeDiagnostics() {
  */
 function tailWranglerLog(text) {
   const HEADER = /^--- \d{4}-\d{2}-\d{2}T[\d:.]+Z \w+$/;
-  const MAX_ENTRY_LINES = 12;
+  // Head AND tail, because the two ends carry different halves of the answer
+  // and a long entry has both. wrangler's fatal entry opens with the message
+  // and the stack and CLOSES with the `cause` — the only place the underlying
+  // error is named — so a head-only elision drops precisely the line worth
+  // printing. Learned by eliding it in CI and having to go back for it.
+  const ENTRY_HEAD_LINES = 20;
+  const ENTRY_TAIL_LINES = 12;
+  const MAX_ENTRY_LINES = ENTRY_HEAD_LINES + ENTRY_TAIL_LINES;
   const entries = [];
   let current = null;
   for (const line of text.split('\n')) {
@@ -793,8 +800,9 @@ function tailWranglerLog(text) {
   const out = [];
   for (const entry of entries.slice(-WRANGLER_LOG_TAIL_ENTRIES)) {
     if (entry.length > MAX_ENTRY_LINES) {
-      out.push(...entry.slice(0, MAX_ENTRY_LINES));
-      out.push(`      … ${entry.length - MAX_ENTRY_LINES} more line(s) elided`);
+      out.push(...entry.slice(0, ENTRY_HEAD_LINES));
+      out.push(`      … ${entry.length - MAX_ENTRY_LINES} line(s) elided …`);
+      out.push(...entry.slice(-ENTRY_TAIL_LINES));
     } else {
       out.push(...entry);
     }

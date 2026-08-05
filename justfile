@@ -59,6 +59,7 @@ dev:
 # matches `just smoke` and the --host examples below are actually correct;
 # they used to name 8788 while this served 8787.
 [group('dev')]
+[doc('full build + wrangler dev on 127.0.0.1:8788 — the only way to exercise the form or the galley')]
 preview:
     MISE_ENV=development mise exec -- npm run preview
 

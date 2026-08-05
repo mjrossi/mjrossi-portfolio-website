@@ -1,9 +1,12 @@
 // Pull galley notes for one post into a markdown file you can hand to Claude
 // alongside the .mdx.
 //
-//   npm run galley -- my-draft            # production notes
-//   npm run galley -- my-draft --local    # the local dev database
-//   npm run galley -- my-draft --out -    # stdout instead of docs/galley/
+//   npm run galley -- my-draft --remote            # production notes
+//   npm run galley -- my-draft --local             # the local dev database
+//   npm run galley -- my-draft --remote --out -    # stdout instead of docs/galley/
+//
+// --remote or --local is REQUIRED; see scripts/database-target.mjs. Pulling
+// from the wrong database reports "no notes" for a post that has them.
 //
 // Reads D1 through `wrangler d1 execute`, which is already authenticated as
 // you. That is the whole reason there is no admin endpoint and no admin auth:
@@ -21,6 +24,7 @@ import { dirname, resolve } from 'node:path';
 import { createLocator, pushFenced, pushQuoted } from '../src/lib/galley-relocate.js';
 import { SLUG_RE } from '../src/lib/preview.js';
 import { resolvePostSource } from './content.mjs';
+import { chooseDatabase, databaseLabel } from './database-target.mjs';
 import { d1Query } from './d1.mjs';
 
 function die(message) {
@@ -33,12 +37,15 @@ function die(message) {
 const argv = process.argv.slice(2);
 let slug = null;
 let local = false;
+let remote = false;
 let out = null;
 
 for (let i = 0; i < argv.length; i++) {
   const arg = argv[i];
   if (arg === '--local') {
     local = true;
+  } else if (arg === '--remote') {
+    remote = true;
   } else if (arg === '--out') {
     out = argv[++i];
     if (!out) die('--out requires a value');
@@ -51,10 +58,18 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 
-if (!slug) die('usage: npm run galley -- <slug> [--local] [--out PATH]');
+if (!slug) die('usage: npm run galley -- <slug> (--remote | --local) [--out PATH]');
 // Shape-checked before it reaches the SQL below. SLUG_RE admits no quotes or
 // spaces, which is what makes the interpolation safe.
 if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
+
+// Which database, decided explicitly. See scripts/database-target.mjs.
+let useLocal;
+try {
+  useLocal = chooseDatabase({ local, remote });
+} catch (err) {
+  die(err.message);
+}
 
 // ── the post on disk ─────────────────────────────────
 
@@ -113,13 +128,15 @@ const sql = `SELECT id, revision_hash, reviewer, kind, src_start, src_end,
 // two distinct failure messages (unreachable database vs unparseable output).
 let rows;
 try {
-  rows = d1Query(sql, { local });
+  rows = d1Query(sql, { local: useLocal });
 } catch (err) {
   die(err.message);
 }
 
 if (rows.length === 0) {
-  console.error(`galley-pull: no notes for ${slug}`);
+  // Names the database, because "no notes" and "notes, but in the other one"
+  // are indistinguishable otherwise -- and the second is the likelier mistake.
+  console.error(`galley-pull: no notes for ${slug} (${databaseLabel(useLocal)})`);
 }
 
 // ── render ───────────────────────────────────────────
@@ -129,7 +146,7 @@ const drifted = rows.filter((r) => r.revision_hash !== currentHash).length;
 const lines = [];
 lines.push(`# Review notes — ${slug}`);
 lines.push('');
-lines.push(`Pulled ${new Date().toISOString()} from \`${local ? 'local' : 'production'}\`.`);
+lines.push(`Pulled ${new Date().toISOString()} from \`${databaseLabel(useLocal)}\`.`);
 lines.push(`${rows.length} note${rows.length === 1 ? '' : 's'}, ${new Set(rows.map((r) => r.reviewer)).size} reviewer(s).`);
 lines.push('');
 if (drifted > 0) {

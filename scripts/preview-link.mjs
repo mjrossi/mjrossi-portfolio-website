@@ -1,9 +1,13 @@
 // Mint a signed, expiring preview link for one scheduled blog post.
 //
-//   npm run preview-link -- my-draft
-//   npm run preview-link -- my-draft --hours 4
-//   npm run preview-link -- my-draft --host http://127.0.0.1:8788 --local
-//   npm run preview-link -- my-draft --reviewer jd
+//   npm run preview-link -- my-draft --remote
+//   npm run preview-link -- my-draft --remote --hours 4
+//   npm run preview-link -- my-draft --remote --reviewer jd
+//   npm run preview-link -- my-draft --local --host http://127.0.0.1:8788
+//
+// --remote or --local is REQUIRED; see scripts/database-target.mjs. Minting
+// against the wrong database is silent at the time and shows up as a 404 in
+// somebody else's browser.
 //
 // Without --reviewer the link is read-only. With it, the holder can also leave
 // galley notes on that post, attributed to the label given. The label is
@@ -31,6 +35,7 @@
 
 import { newLinkId, signPreviewToken, SLUG_RE } from '../src/lib/preview.js';
 import { resolvePostSource } from './content.mjs';
+import { chooseDatabase, databaseLabel } from './database-target.mjs';
 import { readDevVar } from './dev-vars.mjs';
 import { recordLinks } from './links-db.mjs';
 
@@ -50,6 +55,7 @@ let hours = DEFAULT_HOURS;
 let host = DEFAULT_HOST;
 let reviewer = null;
 let local = false;
+let remote = false;
 
 for (let i = 0; i < argv.length; i++) {
   const arg = argv[i];
@@ -57,6 +63,8 @@ for (let i = 0; i < argv.length; i++) {
     // Record against the local D1 that `just preview` and `just smoke` use,
     // rather than production. Pair it with --host http://127.0.0.1:8788.
     local = true;
+  } else if (arg === '--remote') {
+    remote = true;
   } else if (arg === '--reviewer') {
     reviewer = argv[++i];
     if (!reviewer) die('--reviewer requires a value');
@@ -80,7 +88,10 @@ for (let i = 0; i < argv.length; i++) {
     if (!Number.isFinite(hours) || hours <= 0) die('--hours must be a positive number');
   } else if (arg === '--host') {
     host = argv[++i];
-    if (!host) die('--host requires a value');
+    // Rejected here rather than at `new URL` below, which would report
+    // "Invalid URL" and a stack trace for what is really a missing value.
+    // `--host --local` is the easy way to hit this.
+    if (!host || host.startsWith('-')) die('--host requires a URL, e.g. http://127.0.0.1:8788');
   } else if (arg.startsWith('-')) {
     die(`unknown flag ${arg}`);
   } else if (slug === null) {
@@ -91,7 +102,19 @@ for (let i = 0; i < argv.length; i++) {
 }
 
 if (!slug) {
-  die('usage: npm run preview-link -- <slug> [--hours N] [--host URL] [--reviewer LABEL] [--local]');
+  die(
+    'usage: npm run preview-link -- <slug> (--remote | --local) ' +
+      '[--hours N] [--host URL] [--reviewer LABEL]',
+  );
+}
+
+// Which database, decided explicitly. See scripts/database-target.mjs for why
+// there is no default: minting against the wrong one is silent either way.
+let useLocal;
+try {
+  useLocal = chooseDatabase({ local, remote });
+} catch (err) {
+  die(err.message);
 }
 
 // ── validate the slug against real content ───────────
@@ -148,21 +171,28 @@ url.searchParams.set('preview', token);
 // signature and is then refused by middleware, which looks exactly like the
 // feature being broken — so if this fails, no URL is handed out at all.
 try {
-  recordLinks([{ id: linkId, slug, reviewer, exp }], { local });
+  recordLinks([{ id: linkId, slug, reviewer, exp }], { local: useLocal });
 } catch (err) {
   die(
-    `minted a token but could not record it, so it would be refused on arrival:\n${err.message}\n` +
-      (local ? '' : '  (pass --local to mint against the dev database instead)'),
+    `minted a token but could not record it in the ${databaseLabel(useLocal)} ` +
+      `database, so it would be refused on arrival:\n${err.message}`,
   );
 }
 
 console.log(url.href);
-console.error(`\n  post:    ${slug}`);
-console.error(`  expires: ${new Date(exp * 1000).toISOString()} (${hours}h)`);
+// Which database is printed FIRST, and on every mint. A link recorded in the
+// wrong one still looks entirely valid -- it is the arriving reviewer who finds
+// out, by getting a 404 that reads like the post was pulled.
+console.error(`\n  database: ${databaseLabel(useLocal)}`);
+console.error(`  post:     ${slug}`);
+console.error(`  expires:  ${new Date(exp * 1000).toISOString()} (${hours}h)`);
 console.error(
   reviewer
-    ? `  grants:  read + leave galley notes, attributed to "${reviewer}"`
-    : '  grants:  read only — pass --reviewer LABEL to let them leave notes',
+    ? `  grants:   read + leave galley notes, attributed to "${reviewer}"`
+    : '  grants:   read only — pass --reviewer LABEL to let them leave notes',
 );
-console.error('  scope:   this post only — the link does not reveal anything else');
-console.error(`  link id: ${linkId}  (just preview-revoke ${slug} ${linkId})\n`);
+console.error('  scope:    this post only — the link does not reveal anything else');
+console.error(
+  `  link id:  ${linkId}  (just preview-revoke ${slug} ${linkId} ` +
+    `${useLocal ? '--local' : '--remote'})\n`,
+);

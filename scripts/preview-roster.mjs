@@ -1,9 +1,17 @@
 // List and revoke the preview links minted for one post.
 //
-//   npm run preview-roster -- my-draft                    # list
-//   npm run preview-roster -- my-draft --revoke <id>      # revoke one
-//   npm run preview-roster -- my-draft --revoke-all       # revoke every live one
-//   npm run preview-roster -- my-draft --local            # the dev database
+//   npm run preview-roster -- my-draft --remote                # list one post
+//   npm run preview-roster -- --all --remote                   # list everything
+//   npm run preview-roster -- my-draft --remote --revoke <id>   # revoke one
+//   npm run preview-roster -- my-draft --remote --revoke-all    # revoke every live one
+//   npm run preview-roster -- my-draft --local                  # the dev database
+//
+// --remote or --local is REQUIRED; see scripts/database-target.mjs.
+//
+// --all lists every link in the table, across all posts. Revoking stays scoped
+// to one named post: a roster you can read broadly is an inventory, but a
+// revoke that reached across posts would make a mistyped id withdraw someone
+// else's link, which is the failure this scoping exists to prevent.
 //
 // Reads and writes D1 through `wrangler d1 execute`, which is already
 // authenticated as you. That is the whole reason there is no admin endpoint:
@@ -19,7 +27,8 @@
 // post 404s for that link.
 
 import { LINK_ID_RE, SLUG_RE } from '../src/lib/preview.js';
-import { listLinks, revokeLinks } from './links-db.mjs';
+import { chooseDatabase, databaseLabel } from './database-target.mjs';
+import { listAllLinks, listLinks, revokeLinks } from './links-db.mjs';
 
 function die(message) {
   console.error(`preview-roster: ${message}`);
@@ -31,6 +40,8 @@ function die(message) {
 const argv = process.argv.slice(2);
 let slug = null;
 let local = false;
+let remote = false;
+let all = false;
 let revokeId = null;
 let revokeAll = false;
 
@@ -38,6 +49,10 @@ for (let i = 0; i < argv.length; i++) {
   const arg = argv[i];
   if (arg === '--local') {
     local = true;
+  } else if (arg === '--remote') {
+    remote = true;
+  } else if (arg === '--all') {
+    all = true;
   } else if (arg === '--revoke') {
     revokeId = argv[++i];
     if (!revokeId) die('--revoke requires a link id');
@@ -60,22 +75,45 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 
-if (!slug) {
-  die('usage: npm run preview-roster -- <slug> [--revoke ID | --revoke-all] [--local]');
+if (all && slug) die(`pass either a slug or --all, not both (got ${JSON.stringify(slug)})`);
+if (!all && !slug) {
+  die(
+    'usage: npm run preview-roster -- (<slug> | --all) (--remote | --local) ' +
+      '[--revoke ID | --revoke-all]',
+  );
 }
-if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
+if (slug && !SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 if (revokeId && revokeAll) die('pass either --revoke or --revoke-all, not both');
+// Revoking is deliberately per-post. --all is a read: it exists so a link whose
+// slug you have forgotten is still findable, not so one command can withdraw
+// every link in the table.
+if (all && (revokeId || revokeAll)) {
+  die(
+    'revoking is scoped to one post — name it instead of --all.\n' +
+      '  A revoke that reached across posts would let a mistyped id withdraw\n' +
+      "  another draft's link, which is exactly what the scoping prevents.\n" +
+      '  Use --all to find the link, then revoke it by its own slug.',
+  );
+}
+
+// Which database, decided explicitly. See scripts/database-target.mjs.
+let useLocal;
+try {
+  useLocal = chooseDatabase({ local, remote });
+} catch (err) {
+  die(err.message);
+}
 
 // ── revoke, then list ────────────────────────────────
 //
 // In that order, so the command always ends by showing the resulting state
 // rather than the state you asked it to change.
 
-const where = local ? 'local' : 'production';
+const where = databaseLabel(useLocal);
 
 try {
   if (revokeId || revokeAll) {
-    const revoked = revokeLinks(slug, { id: revokeId }, { local });
+    const revoked = revokeLinks(slug, { id: revokeId }, { local: useLocal });
     // Said out loud, because both no-op cases are otherwise indistinguishable
     // from success: an id that belongs to a different post is scoped away by
     // revokeLinks, and --revoke-all against a slug whose links are already
@@ -93,19 +131,24 @@ try {
     }
   }
 
-  const rows = listLinks(slug, { local });
+  const rows = all ? listAllLinks({ local: useLocal }) : listLinks(slug, { local: useLocal });
 
   if (rows.length === 0) {
     // Names the database. An operator who minted with --local and listed without
     // it (or the reverse) would otherwise get the most reassuring possible answer
     // from the wrong place -- and this list is the only inventory there is.
-    console.error(`preview-roster: no links minted for ${slug} (${where})`);
+    console.error(
+      all
+        ? `preview-roster: no links minted for any post (${where})`
+        : `preview-roster: no links minted for ${slug} (${where})`,
+    );
     process.exit(0);
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
-  console.log(`Preview links — ${slug} (${where})\n`);
-  for (const row of rows) {
+
+  /** One link, as a line. Shared so both modes render identically. */
+  function format(row) {
     const state = row.revoked_at
       ? `revoked ${new Date(row.revoked_at).toISOString().slice(0, 10)}`
       : row.exp <= nowSec
@@ -115,11 +158,35 @@ try {
     // the column stays readable and "who holds this?" has a visible answer.
     const who = row.reviewer ?? '—';
     const expires = new Date(row.exp * 1000).toISOString().slice(0, 16).replace('T', ' ');
-    console.log(`  ${row.id}  ${who.padEnd(14)}  expires ${expires}  ${state}`);
+    return `  ${row.id}  ${who.padEnd(14)}  expires ${expires}  ${state}`;
   }
-  console.log('');
-  console.error(`  revoke one:  just preview-revoke ${slug} <id>`);
-  console.error(`  revoke all:  just preview-revoke ${slug} --revoke-all\n`);
+
+  if (all) {
+    // Grouped by post, because the question --all answers is "which draft was
+    // this link for?" -- a flat list sorted by date would bury it.
+    console.log(`Preview links — all posts (${where})\n`);
+    let current = null;
+    let live = 0;
+    for (const row of rows) {
+      if (row.slug !== current) {
+        if (current !== null) console.log('');
+        console.log(`  ${row.slug}`);
+        current = row.slug;
+      }
+      if (!row.revoked_at && row.exp > nowSec) live++;
+      console.log(format(row));
+    }
+    console.log('');
+    console.error(`  ${rows.length} link(s) across posts, ${live} still live`);
+    console.error(`  revoke:  just preview-revoke <slug> <id> ${useLocal ? '--local' : '--remote'}\n`);
+  } else {
+    console.log(`Preview links — ${slug} (${where})\n`);
+    for (const row of rows) console.log(format(row));
+    console.log('');
+    const target = useLocal ? '--local' : '--remote';
+    console.error(`  revoke one:  just preview-revoke ${slug} <id> ${target}`);
+    console.error(`  revoke all:  just preview-revoke ${slug} --revoke-all ${target}\n`);
+  }
 } catch (err) {
   die(err.message);
 }

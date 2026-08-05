@@ -159,3 +159,26 @@ export function listLinks(slug, { local = false } = {}) {
     { local },
   );
 }
+
+/**
+ * Every link in the table, across all posts. Grouped by post, oldest first.
+ *
+ * The per-post scoping everywhere else in this feature is load-bearing in the
+ * WORKER -- handing someone one draft must not hand them the rest. That
+ * reasoning does not reach a local CLI already authenticated as the operator,
+ * and without a list like this, forgetting which slug a link was minted for
+ * makes it unrevocable: `just preview-roster` needs a slug to answer, and a
+ * token is recorded nowhere else. An inventory you can only query by knowing
+ * the answer is not much of an inventory.
+ *
+ * @param {{ local?: boolean }} [opts]
+ * @returns {{ id: string, slug: string, reviewer: string | null, exp: number,
+ *             created_at: number, revoked_at: number | null }[]}
+ */
+export function listAllLinks({ local = false } = {}) {
+  return d1Query(
+    'SELECT id, slug, reviewer, exp, created_at, revoked_at FROM preview_links ' +
+      'ORDER BY slug ASC, created_at ASC',
+    { local },
+  );
+}

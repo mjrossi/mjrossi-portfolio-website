@@ -92,18 +92,31 @@ export function recordLinks(rows, { local = false } = {}) {
  * Already-revoked rows are left alone (`revoked_at IS NULL`), so re-running
  * does not rewrite the date a link was actually withdrawn.
  *
+ * RETURNS THE IDS IT ACTUALLY WITHDREW, and the caller is expected to say so.
+ * Both no-op cases here are silent by construction -- an id belonging to another
+ * post is scoped away, and a slug whose links are all revoked already matches
+ * nothing -- so without this the command that takes a link back reports success
+ * either way. That is the wrong default for a withdrawal: the operator runs it
+ * precisely when a link has gone astray and they need to know it is dead.
+ *
+ * `RETURNING` rather than a second SELECT so this stays one round-trip and
+ * cannot race a concurrent revoke between the write and the read-back.
+ *
  * @param {string} slug
  * @param {{ id?: string | null }} [target] id omitted ⇒ every live link
  * @param {{ local?: boolean }} [opts]
+ * @returns {string[]} ids of the rows this call withdrew, oldest first
  */
 export function revokeLinks(slug, { id = null } = {}, { local = false } = {}) {
   checkSlug(slug);
   const scope = id === null ? '' : ` AND id = '${checkLinkId(id)}'`;
-  d1Exec(
+  const rows = d1Query(
     `UPDATE preview_links SET revoked_at = ${Date.now()} ` +
-      `WHERE slug = '${slug}'${scope} AND revoked_at IS NULL`,
+      `WHERE slug = '${slug}'${scope} AND revoked_at IS NULL ` +
+      'RETURNING id',
     { local },
   );
+  return rows.map((row) => row.id);
 }
 
 /**

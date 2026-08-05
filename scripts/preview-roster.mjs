@@ -71,20 +71,40 @@ if (revokeId && revokeAll) die('pass either --revoke or --revoke-all, not both')
 // In that order, so the command always ends by showing the resulting state
 // rather than the state you asked it to change.
 
+const where = local ? 'local' : 'production';
+
 try {
   if (revokeId || revokeAll) {
-    revokeLinks(slug, { id: revokeId }, { local });
+    const revoked = revokeLinks(slug, { id: revokeId }, { local });
+    // Said out loud, because both no-op cases are otherwise indistinguishable
+    // from success: an id that belongs to a different post is scoped away by
+    // revokeLinks, and --revoke-all against a slug whose links are already
+    // revoked matches nothing. Someone withdrawing a link that has gone astray
+    // needs to know it is dead, not infer it from a table they have to re-read.
+    if (revoked.length === 0) {
+      console.error(
+        revokeId
+          ? `preview-roster: nothing to revoke — no live link ${revokeId} for ${slug} (${where})`
+          : `preview-roster: nothing to revoke — no live links for ${slug} (${where})`,
+      );
+    } else {
+      const what = revoked.length === 1 ? 'link' : 'links';
+      console.error(`preview-roster: revoked ${revoked.length} ${what} (${revoked.join(', ')})`);
+    }
   }
 
   const rows = listLinks(slug, { local });
 
   if (rows.length === 0) {
-    console.error(`preview-roster: no links minted for ${slug}`);
+    // Names the database. An operator who minted with --local and listed without
+    // it (or the reverse) would otherwise get the most reassuring possible answer
+    // from the wrong place -- and this list is the only inventory there is.
+    console.error(`preview-roster: no links minted for ${slug} (${where})`);
     process.exit(0);
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
-  console.log(`Preview links — ${slug} (${local ? 'local' : 'production'})\n`);
+  console.log(`Preview links — ${slug} (${where})\n`);
   for (const row of rows) {
     const state = row.revoked_at
       ? `revoked ${new Date(row.revoked_at).toISOString().slice(0, 10)}`

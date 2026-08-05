@@ -29,4 +29,25 @@ jobs:
       # step that logic ships ungated.
       - run: npm test
       - run: npm run build
-      - run: npm run smoke
+      # Retried ONLY on exit 75, which smoke uses for "wrangler dev died
+      # mid-run" and nothing else. That crash is cloudflare/workers-sdk#4562 --
+      # the dev ProxyWorker loses its connection to a repeatedly-called Durable
+      # Object (local D1 is one), and wrangler treats it as fatal. It has no fix
+      # through wrangler 4.119 and no workaround here that keeps the galley's
+      # quota and allowlist assertions.
+      #
+      # A failed assertion exits 1, is not retried, and stays red. Do not
+      # broaden this to `|| npm run smoke` -- that would retry real failures and
+      # turn a reproducible bug into a flaky one.
+      - name: Smoke
+        run: |
+          set +e
+          npm run smoke
+          code=$?
+          set -e
+          if [ "$code" -eq 75 ]; then
+            echo "::warning::wrangler dev crashed mid-run (workers-sdk#4562); retrying smoke once"
+            npm run smoke
+          else
+            exit "$code"
+          fi

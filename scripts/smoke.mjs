@@ -512,7 +512,10 @@ async function waitForReady(url, deadline) {
   while (Date.now() < deadline) {
     try {
       const res = await fetch(url, { redirect: 'manual' });
-      if (res.status) return;
+      if (res.status) {
+        wranglerWasReady = true;
+        return;
+      }
     } catch {
       // server not up yet
     }
@@ -668,6 +671,25 @@ const wrangler = spawn(
 // SIGNAL is the single most useful datum — it separates an out-of-memory kill
 // from a crash from an orderly exit, and none of the three is reachable from
 // the HTTP side, which sees the same connection error for all of them.
+// Exit code for "the runtime died", as distinct from "an assertion failed",
+// which stays 1. The distinction is what lets CI retry this and ONLY this.
+//
+// `wrangler dev` crashes here for a reason outside this repo: its ProxyWorker
+// loses its connection when a Durable-Object-backed endpoint is called
+// repeatedly, wrangler's ProxyController treats that as fatal, and the dev
+// server exits mid-run. Confirmed in CI, with `cause: { message: 'Network
+// connection lost.' }` -- cloudflare/workers-sdk#4562, still open, and no fix
+// through wrangler 4.119. Local D1 IS such a Durable Object (miniflare stores
+// it under .wrangler/state/v3/d1/miniflare-D1DatabaseObject/), so the galley
+// section trips it roughly one run in two on CI's slower cores. Nothing in this
+// repo can prevent it: the alternative is dropping the D1 binding from the
+// worker under test, which would take the quota and allowlist assertions with
+// it -- the two things the feature's design rests on.
+//
+// So a crash is retried rather than fixed. Scoped by exit code precisely so it
+// cannot mask a real failure: a genuine assertion failure exits 1, is never
+// retried, and the run stays red.
+const RUNTIME_DIED_EXIT = 75; // EX_TEMPFAIL
 const WRANGLER_TAIL_LINES = 40;
 // Counted in log ENTRIES rather than lines — see tailWranglerLog. Generous,
 // deliberately: wrangler's own log file carries debug entries the console never
@@ -678,6 +700,12 @@ const WRANGLER_LOG_TAIL_ENTRIES = 60;
 const wranglerOutput = [];
 let wranglerLogPath = null;
 let wranglerExit = null;
+// Set once waitForReady has seen the runtime answer. Load-bearing for the exit
+// code: a runtime that came up and then vanished is the upstream crash and is
+// worth retrying, but one that NEVER came up is a real, reproducible failure --
+// a stale generated config, port 8788 already held by an orphaned run -- and
+// retrying that would just fail twice as slowly while looking like a flake.
+let wranglerWasReady = false;
 
 function absorbWranglerOutput(chunk, forward) {
   const text = chunk.toString();
@@ -720,6 +748,11 @@ async function runtimeIsListening() {
   }
 }
 
+/**
+ * Reports what became of the runtime. Returns whether it died, which the caller
+ * turns into RUNTIME_DIED_EXIT so a crash is distinguishable from a failed
+ * assertion by exit code alone -- see the constant for why that matters.
+ */
 async function reportRuntimeDiagnostics() {
   // `exitCode`/`signalCode` are set on the handle as soon as the child is
   // reaped, so they read true even when the 'exit' event never got delivered.
@@ -729,7 +762,9 @@ async function reportRuntimeDiagnostics() {
       ? { code: wrangler.exitCode, signal: wrangler.signalCode, afterChecks: null }
       : null);
   const listening = await runtimeIsListening();
-  const died = Boolean(exit) || !listening;
+  // "Died" means it was serving and then stopped. Never having started is a
+  // different failure with a different exit code — see wranglerWasReady.
+  const died = wranglerWasReady && (Boolean(exit) || !listening);
 
   if (died) {
     const where = exit?.afterChecks !== null && exit?.afterChecks !== undefined
@@ -744,6 +779,12 @@ async function reportRuntimeDiagnostics() {
     console.error(
       '  The failures above are collateral of that, not assertions the code ' +
         'actually violated. Debug the runtime, not the checks.',
+    );
+    console.error(
+      `  Exiting ${RUNTIME_DIED_EXIT} rather than 1. Usually cloudflare/` +
+        'workers-sdk#4562 (ProxyWorker: "Network connection lost." on a ' +
+        'repeatedly-called Durable Object, which local D1 is) — just run it ' +
+        'again. CI retries this exit code once, and only this one.',
     );
   }
   if (wranglerOutput.length) {
@@ -762,6 +803,7 @@ async function reportRuntimeDiagnostics() {
       console.error(`smoke: could not read ${wranglerLogPath} — ${err.message}`);
     }
   }
+  return died;
 }
 
 /**
@@ -1638,7 +1680,7 @@ try {
     for (const f of fails) {
       console.error(`  ✗ ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
     }
-    await reportRuntimeDiagnostics();
+    if (await reportRuntimeDiagnostics()) exitCode = RUNTIME_DIED_EXIT;
   }
 } catch (err) {
   console.error(`smoke: ERROR — ${err.message}`);
@@ -1653,7 +1695,7 @@ try {
       console.error(`  ✗ ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
     }
   }
-  await reportRuntimeDiagnostics();
+  if (await reportRuntimeDiagnostics()) exitCode = RUNTIME_DIED_EXIT;
 } finally {
   wrangler.kill('SIGTERM');
   await new Promise((r) => {

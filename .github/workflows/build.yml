@@ -29,4 +29,10 @@ jobs:
       # step that logic ships ungated.
       - run: npm test
       - run: npm run build
+      # Deliberately not retried. This step was briefly wrapped in a retry for
+      # smoke's exit 75 ("the dev runtime died mid-run"), back when that crash
+      # looked like an unfixable upstream flake. It had a cause we owned -- see
+      # `refuse` in src/lib/server.ts -- and the retry did not even paper over
+      # it: both attempts died at the same check. Fix the runtime crash rather
+      # than running smoke twice.
       - run: npm run smoke

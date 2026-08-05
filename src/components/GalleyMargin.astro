@@ -1,0 +1,357 @@
+---
+// Galley review chrome — the margin an editor leaves notes in.
+//
+// Rendered ONLY when a signed preview link named a reviewer. That gate lives
+// in BlogPost.astro and is not optional: it is what keeps this (and the second
+// client-JS carve-out it loads) off every publicly cacheable page. Middleware
+// has already set no-store + noindex on any response that gets here.
+//
+// Owns its own styles, like NewsletterSignup.astro — the .galley-* rules live
+// with the component rather than in global.css, because nothing outside a
+// review session ever renders them.
+//
+// The <style> block below is `is:inline`, and both halves of that matter.
+//
+// Astro hoists a processed <style> into the ROUTE's stylesheet using the static
+// module graph, not the runtime condition that renders this component. A plain
+// <style> here therefore shipped ~4.9KB of galley CSS as a render-blocking
+// stylesheet on every published post — chrome no public reader ever sees, and
+// the one hole in the claim that this component cannot reach a publicly
+// cacheable page. `is:inline` keeps the rules in the response that renders
+// them, which is only ever a no-store + noindex review page.
+//
+// It also has to be inline to work at all. Scoped styles are compiled to
+// `.galley-bar[data-astro-cid-…]`, and Astro stamps that attribute at build
+// time onto elements in this template — but every element these rules target is
+// created at runtime by public/scripts/galley.js via createElement + className,
+// so it never carries the attribute and the scoped selectors matched nothing.
+// Inline styles are emitted verbatim and unscoped, which is what these rules
+// need. That is also why the two `.galley-marked` rules no longer need
+// :global() — nothing here is scoped any more.
+//
+// CSP permits this: src/lib/csp.js sends `style-src 'self' 'unsafe-inline'`.
+// scripts/smoke.mjs asserts no `galley-` rule reaches the built CSS bundles and
+// that a published post carries no galley markup, so a future edit that drops
+// `is:inline` fails the build rather than quietly re-shipping this.
+
+interface Props {
+  slug: string;
+  reviewer: string;
+}
+
+const { slug, reviewer } = Astro.props;
+---
+
+<div id="galley" data-slug={slug} data-reviewer={reviewer}></div>
+
+{/*
+  Handler ships as a static asset at /scripts/galley.js (public/scripts/), for
+  the same reasons as newsletter.js: it loads as an external module under the
+  strict `script-src 'self'` CSP, and Astro's bundler can inline <script>
+  contents on on-demand routes, which would break that.
+*/}
+<script type="module" src="/scripts/galley.js" is:inline></script>
+
+<style is:inline>
+  /* Bottom band, echoing the masthead's accent band so a review session reads
+     as part of the paper rather than as a tool bolted onto it. */
+  .galley-bar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem var(--pad);
+    background: var(--accent-band, var(--bg2));
+    border-top: 1px solid var(--accent-band-border, var(--border));
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+    color: var(--text);
+  }
+
+  .galley-bar-label {
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.06em;
+  }
+
+  .galley-sep {
+    color: var(--muted);
+  }
+
+  .galley-bar-toggle {
+    font: inherit;
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    background: none;
+    border: 1px solid var(--accent-rule, var(--border));
+    border-radius: 2px;
+    padding: 0.2rem 0.6rem;
+    cursor: pointer;
+  }
+
+  .galley-bar-toggle:hover {
+    color: var(--accent-hover);
+  }
+
+  /* Notes list. Sits above the bar and is capped so a long review round
+     scrolls inside the panel rather than burying the post. */
+  .galley-panel {
+    position: fixed;
+    right: var(--pad);
+    bottom: 3rem;
+    z-index: 40;
+    width: min(24rem, calc(100vw - 2 * var(--pad)));
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 1rem 1.1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 24px rgb(0 0 0 / 12%);
+  }
+
+  .galley-panel-title {
+    margin: 0 0 0.6rem;
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.06em;
+  }
+
+  .galley-empty {
+    margin: 0;
+    color: var(--muted);
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+  }
+
+  .galley-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .galley-note {
+    padding: 0.7rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .galley-note:first-child {
+    border-top: 0;
+  }
+
+  .galley-note-meta {
+    margin: 0 0 0.3rem;
+    font-family: var(--font-ui);
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.06em;
+  }
+
+  .galley-note-reviewer {
+    color: var(--accent);
+  }
+
+  .galley-note-quote,
+  .galley-composer-quote {
+    margin: 0 0 0.4rem;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--accent-rule, var(--border));
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-style: italic;
+  }
+
+  .galley-note-body {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  /* Suggestions — a note whose content is replacement text. Shown as preformatted
+     so the wording an editor typed is what the author reads back. */
+  .galley-note-sublabel,
+  .galley-composer-sublabel {
+    margin: 0.6rem 0 0.25rem;
+    font-family: var(--font-ui);
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.06em;
+  }
+
+  .galley-note-suggestion {
+    margin: 0;
+    padding: 0.5rem 0.6rem;
+    background: var(--bg2);
+    border-left: 2px solid var(--accent);
+    font-family: var(--font);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  /* Floating "Add note" button, positioned against the selection by
+     public/scripts/galley.js. */
+  .galley-add {
+    position: absolute;
+    z-index: 50;
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.06em;
+    padding: 0.3rem 0.7rem;
+    color: var(--bg);
+    background: var(--accent);
+    border: 0;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+
+  .galley-add:hover {
+    background: var(--accent-hover);
+  }
+
+  .galley-composer {
+    position: fixed;
+    left: 50%;
+    bottom: 4rem;
+    transform: translateX(-50%);
+    z-index: 50;
+    width: min(30rem, calc(100vw - 2 * var(--pad)));
+    padding: 1rem 1.1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 24px rgb(0 0 0 / 15%);
+  }
+
+  .galley-composer-input {
+    width: 100%;
+    font: inherit;
+    font-size: 0.9rem;
+    padding: 0.5rem;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    resize: vertical;
+  }
+
+  .galley-composer-input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .galley-composer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+  }
+
+  .galley-composer-submit,
+  .galley-composer-cancel {
+    font-family: var(--font-ui);
+    font-size: 0.78rem;
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.06em;
+    padding: 0.35rem 0.8rem;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+
+  .galley-composer-submit {
+    color: var(--bg);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+  }
+
+  .galley-composer-submit:hover {
+    background: var(--accent-hover);
+  }
+
+  .galley-composer-submit:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .galley-composer-cancel {
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+  }
+
+  .galley-composer-msg {
+    margin: 0.5rem 0 0;
+    font-family: var(--font-ui);
+    font-size: 0.78rem;
+    color: var(--muted);
+    min-height: 1em;
+  }
+
+  .galley-composer-msg.is-error {
+    color: #a33;
+  }
+
+  /* Applied by the client to blocks in the slotted post body. Marks passages
+     that already carry a note, which is the point of everyone seeing the same
+     margin: it stops three editors filing the same sentence. */
+  .post-body .galley-marked {
+    background: linear-gradient(transparent 60%, var(--accent-band, #f3e5d5) 60%);
+    position: relative;
+  }
+
+  .post-body .galley-marked::after {
+    content: attr(data-galley-count);
+    position: absolute;
+    top: -0.4em;
+    margin-left: 0.25em;
+    font-family: var(--font-ui);
+    font-size: 0.6rem;
+    color: var(--accent);
+  }
+
+  @media (max-width: 40rem) {
+    .galley-panel {
+      right: 0;
+      left: 0;
+      width: auto;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .galley-composer,
+    .galley-panel {
+      animation: galley-rise 120ms ease-out;
+    }
+  }
+
+  @keyframes galley-rise {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+
+  /* The composer is centred with a transform, so it needs its own keyframes —
+     otherwise the shared animation would drop its horizontal centring. */
+  @media (prefers-reduced-motion: no-preference) {
+    .galley-composer {
+      animation-name: galley-rise-centred;
+    }
+  }
+
+  @keyframes galley-rise-centred {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(4px);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+</style>

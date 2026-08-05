@@ -10,6 +10,8 @@ import { spawn } from 'node:child_process';
 import { request as httpRequest } from 'node:http';
 import { signPreviewToken, WORKER_NAME } from '../src/lib/preview.js';
 import { readDevVar } from './dev-vars.mjs';
+import { d1Exec, d1Migrate } from './d1.mjs';
+import { clearLinks, recordLinks } from './links-db.mjs';
 
 const DIST = resolve('dist/client');
 const PORT = Number(process.env.SMOKE_PORT ?? 8788);
@@ -20,6 +22,36 @@ const READY_TIMEOUT_MS = 30_000;
 // scheduled-post matrix below keys off it.
 const FIXTURE_SLUG = 'smoke-scheduled-fixture';
 const FIXTURE_TAG = 'smoke-fixture';
+// A slug that names no real post, used by the cross-slug assertions: a token
+// minted for another draft must not open or write to the fixture.
+const OTHER_SLUG = 'some-other-draft';
+
+// D1 database holding galley notes. Must match wrangler.jsonc's database_name.
+const GALLEY_DB = 'mjrossi-galley';
+// Reviewer label used for the galley assertions. Scoped to smoke so a real
+// review file can never be confused with test rows.
+const SMOKE_REVIEWER = 'smoke-reviewer';
+// Mirrors MAX_NOTES_PER_REVIEWER in src/pages/api/galley.ts. Asserted against
+// the source below rather than imported — the endpoint is TypeScript and this
+// file runs under bare node.
+const GALLEY_WRITE_QUOTA = 60;
+
+// Allowlist rows for the preview and galley matrices. Every token carries a
+// link id, and middleware refuses a grant whose row is missing or revoked, so
+// each token signed below needs a row seeded before wrangler dev starts.
+//
+// Fixed rather than random so the seeded rows and the tokens signed later
+// cannot drift apart. One per token, because each assertion is named for the
+// thing it isolates — expiry, slug scoping, reviewer scoping — and sharing a
+// row between two of them would let one test's revocation break another's
+// stated reason for failing.
+const VIEW_LINK_ID = 'aaaa0000bbbb1111'; // the view-only fixture link
+const WRONG_SLUG_ID = 'bbbb1111cccc2222'; // view-only, minted for another post
+const EXPIRED_LINK_ID = 'cccc2222dddd3333'; // live row, deliberately expired token
+const LIVE_LINK_ID = 'dddd3333eeee4444'; // the working review link
+const CROSS_SLUG_ID = 'eeee4444ffff5555'; // review link for another post
+const REVOKED_LINK_ID = 'ffff5555aaaa6666'; // seeded already revoked
+const UNKNOWN_LINK_ID = '99998888aaaabbbb'; // deliberately never inserted
 
 // Sign with whatever key the worker will actually hold. wrangler dev reads
 // .dev.vars and that wins over --var, so a developer with a real key there
@@ -133,6 +165,64 @@ if (existsSync(rssRoutePath)) {
     'rss route: previewSlug does NOT reach the feed',
     !/previewSlug/.test(stripComments(readFileSync(rssRoutePath, 'utf8'))),
     'previewSlug leaked into the RSS route — a preview link could trigger the subscriber email',
+  );
+}
+
+// previewReviewer is subject to the same rule, for the same reason: a link
+// that lets an editor leave notes is still scoped to one post, and must not
+// widen the listing helpers or the feed any more than a read-only one does.
+check(
+  'src/lib/blog.ts: previewReviewer does NOT reach the listing helpers',
+  !/previewReviewer/.test(blogLibSource),
+  'previewReviewer leaked into blog.ts — a review link could reach the index/tags/RSS',
+);
+if (existsSync(rssRoutePath)) {
+  check(
+    'rss route: previewReviewer does NOT reach the feed',
+    !/previewReviewer/.test(stripComments(readFileSync(rssRoutePath, 'utf8'))),
+    'previewReviewer leaked into the RSS route — a review link could trigger the subscriber email',
+  );
+}
+
+// The galley's client JS is the site's SECOND carve-out from the no-client-JS
+// rule, and the narrower of the two: it may only ship on a response that
+// middleware has already forced to no-store + noindex. That holds because
+// BlogPost.astro gates it on previewReviewer AND a previewSlug matching the
+// post being rendered. Dropping either half would put review chrome — and a
+// script tag — on publicly cacheable pages. The live matrix below proves the
+// behaviour; this names the file and the invariant when it breaks.
+const blogPostLayout = resolve('src/layouts/BlogPost.astro');
+if (existsSync(blogPostLayout)) {
+  const layoutSource = stripComments(readFileSync(blogPostLayout, 'utf8'));
+  check(
+    'BlogPost.astro: galley is gated on previewReviewer',
+    /previewReviewer/.test(layoutSource),
+    'BlogPost.astro no longer reads previewReviewer — the galley gate is gone',
+  );
+  check(
+    'BlogPost.astro: galley gate also matches the post slug',
+    /previewSlug\s*===\s*post\.id/.test(layoutSource),
+    'the galley gate no longer compares previewSlug to the rendered post',
+  );
+}
+
+// The write quota must stay ONE statement. A check-then-insert pair passes
+// every sequential test and still lets concurrent requests race past the limit,
+// and the quota is the stated bound on a leaked review link. The live flood
+// below proves the behaviour; this names the file when someone "simplifies" the
+// insert back into a SELECT followed by an INSERT.
+const galleyEndpoint = resolve('src/pages/api/galley.ts');
+if (existsSync(galleyEndpoint)) {
+  const endpointSource = stripComments(readFileSync(galleyEndpoint, 'utf8'));
+  check(
+    'api/galley.ts: the quota and the insert are one statement',
+    /INSERT INTO galley_notes[\s\S]*?SELECT[\s\S]*?WHERE\s*\(SELECT COUNT\(\*\)/.test(endpointSource),
+    'the write quota is no longer a conditional INSERT — concurrent writes can race past it',
+  );
+  check(
+    `api/galley.ts: the write quota is still ${GALLEY_WRITE_QUOTA}`,
+    new RegExp(`MAX_NOTES_PER_REVIEWER\\s*=\\s*${GALLEY_WRITE_QUOTA}\\b`).test(endpointSource),
+    `the endpoint's quota no longer matches GALLEY_WRITE_QUOTA in this file — the flood assertion below would go green against the wrong bound`,
   );
 }
 
@@ -402,13 +492,30 @@ check('css: no inline SVG data URIs',           !css.includes('data:image/svg+xm
 check('css: condensed masthead rules gone',
   !/\.masthead\.condensed|\.masthead-home-link|\.masthead-page-label/.test(css));
 
+// The galley's styles must not reach the public CSS bundle. A processed
+// <style> in GalleyMargin.astro is hoisted into the /blog/[...slug] stylesheet
+// by the static module graph, NOT by the runtime condition that renders the
+// component — so a plain <style> there ships ~4.9KB of review chrome as a
+// render-blocking stylesheet on every published post. That is the one way this
+// component can reach a publicly cacheable page, and it is invisible in the
+// HTML, which is why it needs a check of its own rather than relying on the
+// `/scripts/galley.js` assertions below. `is:inline` is what keeps it out.
+check(
+  'css: galley styles are not in the public bundle',
+  !/galley-/.test(css),
+  'galley CSS was hoisted into a route stylesheet — is:inline dropped from GalleyMargin.astro?',
+);
+
 // ── Live routes ──────────────────────────────────────
 
 async function waitForReady(url, deadline) {
   while (Date.now() < deadline) {
     try {
       const res = await fetch(url, { redirect: 'manual' });
-      if (res.status) return;
+      if (res.status) {
+        wranglerWasReady = true;
+        return;
+      }
     } catch {
       // server not up yet
     }
@@ -455,14 +562,291 @@ function assertSharedChrome(label, res, html, activeHref) {
   }
 }
 
+// ── local D1 fixtures ──────────────────────────────
+//
+// All of this runs BEFORE wrangler dev is spawned, and it has to. wrangler dev
+// reads the persisted SQLite once at startup and does not flush its own writes
+// back, so a row inserted here mid-run would not be seen by the running worker —
+// which is also why the revoked case below is seeded as an already-revoked row
+// rather than by revoking partway through. That tests enforcement, which is the
+// part that matters, without a second process writing the database underneath
+// the first.
+//
+// Local only throughout; none of this can touch the production database.
+
+// wrangler dev does NOT apply migrations on startup — it just hands the worker
+// an empty database. Without this the galley and allowlist assertions would
+// fail with "no such table", which reads like a broken endpoint rather than an
+// unmigrated fixture.
+try {
+  d1Migrate({ local: true });
+} catch (err) {
+  console.error(`smoke: could not migrate the local ${GALLEY_DB} database\n${err.message}`);
+  process.exit(1);
+}
+
+// Clear this suite's own rows, because the rate-limit assertion below
+// deliberately fills the hourly write quota. If those rows ever survived to the
+// next run, the FIRST write of that run would come back 429 and the positive
+// path would fail — a confusing failure whose cause is an hour old.
+//
+// Today they don't: the local database file keeps the schema between runs (it
+// is what the migration above writes to) but rows written through `wrangler dev`
+// are not flushed to it when smoke kills the process, so each run starts empty
+// in practice. That is observed wrangler behaviour, not a contract, and it is
+// the kind of thing a version bump changes quietly — so the suite does not
+// depend on it. Scoped to SMOKE_REVIEWER and to the two fixture slugs, so it can
+// only ever touch rows this file wrote.
+try {
+  d1Exec(`DELETE FROM galley_notes WHERE reviewer = '${SMOKE_REVIEWER}'`, { local: true });
+  clearLinks([FIXTURE_SLUG, OTHER_SLUG], { local: true });
+} catch (err) {
+  console.error(`smoke: could not clear previous ${GALLEY_DB} rows\n${err.message}`);
+  process.exit(1);
+}
+
+// Every token signed below needs a row, because middleware refuses a grant
+// whose link is not in the allowlist. One row per token rather than a shared
+// one: each assertion is named for the thing it isolates — expiry, slug
+// scoping, reviewer scoping — and a token that 404s for want of a row would
+// pass its check while testing nothing.
+//
+// Seeded through recordLinks, the same function production mints through, so a
+// schema change that breaks minting breaks this fixture in the same commit
+// rather than leaving a green suite pointed at a table nothing writes any more.
+const FAR_FUTURE_EXP = 4102444800; // 2100-01-01; the token's own exp is what expires
+try {
+  recordLinks(
+    [
+      { id: VIEW_LINK_ID, slug: FIXTURE_SLUG, reviewer: null, exp: FAR_FUTURE_EXP },
+      { id: WRONG_SLUG_ID, slug: OTHER_SLUG, reviewer: null, exp: FAR_FUTURE_EXP },
+      // Live row, expired token — so `preview: expired token 404s` still fails
+      // for the reason it is named after.
+      { id: EXPIRED_LINK_ID, slug: FIXTURE_SLUG, reviewer: null, exp: FAR_FUTURE_EXP },
+      { id: LIVE_LINK_ID, slug: FIXTURE_SLUG, reviewer: SMOKE_REVIEWER, exp: FAR_FUTURE_EXP },
+      { id: CROSS_SLUG_ID, slug: OTHER_SLUG, reviewer: SMOKE_REVIEWER, exp: FAR_FUTURE_EXP },
+      // The allowlist's own negative case. UNKNOWN_LINK_ID is deliberately
+      // absent — a well-signed token for a row that was never written.
+      {
+        id: REVOKED_LINK_ID,
+        slug: FIXTURE_SLUG,
+        reviewer: SMOKE_REVIEWER,
+        exp: FAR_FUTURE_EXP,
+        revokedAt: Date.now(),
+      },
+    ],
+    { local: true },
+  );
+} catch (err) {
+  console.error(`smoke: could not seed ${GALLEY_DB} preview_links fixtures\n${err.message}`);
+  process.exit(1);
+}
+
 const wrangler = spawn(
   'npx',
   [
     'wrangler', 'dev', '--port', String(PORT), '--ip', '127.0.0.1', '--log-level', 'warn',
     ...PREVIEW_KEY_ARGS,
   ],
-  { stdio: ['ignore', 'ignore', 'inherit'] },
+  // stdout was 'ignore' and stderr 'inherit'. Both are piped now so a runtime
+  // that dies mid-run can be told apart from an assertion that genuinely
+  // failed — see reportRuntimeDiagnostics below for why that distinction was
+  // worth the plumbing. stderr is still forwarded live, so ordinary output is
+  // unchanged; stdout is buffered and only printed when something has gone
+  // wrong, since `--log-level warn` makes it empty on a healthy run.
+  { stdio: ['ignore', 'pipe', 'pipe'] },
 );
+
+// ── runtime diagnostics ────────────────────────────
+//
+// `wrangler dev` can exit in the middle of a run. When it does, every fetch
+// after that point either 500s or is refused outright, and each one lands as a
+// named assertion failure — so the report blames the checks that happened to be
+// in flight rather than the runtime that vanished underneath them. A CI failure
+// on this suite once read as four galley violations, including "a valid token
+// wrote to a post it was not minted for", when in fact the worker had already
+// died and no token had written anything.
+//
+// So: watch the process, and on any failure say what happened to it. The exit
+// SIGNAL is the single most useful datum — it separates an out-of-memory kill
+// from a crash from an orderly exit, and none of the three is reachable from
+// the HTTP side, which sees the same connection error for all of them.
+// Exit code for "the runtime died", as distinct from "an assertion failed",
+// which stays 1. Worth separating because the two need opposite responses, and
+// from the HTTP side they look identical -- a dead runtime turns every
+// remaining request into a 500 or a refused connection, which arrive as named
+// assertion failures about tokens and quotas.
+//
+// This is not a flake to be tolerated. `wrangler dev`'s ProxyWorker is left
+// holding any request body the Worker never reads, and after enough of them the
+// connection goes with "Network connection lost." and wrangler exits. The
+// galley branch hit it because /api/galley refused unauthorised POSTs without
+// draining them; `refuse` in src/lib/server.ts is the fix. If this code comes
+// back, look for a new handler that returns without reading its body -- do not
+// re-add the CI retry that was briefly here, which failed twice in a row
+// anyway.
+const RUNTIME_DIED_EXIT = 75; // EX_TEMPFAIL
+const WRANGLER_TAIL_LINES = 40;
+// Counted in log ENTRIES rather than lines — see tailWranglerLog. Generous,
+// deliberately: wrangler's own log file carries debug entries the console never
+// shows at --log-level warn, and it is the only place the cause of a mid-run
+// exit is written down. This prints on a failure that has so far only ever
+// happened in CI, where there is no second chance to go and look.
+const WRANGLER_LOG_TAIL_ENTRIES = 60;
+const wranglerOutput = [];
+let wranglerLogPath = null;
+let wranglerExit = null;
+// Set once waitForReady has seen the runtime answer. Load-bearing for the exit
+// code: a runtime that came up and then vanished is the upstream crash and is
+// worth retrying, but one that NEVER came up is a real, reproducible failure --
+// a stale generated config, port 8788 already held by an orphaned run -- and
+// retrying that would just fail twice as slowly while looking like a flake.
+let wranglerWasReady = false;
+
+function absorbWranglerOutput(chunk, forward) {
+  const text = chunk.toString();
+  if (forward) process.stderr.write(text);
+  // wrangler prints this once, naming a file that holds far more than it puts
+  // on the console. Scraped rather than reconstructed because the directory is
+  // platform-dependent (~/Library/Preferences here, ~/.config in CI).
+  const logged = text.match(/Logs were written to "([^"]+)"/);
+  if (logged) wranglerLogPath = logged[1];
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    wranglerOutput.push(line);
+    if (wranglerOutput.length > WRANGLER_TAIL_LINES) wranglerOutput.shift();
+  }
+}
+
+wrangler.stdout.on('data', (chunk) => absorbWranglerOutput(chunk, false));
+wrangler.stderr.on('data', (chunk) => absorbWranglerOutput(chunk, true));
+// Recorded rather than acted on. Tearing the run down here would lose the
+// assertions still to come, and on a healthy run this fires during the SIGTERM
+// in the finally block, where it means nothing.
+//
+// This handler is a best case, not the mechanism. The child is `npx`, which
+// wraps two more processes before workerd, so a runtime that dies need not take
+// the handle with it — and `process.exit()` in the finally block can outrun the
+// event even when it does. Verified: killing the middle process mid-run left
+// this silent while every remaining fetch was refused. Hence the two
+// topology-independent reads below.
+wrangler.on('exit', (code, signal) => {
+  wranglerExit = { code, signal, afterChecks: passes + fails.length };
+});
+
+/** Did anything answer on the port? The one check that survives any topology. */
+async function runtimeIsListening() {
+  try {
+    await fetch(`${BASE}/`, { redirect: 'manual', signal: AbortSignal.timeout(2000) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reports what became of the runtime. Returns whether it died, which the caller
+ * turns into RUNTIME_DIED_EXIT so a crash is distinguishable from a failed
+ * assertion by exit code alone -- see the constant for why that matters.
+ */
+async function reportRuntimeDiagnostics() {
+  // `exitCode`/`signalCode` are set on the handle as soon as the child is
+  // reaped, so they read true even when the 'exit' event never got delivered.
+  const exit =
+    wranglerExit ??
+    (wrangler.exitCode !== null || wrangler.signalCode !== null
+      ? { code: wrangler.exitCode, signal: wrangler.signalCode, afterChecks: null }
+      : null);
+  const listening = await runtimeIsListening();
+  // "Died" means it was serving and then stopped. Never having started is a
+  // different failure with a different exit code — see wranglerWasReady.
+  const died = wranglerWasReady && (Boolean(exit) || !listening);
+
+  if (died) {
+    const where = exit?.afterChecks !== null && exit?.afterChecks !== undefined
+      ? `, after ${exit.afterChecks} check(s)`
+      : '';
+    console.error(
+      exit
+        ? `smoke: wrangler dev EXITED MID-RUN — code ${exit.code}, signal ${exit.signal}${where}.`
+        : 'smoke: wrangler dev is NOT ANSWERING on ' + BASE +
+            ' — the runtime died without the process handle noticing.',
+    );
+    console.error(
+      '  The failures above are collateral of that, not assertions the code ' +
+        'actually violated. Debug the runtime, not the checks.',
+    );
+    console.error(
+      `  Exiting ${RUNTIME_DIED_EXIT} rather than 1. The cause to look for ` +
+        'first is a handler that returns without reading a request body it ' +
+        'was sent — wrangler dev is left holding the stream and eventually ' +
+        'drops the connection. See `refuse` in src/lib/server.ts.',
+    );
+  }
+  if (wranglerOutput.length) {
+    console.error(`smoke: last ${wranglerOutput.length} line(s) of wrangler output:`);
+    for (const line of wranglerOutput) console.error(`  | ${line}`);
+  }
+  // Only when the runtime actually went down. On an ordinary assertion failure
+  // this file says nothing the checks didn't, and it is long.
+  if (died && wranglerLogPath && existsSync(wranglerLogPath)) {
+    try {
+      console.error(`smoke: tail of ${wranglerLogPath}:`);
+      for (const line of tailWranglerLog(readFileSync(wranglerLogPath, 'utf8'))) {
+        console.error(`  | ${line}`);
+      }
+    } catch (err) {
+      console.error(`smoke: could not read ${wranglerLogPath} — ${err.message}`);
+    }
+  }
+  return died;
+}
+
+/**
+ * The log is a series of `--- <ISO timestamp> <level>` entries terminated by a
+ * bare `---`. A plain line tail is useless on it: startup logs the entire
+ * bundled worker, one quoted source line at a time, which buried the actual
+ * error under 200,000 characters of Astro's client JS the first time this ran
+ * in CI. So elide the body of any entry long enough to be one of those dumps,
+ * and keep the entries themselves — the error and the stack that follows it are
+ * short, and it is the sequence of entries either side that says what happened.
+ *
+ * @param {string} text
+ */
+function tailWranglerLog(text) {
+  const HEADER = /^--- \d{4}-\d{2}-\d{2}T[\d:.]+Z \w+$/;
+  // Head AND tail, because the two ends carry different halves of the answer
+  // and a long entry has both. wrangler's fatal entry opens with the message
+  // and the stack and CLOSES with the `cause` — the only place the underlying
+  // error is named — so a head-only elision drops precisely the line worth
+  // printing. Learned by eliding it in CI and having to go back for it.
+  const ENTRY_HEAD_LINES = 20;
+  const ENTRY_TAIL_LINES = 12;
+  const MAX_ENTRY_LINES = ENTRY_HEAD_LINES + ENTRY_TAIL_LINES;
+  const entries = [];
+  let current = null;
+  for (const line of text.split('\n')) {
+    if (HEADER.test(line)) {
+      current = [line];
+      entries.push(current);
+    } else if (line.trim() === '---') {
+      current = null;
+    } else if (current && line.trim()) {
+      current.push(line);
+    }
+  }
+  const out = [];
+  for (const entry of entries.slice(-WRANGLER_LOG_TAIL_ENTRIES)) {
+    if (entry.length > MAX_ENTRY_LINES) {
+      out.push(...entry.slice(0, ENTRY_HEAD_LINES));
+      out.push(`      … ${entry.length - MAX_ENTRY_LINES} line(s) elided …`);
+      out.push(...entry.slice(-ENTRY_TAIL_LINES));
+    } else {
+      out.push(...entry);
+    }
+  }
+  return out;
+}
 
 let exitCode = 1;
 try {
@@ -592,7 +976,8 @@ try {
   // future-dated post, over HTTP, on the production code path (127.0.0.1 is
   // deliberately not a preview host).
   const fixtureExp = Math.floor(Date.now() / 1000) + 3600;
-  const fixtureToken = await signPreviewToken(FIXTURE_SLUG, fixtureExp, PREVIEW_KEY);
+  const fixtureToken = await signPreviewToken(
+    { slug: FIXTURE_SLUG, exp: fixtureExp, linkId: VIEW_LINK_ID }, PREVIEW_KEY);
   const q = `preview=${encodeURIComponent(fixtureToken)}`;
 
   // 1. Locked: hidden everywhere, 404 at its own URL.
@@ -628,9 +1013,10 @@ try {
   // listing surfaces. RSS is the one that matters most — it drives Buttondown's
   // email to real subscribers, so a link handed to a reviewer reaching it would
   // publish the post for real.
-  const [tokenIndex, tokenRss] = await Promise.all([
+  const [tokenIndex, tokenRss, tokenTag] = await Promise.all([
     fetch(`${BASE}/blog?${q}`).then((r) => r.text()),
     fetch(`${BASE}/blog/rss.xml?${q}`).then((r) => r.text()),
+    fetch(`${BASE}/blog/tag/${FIXTURE_TAG}?${q}`),
   ]);
   check(
     'preview: valid token does NOT add the post to /blog',
@@ -641,6 +1027,11 @@ try {
     'preview: valid token does NOT add the post to RSS',
     !tokenRss.includes(FIXTURE_SLUG),
     'a signed preview link reached the feed — this would trigger the subscriber email',
+  );
+  check(
+    'preview: valid token does NOT create the fixture-only tag page',
+    tokenTag.status === 404,
+    `got ${tokenTag.status} — a signed preview link widened a tag listing`,
   );
 
   // 4. A token minted for one slug must not open a DIFFERENT post's URL.
@@ -653,7 +1044,8 @@ try {
   // Deliberately NOT written as "valid token, some already-published post,
   // expect 200": that passes with or without a token, so it can never fail
   // for the reason it claims to test.
-  const wrongSlugToken = await signPreviewToken('some-other-draft', fixtureExp, PREVIEW_KEY);
+  const wrongSlugToken = await signPreviewToken(
+    { slug: OTHER_SLUG, exp: fixtureExp, linkId: WRONG_SLUG_ID }, PREVIEW_KEY);
   const wrongSlug = await fetch(`${BASE}/blog/${FIXTURE_SLUG}/?preview=${encodeURIComponent(wrongSlugToken)}`);
   check(
     'preview: a token minted for another slug does not open the fixture',
@@ -662,9 +1054,312 @@ try {
   );
 
   // An expired token must 404 the post exactly like no token at all.
-  const expiredToken = await signPreviewToken(FIXTURE_SLUG, Math.floor(Date.now() / 1000) - 60, PREVIEW_KEY);
+  const expiredToken = await signPreviewToken(
+    { slug: FIXTURE_SLUG, exp: Math.floor(Date.now() / 1000) - 60, linkId: EXPIRED_LINK_ID },
+    PREVIEW_KEY);
   const expired = await fetch(`${BASE}/blog/${FIXTURE_SLUG}/?preview=${encodeURIComponent(expiredToken)}`);
   check('preview: expired token 404s the scheduled post', expired.status === 404, `got ${expired.status}`);
+
+  // ── Galley matrix ──────────────────────────────────
+  // Everything above tests a READ-ONLY preview link. A galley link grants
+  // strictly more — the right to write — so it gets its own matrix. The point
+  // of most of these is that granting more never widens the SCOPE: a review
+  // link is still one post, still not the index, and above all still not the
+  // feed that triggers Buttondown's send.
+  const galleyToken = await signPreviewToken(
+    { slug: FIXTURE_SLUG, exp: fixtureExp, reviewer: SMOKE_REVIEWER, linkId: LIVE_LINK_ID },
+    PREVIEW_KEY);
+  const gq = `preview=${encodeURIComponent(galleyToken)}`;
+  const galleyApi = `${BASE}/api/galley?${gq}`;
+
+  // 1. The chrome ships only where it is allowed to.
+  const galleyPost = await fetch(`${BASE}/blog/${FIXTURE_SLUG}/?${gq}`);
+  const galleyHtml = await galleyPost.text();
+  check('galley: review link opens the post', galleyPost.status === 200, `got ${galleyPost.status}`);
+  check('galley: review link loads /scripts/galley.js', galleyHtml.includes('/scripts/galley.js'));
+  check(
+    'galley: reviewed page is never cached',
+    (galleyPost.headers.get('cache-control') ?? '').includes('no-store'),
+    `cache-control was ${galleyPost.headers.get('cache-control')}`,
+  );
+  check(
+    'galley: reviewed page is noindex',
+    (galleyPost.headers.get('x-robots-tag') ?? '').includes('noindex'),
+  );
+
+  // A READ-ONLY token must not ship the review chrome. This is the difference
+  // between the two token shapes, over HTTP.
+  const viewOnlyHtml = await fetch(`${BASE}/blog/${FIXTURE_SLUG}/?${q}`).then((r) => r.text());
+  check(
+    'galley: a view-only preview link does NOT load galley.js',
+    !viewOnlyHtml.includes('/scripts/galley.js'),
+    'the galley shipped for a link that never granted review rights',
+  );
+
+  // The second carve-out must stay off every public page. /blog is the one
+  // that already carries client JS, which is exactly why it is worth pinning.
+  const [homeGalley, blogGalley] = await Promise.all([
+    fetch(`${BASE}/`).then((r) => r.text()),
+    fetch(`${BASE}/blog`).then((r) => r.text()),
+  ]);
+  check('galley: absent from the home page', !homeGalley.includes('/scripts/galley.js'));
+  check('galley: absent from /blog', !blogGalley.includes('/scripts/galley.js'));
+  // A PUBLISHED post is the page the carve-out is really about: it renders the
+  // same route and the same layout as a review session, differing only by the
+  // gate in BlogPost.astro. Assert on `galley-` rather than the script src so
+  // this also catches styles or markup leaking without the client JS — the
+  // exact shape the inline-style fix in GalleyMargin.astro exists to prevent.
+  if (post) {
+    check(
+      'galley: absent from a published post',
+      !post.html.includes('galley-'),
+      'galley chrome reached a page any reader can load — and one that IS edge-cached',
+    );
+  }
+
+  // 2. Writing requires a reviewer token, not merely a valid one.
+  const noteBody = { slug: FIXTURE_SLUG, kind: 'comment', src: '8-8', quote: 'test fixture', body: 'smoke note' };
+  const postNote = (token, body = noteBody) =>
+    fetch(`${BASE}/api/galley${token ? `?preview=${encodeURIComponent(token)}` : ''}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  const wrote = await postNote(galleyToken);
+  check('galley: a reviewer token can leave a note', wrote.status === 200, `got ${wrote.status}`);
+
+  const viewOnlyWrite = await postNote(fixtureToken);
+  check(
+    'galley: a view-only token CANNOT leave a note',
+    viewOnlyWrite.status === 403,
+    `got ${viewOnlyWrite.status} — reading a draft must not imply writing to it`,
+  );
+
+  const anonWrite = await postNote(null);
+  check('galley: an untokened POST is refused', anonWrite.status === 403, `got ${anonWrite.status}`);
+
+  // A perfectly valid signature for a DIFFERENT post must not file a note
+  // against this one — the case a signature check alone cannot catch.
+  const otherGalleyToken = await signPreviewToken(
+    { slug: OTHER_SLUG, exp: fixtureExp, reviewer: SMOKE_REVIEWER, linkId: CROSS_SLUG_ID },
+    PREVIEW_KEY);
+  const crossWrite = await postNote(otherGalleyToken);
+  check(
+    'galley: a token for another slug cannot write to the fixture',
+    crossWrite.status === 403,
+    `got ${crossWrite.status} — a valid token wrote to a post it was not minted for`,
+  );
+
+  // 3. Read-back works, and is scoped the same way.
+  const listed = await fetch(galleyApi);
+  const listedJson = await listed.json().catch(() => ({}));
+  check('galley: notes read back for the granted post', listed.status === 200, `got ${listed.status}`);
+  check(
+    'galley: the note just written is in the list',
+    Array.isArray(listedJson.notes) && listedJson.notes.some((n) => n.body === 'smoke note'),
+  );
+  check(
+    'galley: the note is attributed to the token’s reviewer',
+    Array.isArray(listedJson.notes) && listedJson.notes.every((n) => n.reviewer === SMOKE_REVIEWER),
+    'a note was attributed to someone other than the signed reviewer',
+  );
+  const viewOnlyRead = await fetch(`${BASE}/api/galley?${q}`);
+  check('galley: a view-only token cannot read notes', viewOnlyRead.status === 403, `got ${viewOnlyRead.status}`);
+
+  // 4. THE ONE THAT MATTERS MOST. A review link grants writing; it must still
+  // not put the draft anywhere a reader — or Buttondown's poller — can find it.
+  const [galleyIndex, galleyRss, galleyTag] = await Promise.all([
+    fetch(`${BASE}/blog?${gq}`).then((r) => r.text()),
+    fetch(`${BASE}/blog/rss.xml?${gq}`).then((r) => r.text()),
+    fetch(`${BASE}/blog/tag/${FIXTURE_TAG}?${gq}`),
+  ]);
+  check(
+    'galley: a review link does NOT add the post to /blog',
+    !galleyIndex.includes(FIXTURE_SLUG),
+    'a galley link reached the blog index',
+  );
+  check(
+    'galley: a review link does NOT add the post to RSS',
+    !galleyRss.includes(FIXTURE_SLUG),
+    'a galley link reached the feed — this would trigger the subscriber email',
+  );
+  check(
+    'galley: a review link does NOT create the fixture-only tag page',
+    galleyTag.status === 404,
+    `got ${galleyTag.status} — a galley link widened a tag listing`,
+  );
+
+  // 5. Validation is actually wired to the endpoint. src/lib/galley.test.js
+  // covers the rules themselves; this only proves they are being consulted.
+  const emptyNote = await postNote(galleyToken, { slug: FIXTURE_SLUG, kind: 'comment', body: '  ' });
+  check('galley: an empty note is rejected', emptyNote.status === 400, `got ${emptyNote.status}`);
+  const hugeNote = await postNote(galleyToken, { slug: FIXTURE_SLUG, kind: 'comment', body: 'x'.repeat(5000) });
+  check('galley: an oversize note is rejected', hugeNote.status === 400, `got ${hugeNote.status}`);
+
+  // The second note kind. `suggestion` has always been in the schema, the
+  // validator and the pull script, but nothing could create one until the
+  // composer grew an optional replacement field — so this is the first thing
+  // that proves the kind works end to end rather than only in unit tests.
+  const suggested = await postNote(galleyToken, {
+    slug: FIXTURE_SLUG, kind: 'suggestion', src: '8-8',
+    quote: 'test fixture', suggestion: 'a proposed rewrite',
+  });
+  check('galley: a suggestion note is accepted', suggested.status === 200, `got ${suggested.status}`);
+  const afterSuggestion = await fetch(galleyApi).then((r) => r.json()).catch(() => ({}));
+  check(
+    'galley: the suggestion reads back with its replacement text',
+    Array.isArray(afterSuggestion.notes) &&
+      afterSuggestion.notes.some((n) => n.kind === 'suggestion' && n.suggestion === 'a proposed rewrite'),
+    'a suggestion round-tripped without the text that is its whole content',
+  );
+  // The column is write-once and every row reads 'open', so the endpoint stops
+  // shipping it. Pinned because re-adding it is a one-word change that would
+  // put a meaningless constant back in front of a client author.
+  check(
+    'galley: notes do not carry the unused status column',
+    Array.isArray(afterSuggestion.notes) && afterSuggestion.notes.every((n) => !('status' in n)),
+  );
+
+  // 6. THE ALLOWLIST.
+  // A valid signature is necessary but no longer sufficient: a token grants
+  // nothing unless its row in preview_links is present and un-revoked. This is
+  // the direction the positive paths above cannot show — they prove a good link
+  // still works, not that a withdrawn one stops.
+  //
+  // Revocation deliberately takes READING as well as writing, so each case
+  // asserts both: a link that still opened the draft after being revoked would
+  // defeat the point of revoking it. Reading notes goes through the same
+  // previewReviewer the write does, so a third GET per case would add nothing.
+  const revokedToken = await signPreviewToken(
+    { slug: FIXTURE_SLUG, exp: fixtureExp, reviewer: SMOKE_REVIEWER, linkId: REVOKED_LINK_ID },
+    PREVIEW_KEY);
+  const unknownToken = await signPreviewToken(
+    { slug: FIXTURE_SLUG, exp: fixtureExp, reviewer: SMOKE_REVIEWER, linkId: UNKNOWN_LINK_ID },
+    PREVIEW_KEY);
+
+  for (const [label, token] of [['revoked', revokedToken], ['unrecorded', unknownToken]]) {
+    const page = await fetch(`${BASE}/blog/${FIXTURE_SLUG}/?preview=${encodeURIComponent(token)}`);
+    check(
+      `galley: a ${label} link cannot open the post`,
+      page.status === 404,
+      `got ${page.status} — a signature alone opened a draft the allowlist does not vouch for`,
+    );
+    const write = await postNote(token, {
+      slug: FIXTURE_SLUG, kind: 'comment', quote: 'test fixture', body: `${label} write`,
+    });
+    check(
+      `galley: a ${label} link cannot leave a note`,
+      write.status === 403,
+      `got ${write.status}`,
+    );
+  }
+
+  // 7. The write quota bounds a leaked review link between the moment it goes
+  // astray and the moment anyone notices to revoke it. Revocation is the real
+  // remedy (section 6), but it needs a human to know the link leaked; until
+  // then this is what stops one from filling the table. Worth proving it
+  // actually fires rather than trusting the constant.
+  //
+  // Fired in PARALLEL, deliberately. A sequential flood passes against a
+  // check-then-insert quota, which is exactly the implementation that does not
+  // hold: two round-trips let N concurrent requests all read the same pre-flood
+  // count, all pass, and all insert. Someone with a leaked link has no reason
+  // to be polite about it, so the test shouldn't be either. The endpoint does
+  // the count and the insert in one statement, which is what makes this pass.
+  //
+  // Runs last in this section, since it fills the hour's allowance. The
+  // post-migration DELETE keeps it idempotent across runs.
+  // allSettled, not all. 90 parallel requests is the most aggressive thing this
+  // suite does, and wrangler dev has been observed dropping connections under
+  // far gentler load (see fetchExpectingNon5xx below, which exists for exactly
+  // that). Under Promise.all a single ECONNRESET rejects the whole batch, lands
+  // in the outer catch as "smoke: ERROR — fetch failed", and takes the ~40
+  // assertions after this one with it — turning a transport blip into a total
+  // run failure that names nothing.
+  //
+  // But tolerating failures is only safe with a floor underneath. allSettled on
+  // its own would let a run where the worker died mid-flood report zero accepted
+  // and sail through "accepted <= quota" — the assertion would be vacuously true
+  // and the suite would go green on a dead endpoint. FLOOD_MIN_USABLE is what
+  // stops that: enough requests have to come back with a status this test can
+  // actually reason about before its conclusions mean anything.
+  const FLOOD_SIZE = 90;
+  const FLOOD_MIN_USABLE = 81; // 90 % of the batch; tolerate a handful of blips
+  const floodResults = await Promise.allSettled(
+    Array.from({ length: FLOOD_SIZE }, (_, i) =>
+      postNote(galleyToken, {
+        slug: FIXTURE_SLUG, kind: 'comment', quote: 'test fixture', body: `flood ${i}`,
+      }).then((res) => res.status)),
+  );
+  const flood = floodResults.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+  const dropped = floodResults.length - flood.length;
+  const accepted = flood.filter((s) => s === 200).length;
+  const refused = flood.filter((s) => s === 429).length;
+  // Only 200 and 429 are answers to the question being asked. A 5xx means the
+  // endpoint fell over rather than deciding, so it is counted as noise here and
+  // reported by the floor check rather than being read as "not accepted".
+  const usable = accepted + refused;
+  const seen = [...new Set(flood)].sort().join(', ') || 'none';
+  const tally = `${usable}/${FLOOD_SIZE} usable (${accepted} accepted, ${refused} refused` +
+    `, ${flood.length - usable} other, ${dropped} dropped) — statuses seen: ${seen}`;
+
+  check(
+    'galley: the flood actually reached the endpoint',
+    usable >= FLOOD_MIN_USABLE,
+    `${tally}\n    too few requests came back to judge the quota by — the two ` +
+      'checks below would be vacuously true, so this fails instead of them passing',
+  );
+  check(
+    'galley: the write quota stops a flooded review link',
+    refused > 0,
+    `${FLOOD_SIZE} concurrent notes, none refused — ${tally}`,
+  );
+  // The bound has to hold under concurrency, not merely exist. Anything over
+  // the cap means the count was observed and then invalidated before the row
+  // landed — the race a sequential loop cannot see.
+  check(
+    'galley: the quota holds under concurrent writes',
+    accepted <= GALLEY_WRITE_QUOTA,
+    `${accepted} of ${FLOOD_SIZE} concurrent notes were accepted, quota is ` +
+      `${GALLEY_WRITE_QUOTA} — check-then-insert raced past the limit (${tally})`,
+  );
+
+  // 8. The anchoring contract, end to end. A data-src in served HTML must name
+  // the line of the .mdx that actually holds that text. Unit tests cannot see
+  // this: they build mdast by hand and so cannot catch remark's line numbers
+  // shifting relative to the file (frontmatter being stripped, say), which
+  // would move every anchor by a constant and silently misdirect every note.
+  const anchorMatch = /<p data-src="(\d+)-\d+"[^>]*>([^<]{25,80})/.exec(galleyHtml);
+  check('galley: served HTML carries source anchors', anchorMatch !== null);
+  if (anchorMatch) {
+    const fixtureLines = readFileSync(
+      resolve('src/content/blog', `${FIXTURE_SLUG}.mdx`),
+      'utf8',
+    ).split('\n');
+    // Fold the typography smartypants introduces (’ for ', em dashes) before
+    // comparing — see scripts/galley-pull.mjs, which folds the same way.
+    const fold = (s) => s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim();
+    const sourceLine = fold(fixtureLines[Number(anchorMatch[1]) - 1] ?? '');
+    const rendered = fold(anchorMatch[2]).slice(0, 25);
+    check(
+      'galley: an anchor points at the .mdx line holding its text',
+      sourceLine.includes(rendered),
+      `data-src said line ${anchorMatch[1]}, which reads ${JSON.stringify(sourceLine.slice(0, 60))} ` +
+        `but the rendered text there starts ${JSON.stringify(rendered)}`,
+    );
+  }
+
+  // Leave the local database as we found it, so a rerun asserts against a
+  // clean table rather than accumulating rows from every previous run. Links
+  // included — they are seeded before the spawn, so unlike the notes they DO
+  // survive to the next run and would collide with the seeding INSERT.
+  try {
+    d1Exec(`DELETE FROM galley_notes WHERE reviewer = '${SMOKE_REVIEWER}'`, { local: true });
+    clearLinks([FIXTURE_SLUG, OTHER_SLUG], { local: true });
+  } catch {
+    // Cleanup is best-effort; a stale smoke row never affects production.
+  }
 
   // ── Host-based unlock (both directions) ────────────
   // isPreviewHost is unit-tested as a pure function, and everything above runs
@@ -981,6 +1676,7 @@ try {
     for (const f of fails) {
       console.error(`  ✗ ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
     }
+    if (await reportRuntimeDiagnostics()) exitCode = RUNTIME_DIED_EXIT;
   }
 } catch (err) {
   console.error(`smoke: ERROR — ${err.message}`);
@@ -995,6 +1691,7 @@ try {
       console.error(`  ✗ ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
     }
   }
+  if (await reportRuntimeDiagnostics()) exitCode = RUNTIME_DIED_EXIT;
 } finally {
   wrangler.kill('SIGTERM');
   await new Promise((r) => {

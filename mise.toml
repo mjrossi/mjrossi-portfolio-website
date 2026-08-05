@@ -3,4 +3,12 @@ node = "22"
 "aqua:casey/just" = "1.56.0"
 
 [env]
+# Project-local npm binaries on PATH — mise's documented Node.js convention
+# (https://mise.jdx.dev/mise-cookbook/nodejs.html). Here it is load-bearing
+# rather than a convenience: it makes an ad-hoc `wrangler` in the shell the
+# SAME binary package.json pins, which is the one that owns `.wrangler/state`.
+# A second wrangler from elsewhere on PATH cannot open state a newer one
+# wrote — see the justfile header for the exact failure.
+_.path = ["{{config_root}}/node_modules/.bin"]
+
 PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAADNX41uDNZXvcMTg"

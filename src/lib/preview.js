@@ -3,8 +3,17 @@
 //
 //   1. isPreviewHost(hostname) — requests to *.workers.dev (Cloudflare
 //      Workers Builds PR-branch deploys) reveal every scheduled post.
-//   2. verifyPreviewToken(token, key) — a signed, expiring link reveals
-//      exactly ONE post, on any host including production.
+//   2. verifyPreviewGrant(token, key) — a signed, expiring link reveals
+//      exactly ONE post, on any host including production. The token may also
+//      name a reviewer, which additionally authorises leaving galley notes on
+//      that post (see CLAUDE.md, "The galley"). verifyPreviewToken is the
+//      viewing half of the same check, kept for callers that only need the slug.
+//
+// Every token also carries a link id naming its row in the preview_links
+// allowlist, which is what makes a link revocable. The lookup itself is NOT
+// here: this module stays free of any database dependency so one copy serves
+// the Worker, `node --test`, and scripts/preview-link.mjs. src/middleware.ts
+// does the lookup and refuses a grant whose row is missing or revoked.
 //
 // Plain JS for the same reason as schedule.js and csp.js: `node --test`
 // imports it directly, no TypeScript tooling on the test side. It uses
@@ -30,6 +39,36 @@
  */
 export const SLUG_RE = /^[a-z0-9-]+$/;
 const EXP_RE = /^\d+$/;
+
+/**
+ * Shape of a link id — the field that makes a preview link revocable.
+ *
+ * 64 bits of randomness as lowercase hex: unguessable, dot-free (so it cannot
+ * shift a field boundary in the token), and short enough to paste into a
+ * `just preview-revoke` command by hand.
+ *
+ * Exported so scripts/links-db.mjs can shape-check an id before interpolating
+ * it into SQL, and so scripts/preview-roster.mjs can reject a mistyped one with
+ * a useful message.
+ */
+export const LINK_ID_RE = /^[0-9a-f]{16}$/;
+
+/**
+ * Mint a fresh link id.
+ *
+ * Random rather than derived: the id is an opaque handle for the row in
+ * preview_links, and the signature already binds it to the slug, reviewer, and
+ * expiry — so it needs unguessability and nothing else. `crypto.getRandomValues`
+ * is present in the Worker and in Node 22 alike, same as the rest of this
+ * module.
+ *
+ * @returns {string}
+ */
+export function newLinkId() {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 /**
  * The deployed Worker's name. MUST match `name` in wrangler.jsonc — that
@@ -102,26 +141,61 @@ function fromHex(hex) {
 /**
  * Mint a preview token for one post. Used by scripts/preview-link.mjs.
  *
- * Token shape: `<slug>.<exp>.<sigHex>`, where the signed payload is
- * `<slug>.<exp>` and `exp` is epoch SECONDS (shorter and more scannable in a
- * URL than milliseconds).
+ * Two shapes, distinguished only by whether a reviewer is named:
  *
- * @param {string} slug post id, e.g. 'why-im-pivoting'
- * @param {number} exp expiry as epoch seconds
+ *   `<slug>.<exp>.<linkId>.<sigHex>`            — view-only
+ *   `<slug>.<exp>.<reviewer>.<linkId>.<sigHex>` — view AND leave galley notes
+ *
+ * The signed payload is everything before the signature, and `exp` is epoch
+ * SECONDS (shorter and more scannable in a URL than milliseconds).
+ *
+ * Because the payload differs between the shapes, the two cannot be converted
+ * into one another: stripping the reviewer out of a five-part token leaves a
+ * signature over `<slug>.<exp>.<reviewer>.<linkId>` being checked against
+ * `<slug>.<exp>.<linkId>`, which fails, and inventing a reviewer requires a
+ * signature the holder of a view-only link cannot produce. Parsing stays
+ * unambiguous because neither SLUG_RE nor LINK_ID_RE admits a dot, so no field
+ * can smuggle in an extra boundary.
+ *
+ * Takes the same object shape verifyPreviewGrant returns, so minting and
+ * verifying stay symmetric and the arity stops growing.
+ *
+ * @param {object} grant
+ * @param {string} grant.slug post id, e.g. 'why-im-pivoting'
+ * @param {number} grant.exp expiry as epoch seconds
+ * @param {string} grant.linkId id of this link's row in preview_links. REQUIRED
+ *   on both shapes — see the check below for why it is not defaulted.
+ * @param {string | null} [grant.reviewer] short label identifying the editor.
+ *   Chosen at mint time and recorded on every note they leave, so picking
+ *   initials is what keeps the committed review file anonymous.
  * @param {string} key signing key (PREVIEW_SIGNING_KEY)
  * @returns {Promise<string>}
  */
-export async function signPreviewToken(slug, exp, key) {
+export async function signPreviewToken({ slug, exp, linkId, reviewer = null }, key) {
   if (!key) throw new Error('signPreviewToken: signing key is required');
   if (!SLUG_RE.test(slug)) throw new Error(`signPreviewToken: invalid slug ${JSON.stringify(slug)}`);
   if (!Number.isInteger(exp) || exp < 0) throw new Error('signPreviewToken: exp must be a non-negative integer');
-  const payload = `${slug}.${exp}`;
+  if (reviewer !== null && !SLUG_RE.test(reviewer)) {
+    throw new Error(`signPreviewToken: invalid reviewer ${JSON.stringify(reviewer)}`);
+  }
+  // Every link must be revocable, so every token carries an id. Mandatory
+  // rather than defaulted: a token minted without one would be a grant the
+  // allowlist has no row for, and therefore no way to withdraw.
+  if (!LINK_ID_RE.test(linkId ?? '')) {
+    throw new Error(
+      `signPreviewToken: invalid link id ${JSON.stringify(linkId)} — every preview link ` +
+        'must be revocable, so one is required on both shapes. See newLinkId().',
+    );
+  }
+  const payload = reviewer === null
+    ? `${slug}.${exp}.${linkId}`
+    : `${slug}.${exp}.${reviewer}.${linkId}`;
   const sig = await crypto.subtle.sign('HMAC', await importKey(key), new TextEncoder().encode(payload));
   return `${payload}.${toHex(sig)}`;
 }
 
 /**
- * Verify a preview token and return the slug it authorises, or null.
+ * Verify a preview token and return what it authorises, or null.
  *
  * Never throws — every malformed, unsigned, tampered, or expired input is a
  * plain `null` so the caller can treat "no token" and "bad token" the same
@@ -132,22 +206,59 @@ export async function signPreviewToken(slug, exp, key) {
  * crypto.subtle.verify does the comparison in constant time, which is why
  * there is no hand-rolled equality check anywhere in here.
  *
+ * A `reviewer` of null means view-only. Granting the right to leave notes is
+ * strictly an escalation over viewing, so it is carried INSIDE the signature
+ * rather than as a separate query parameter — otherwise anyone holding a
+ * read-only link could promote themselves by editing the URL.
+ *
+ * This function does NOT consult the allowlist: it stays free of any database
+ * dependency so the same module runs in the Worker, under `node --test`, and in
+ * scripts/preview-link.mjs. src/middleware.ts takes the returned `linkId` and
+ * requires an active row in preview_links before honouring the grant.
+ *
  * @param {string | null | undefined} token
  * @param {string | null | undefined} key signing key; absent ⇒ always null
  * @param {number} [now] epoch ms; defaults to the current time
- * @returns {Promise<string | null>} the authorised slug, or null
+ * @returns {Promise<{ slug: string, reviewer: string | null, linkId: string } | null>}
  */
-export async function verifyPreviewToken(token, key, now = Date.now()) {
+export async function verifyPreviewGrant(token, key, now = Date.now()) {
   if (!token || !key) return null;
 
   const parts = token.split('.');
-  if (parts.length !== 3) return null;
+  // Four fields (view-only) or five (reviewer). Both PRE-ALLOWLIST shapes are
+  // deliberately refused, because a token minted before link ids existed has no
+  // row to revoke, and honouring it would leave a permanent grant outside the
+  // allowlist:
+  //
+  //   - three fields is the old view-only shape, rejected on length here;
+  //   - `<slug>.<exp>.<reviewer>.<sig>` is the old reviewer shape, which has
+  //     four fields and so reaches the LINK_ID_RE check below — a reviewer
+  //     label like `jd` is not 16 hex characters, so it fails there.
+  //
+  // The one collision that implies: a legacy reviewer token whose reviewer was
+  // exactly 16 lowercase hex characters would parse as a new view-only token
+  // over a byte-identical payload, and its signature would verify. It is
+  // harmless — the allowlist refuses it for having no row — and unreachable in
+  // practice, since reviewers are minted as initials and no legacy token was
+  // ever issued (this shipped before the galley did).
+  if (parts.length !== 4 && parts.length !== 5) return null;
 
-  const [slug, exp, sigHex] = parts;
+  const slug = parts[0];
+  const exp = parts[1];
+  const reviewer = parts.length === 5 ? parts[2] : null;
+  const linkId = parts.length === 5 ? parts[3] : parts[2];
+  const sigHex = parts[parts.length - 1];
+
   if (!SLUG_RE.test(slug) || !EXP_RE.test(exp)) return null;
+  if (reviewer !== null && !SLUG_RE.test(reviewer)) return null;
+  if (!LINK_ID_RE.test(linkId)) return null;
 
   const sig = fromHex(sigHex);
   if (!sig) return null;
+
+  // The payload is every field except the signature, so the shape itself is
+  // authenticated — a token cannot be re-read as the other shape.
+  const payload = parts.slice(0, -1).join('.');
 
   let valid = false;
   try {
@@ -155,7 +266,7 @@ export async function verifyPreviewToken(token, key, now = Date.now()) {
       'HMAC',
       await importKey(key),
       sig,
-      new TextEncoder().encode(`${slug}.${exp}`),
+      new TextEncoder().encode(payload),
     );
   } catch {
     return null;
@@ -165,5 +276,23 @@ export async function verifyPreviewToken(token, key, now = Date.now()) {
   // Expiry is exclusive: a token whose exp is exactly now has expired.
   if (Number(exp) * 1000 <= now) return null;
 
-  return slug;
+  return { slug, reviewer, linkId };
+}
+
+/**
+ * Verify a preview token and return the slug it authorises, or null.
+ *
+ * The viewing half of verifyPreviewGrant, kept as the name every existing
+ * caller uses. Both token shapes grant viewing — an editor obviously has to
+ * read the post to comment on it — so this deliberately does not care which
+ * shape arrived.
+ *
+ * @param {string | null | undefined} token
+ * @param {string | null | undefined} key
+ * @param {number} [now] epoch ms
+ * @returns {Promise<string | null>} the authorised slug, or null
+ */
+export async function verifyPreviewToken(token, key, now = Date.now()) {
+  const grant = await verifyPreviewGrant(token, key, now);
+  return grant === null ? null : grant.slug;
 }

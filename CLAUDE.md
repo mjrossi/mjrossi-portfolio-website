@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository. For the full architecture, 
 
 ## Stack
 
-Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece of client JS (the `/blog` newsletter form — see "Newsletter" below). `output: 'server'` — every route runs in the Cloudflare worker by default; only `/404` opts back into static via `export const prerender = true`. `/blog/rss.xml` is intentionally on-demand (not prerendered) so scheduled posts can enter the feed at request time — see "Blog". `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response so the edge cache absorbs traffic while the dynamic edition line refreshes hourly. Build output: `dist/client/` (assets, served via the `ASSETS` binding in `wrangler.jsonc`) plus the server bundle in `dist/server/` that Wrangler deploys as the worker. Node 22 (pinned in `mise.toml`).
+Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **two** scoped pieces of client JS: the `/blog` newsletter form (see "Newsletter") and the galley review client, which loads only on a signed review link (see "The galley"). Neither ever appears on an ordinary page. `output: 'server'` — every route runs in the Cloudflare worker by default; only `/404` opts back into static via `export const prerender = true`. `/blog/rss.xml` is intentionally on-demand (not prerendered) so scheduled posts can enter the feed at request time — see "Blog". `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response so the edge cache absorbs traffic while the dynamic edition line refreshes hourly. Build output: `dist/client/` (assets, served via the `ASSETS` binding in `wrangler.jsonc`) plus the server bundle in `dist/server/` that Wrangler deploys as the worker. Node 22 (pinned in `mise.toml`).
 
 **Server endpoint convention:** anything that doesn't render a page (redirects, JSON APIs) lives under `src/pages/api/*`. All endpoints share `src/lib/server.ts` for security headers, env access, JSON parsing, and error responses.
 
@@ -15,13 +15,13 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece 
 - `src/components/BlogPostEntry.astro` — shared `<article class="post-entry">` card used by `blog/index.astro` and `blog/tag/[tag].astro`.
 - `src/components/Figure.astro` — `<figure>` wrapper around `astro:assets` `<Image>` with an optional `<figcaption>`. Imported in `.mdx` posts when an inline image needs a visible caption separate from its `alt`.
 - `src/components/diagrams/*.astro` — per-post explanatory diagrams as hand-authored **inline SVG**. Not site chrome; each is imported by exactly one `.mdx` post. Hand-authored rather than generated because the no-client-JS rule plus `script-src 'self'` rules out running mermaid in the browser, and pre-rendering it would mean a Puppeteer dev dependency and a house style that fights the Broadsheet palette. They emit their own `<figure class="post-figure post-diagram">` and reuse the existing `.post-figure` / `figcaption` rules — they do **not** go through `Figure.astro`, which requires `ImageMetadata`. Shared styling (`.post-diagram`, `.dg-*`) lives in `global.css`. See "Diagrams in posts" under Blog.
-- `src/components/NewsletterSignup.astro` — newspaper-style email signup form. Rendered **only** in `src/pages/blog/index.astro` — this is the single carve-out from the no-client-JS rule. Loads Cloudflare Turnstile + a hoisted submit handler. Owns its own scoped `<style>` block (the `.newsletter-*` rules live with the component, not in `global.css`). Smoke asserts the form is present on `/blog` and absent on `/` (regression guard against accidental lifts into shared chrome).
+- `src/components/NewsletterSignup.astro` — newspaper-style email signup form. Rendered **only** in `src/pages/blog/index.astro` — the first of two carve-outs from the no-client-JS rule (the other is the galley). Loads Cloudflare Turnstile + a hoisted submit handler. Owns its own scoped `<style>` block (the `.newsletter-*` rules live with the component, not in `global.css`). Smoke asserts the form is present on `/blog` and absent on `/` (regression guard against accidental lifts into shared chrome).
 - `src/components/PageHeader.astro` — shared interior-page header (`<h1>` + optional description + default slot for `.page-meta`). Used by `/work`, `/education`, `/urban-mobility`, `/privacy`, and `/blog/tag/[tag]`. `/blog` keeps its custom `.blog-header` since the RSS-link variant doesn't fit the prop shape.
 - `src/components/PostTags.astro` — `<p class="post-tags">` chip list, rendered twice by `BlogPost.astro` (header and footer). Single source of truth for the tag-list markup.
 - `src/pages/*.astro` — one file per route. Pages: `/` (About + Now), `/work`, `/education`, `/urban-mobility`, `/blog`, `/privacy`, `/404`. Output mode is `server`, so every page runs on-demand by default; only `/404` opts back into static via `export const prerender = true` (`/blog/rss.xml` renders on-demand so scheduled posts surface without a rebuild). `Cache-Control: public, max-age=3600` is applied centrally by `src/middleware.ts`, not per-page.
 - `src/pages/api/contact.ts` — on-demand redirect. `GET /api/contact` returns 302 to `mailto:hello@mjrossi.com` so the address never appears in static HTML. Cloudflare's `_redirects` rejects `mailto:` destinations and the deploy is a Worker with Static Assets (not classic Pages), so `functions/` is unavailable.
 - `src/pages/api/subscribe.ts` — on-demand POST endpoint. Receives `{ email, turnstileToken, company }` from the newsletter form, verifies the Turnstile token, forwards to Buttondown (default double-opt-in; passes `ip_address` so Buttondown's firewall can geo/reputation-score the request and avoid false-positive blocks). Treats already-subscribed as success to avoid leaking the subscriber list; surfaces other Buttondown 400s as `upstream_rejected` so the client falls back to the "email me to add you manually" message. Uses helpers from `src/lib/server.ts`.
-- `src/lib/server.ts` — shared `/api/*` plumbing: `securityHeaders`, `getEnv()`, `parseJson()`, `jsonOk()`, `jsonError()`, `methodNotAllowed()`. The single source of truth for server-endpoint conventions.
+- `src/lib/server.ts` — shared `/api/*` plumbing: `securityHeaders`, `getEnv()` / `tryGetEnv()`, `parseJson()`, `jsonOk()`, `jsonError()`, `methodNotAllowed()`. The single source of truth for server-endpoint conventions. `tryGetEnv()` is the fail-closed read — `cloudflare:workers` throws when touched outside the worker runtime, and swallowing that belongs here rather than in a try/catch at each call site.
 - `src/env.d.ts` — types for Cloudflare runtime `Env` (`BUTTONDOWN_API_KEY`, `TURNSTILE_SECRET_KEY`) and Astro `ImportMetaEnv` (`PUBLIC_TURNSTILE_SITE_KEY`).
 - `src/content.config.ts` — Zod schema for blog post frontmatter (single source of truth for required/optional fields and tag validation).
 - `src/content/blog/<slug>.mdx` — one file per post (or `<slug>/index.mdx` when colocating images).
@@ -33,13 +33,27 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **one** scoped piece 
 - `astro.config.mjs` — Cloudflare adapter, MDX integration (for the blog), sitemap integration, Astro `Font` integration for Inter / Fraunces / Source Serif 4.
 - `wrangler.jsonc` — Worker config; `ASSETS` binding points at `dist/client`. Also declares `SESSION` (KV). **`SESSION` is not a feature this site uses** — `@astrojs/cloudflare` injects it into the generated `dist/server/wrangler.json` whenever `config.session.driver` is unset, which is unconditional and has no clean off switch, so the binding exists on the deployed Worker either way. It is declared here so the resource is visible in the repo rather than only in generated output and the dashboard. `smoke.mjs` asserts `wrangler.jsonc` declares every binding the build emits, so a future adapter release that injects another one fails the build. The check is one-directional by design (generated ⊆ declared) — a binding declared here but dropped by the build is not flagged.
 - `src/lib/schedule.js` — `isPublished(pubDate, now?)`, the scheduled-publishing predicate. Plain JS (like `csp.js`) so `node --test` can import it without `astro:content`. Unit-tested in `src/lib/schedule.test.js`; see "Scheduled publishing" under Blog.
-- `src/lib/preview.js` — the two scheduled-post preview unlocks: `isPreviewHost(hostname)` (`*.workers.dev` branch/version hosts → show drafts, but **not** the Worker's own production alias) and `signPreviewToken` / `verifyPreviewToken` (signed, expiring, single-post links). Also exports `WORKER_NAME`, which must stay equal to `name` in `wrangler.jsonc` — smoke asserts it. Plain JS on `globalThis.crypto.subtle`, so the same module runs in the worker, under `node --test`, and in `scripts/preview-link.mjs` — the code that mints links is the code that verifies them. Unit-tested in `src/lib/preview.test.js`; see "Previewing a scheduled post".
-- `scripts/preview-link.mjs` — mints a signed preview link (`npm run preview-link -- <slug> [--hours N] [--host URL]`). Reads `PREVIEW_SIGNING_KEY` from the environment or `.dev.vars`; validates the slug against real content before signing. URL on stdout, metadata on stderr.
+- `src/lib/preview.js` — the two scheduled-post preview unlocks: `isPreviewHost(hostname)` (`*.workers.dev` branch/version hosts → show drafts, but **not** the Worker's own production alias) and `signPreviewToken` / `verifyPreviewGrant` (signed, expiring, single-post links). Also exports `newLinkId` / `LINK_ID_RE` — every token carries a link id naming its row in `preview_links`, which is what makes it revocable — and `WORKER_NAME`, which must stay equal to `name` in `wrangler.jsonc` (smoke asserts it). `signPreviewToken` takes the same object `verifyPreviewGrant` returns, so minting and verifying stay symmetric. Deliberately **DB-free**: the allowlist lookup lives in `src/lib/preview-links.js`, so this one module still runs in the worker, under `node --test`, and in `scripts/preview-link.mjs` — the code that mints links is the code that verifies them. Unit-tested in `src/lib/preview.test.js`; see "Previewing a scheduled post".
+- `src/lib/preview-links.js` — `isLinkActive(DB, id)`, the `preview_links` allowlist lookup that makes a link revocable. Called by `src/middleware.ts`, and plain JS rather than inline in it for one reason: middleware imports `astro:middleware`, so `node --test` cannot load it, and this was the only fail-closed branch in the feature with no persistent test — `return false` in a bare `catch` is one character from `return true`. Takes the store as an argument (duck-typed, so a test passes a three-line stub) rather than importing a binding, which is what keeps `preview.js` DB-free as well. Unit-tested in `src/lib/preview-links.test.js`, which covers the two paths smoke cannot reach over HTTP: a missing `DB` binding and a store that throws.
+- `scripts/preview-link.mjs` — mints a signed preview link (`npm run preview-link -- <slug> (--remote | --local) [--hours N] [--host URL] [--reviewer LABEL]`). Reads `PREVIEW_SIGNING_KEY` from the environment or `.dev.vars`; validates the slug against real content before signing. **Records the link in `preview_links` before printing the URL** — a link whose row failed to write would be refused on arrival, so a failed insert hands out nothing. URL on stdout, metadata (including the link id to revoke by) on stderr.
+- `scripts/preview-roster.mjs` — lists and revokes preview links (`just preview-roster` / `just preview-roster-all` / `just preview-revoke`). The only inventory of issued links there is. `--all` lists every link across every post, grouped by post, because a link whose slug you have forgotten is otherwise unrevocable — the per-post scoping that matters in the worker doesn't apply to a CLI already authenticated as you. **Revoking stays per-post**, so a mistyped id can't withdraw another draft's link. No admin endpoint, same rationale as `galley-pull.mjs`.
+- `scripts/database-target.mjs` — `chooseDatabase({ local, remote })` and `databaseLabel(local)`. Every operator script that touches D1 (`preview-link`, `preview-roster`, `galley-pull`) requires an explicit `--remote` or `--local` and prints which one it used. There is **no default**: `--local` used to be opt-in on a production default, so forgetting it silently wrote a real row, and pointing a read at the wrong database answered "no links minted" / "no notes" for one that was never queried. Both mistakes are invisible at the time. `smoke.mjs` is exempt — not operator-facing, and local by construction.
+- `scripts/d1.mjs` — `DB_NAME`, `d1Query`, `d1Exec`, `d1Migrate`. The single place this repo shells out to `wrangler d1 execute`; throws rather than exiting so each caller keeps its own `die()` prefix. Preserves three distinct failure messages that must not collapse into one: unreachable database, unparseable output, and output that parsed but is not the `[{ results: [...] }]` shape. The third throws rather than returning `[]` — a silent empty result from `d1Query` would make `preview-roster` report "no links minted" for a table it never actually read, and that list is the only inventory of issued links there is.
+- `scripts/links-db.mjs` — the only owner of `preview_links` SQL. Validates its own inputs (`SLUG_RE`, `LINK_ID_RE`, `Number.isInteger`), because wrangler's `--command` takes a string rather than bound parameters and that shape check is what makes the interpolation safe. `smoke.mjs` seeds fixtures through the same `recordLinks` production mints through.
+- `scripts/content.mjs` — `resolvePostSource(slug)`, the `<slug>.mdx` / `<slug>/index.mdx` probe shared by `preview-link.mjs` and `galley-pull.mjs`.
 - `scripts/dev-vars.mjs` — `readDevVar(name)`, the one `.dev.vars` parser shared by `preview-link.mjs` and `smoke.mjs`. Both sign preview tokens that the worker must then verify, so they have to agree byte-for-byte on quoting: if one strips surrounding quotes and the other doesn't, `PREVIEW_SIGNING_KEY="…"` makes smoke sign with a different key than wrangler injects, and the positive-path preview assertions fail locally while CI (which has no `.dev.vars`) passes. Same anti-drift rationale as `csp.js` / `security-headers.js`.
 - `src/lib/security-headers.js` — `SECURITY_HEADERS`, the canonical non-CSP header set (HSTS, COOP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy). Imported by `src/middleware.ts` and `scripts/gen-headers.mjs` so the worker and the static `_headers` file can't drift. Same split-source rationale as `csp.js`.
-- `src/middleware.ts` — applies `SECURITY_HEADERS` to **every** worker response (set-if-absent, so a route that chose a stricter value keeps it — `/api/*` sends `Referrer-Policy: no-referrer` and `Cache-Control: no-store`), then adds `Content-Security-Policy` and the default `Cache-Control: public, max-age=3600` to HTML responses only. Routes can override Cache-Control by setting it before middleware runs (e.g. prerendered `/404` emits `max-age=0` from Astro and middleware leaves it alone). `_headers` rules only apply to static asset responses served by the Cloudflare ASSETS binding; on-demand routes bypass that file, so middleware is the single source of truth for their headers. The all-responses scope matters for `/blog/rss.xml`, which went on-demand for scheduled publishing and would otherwise ship with no security headers at all. Middleware also resolves the two scheduled-post preview unlocks *before* the route runs, handing them to routes as `locals.showScheduled` / `locals.previewSlug`, and — when either is active — **overrides** `Cache-Control` to `no-store` and sets `X-Robots-Tag: noindex, nofollow`. That override is the single exception to the set-if-absent rule above, because the values it replaces (`max-age=3600`, and the RSS route's own header) are exactly what would cache a draft.
+- `src/middleware.ts` — applies `SECURITY_HEADERS` to **every** worker response (set-if-absent, so a route that chose a stricter value keeps it — `/api/*` sends `Referrer-Policy: no-referrer` and `Cache-Control: no-store`), then adds `Content-Security-Policy` and the default `Cache-Control: public, max-age=3600` to HTML responses only. Routes can override Cache-Control by setting it before middleware runs (e.g. prerendered `/404` emits `max-age=0` from Astro and middleware leaves it alone). `_headers` rules only apply to static asset responses served by the Cloudflare ASSETS binding; on-demand routes bypass that file, so middleware is the single source of truth for their headers. The all-responses scope matters for `/blog/rss.xml`, which went on-demand for scheduled publishing and would otherwise ship with no security headers at all. Middleware also resolves the two scheduled-post preview unlocks *before* the route runs, handing them to routes as `locals.showScheduled` / `locals.previewSlug` / `locals.previewReviewer`. For a signed link that means two checks, not one: the signature, and then a lookup in the `preview_links` allowlist that makes the link revocable (`isLinkActive` from `src/lib/preview-links.js`, fail-closed on a missing binding, a D1 error, a missing row, or a revoked one). Both happen only when a `?preview=` token is present, so the normal request path does no HMAC work and touches no database. When either unlock is active middleware — **overrides** `Cache-Control` to `no-store` and sets `X-Robots-Tag: noindex, nofollow`. That override is the single exception to the set-if-absent rule above, because the values it replaces (`max-age=3600`, and the RSS route's own header) are exactly what would cache a draft.
 - `dist/client/_headers` — **generated**, not checked in. `scripts/gen-headers.mjs` writes it during `npm run build` from `src/lib/csp.js` + `src/lib/security-headers.js`, so the static-asset header set can't drift from what middleware applies to worker responses. Applies only to assets served by the Cloudflare ASSETS binding.
-- `public/scripts/newsletter.js` — the only client-side JS on the site. Served as a static asset (not bundled by Astro) so it loads as an external module from `/scripts/newsletter.js` and works under the strict `script-src 'self'` CSP. Imported only by `src/components/NewsletterSignup.astro`.
+- `public/scripts/newsletter.js` — one of two client-side JS files. Served as a static asset (not bundled by Astro) so it loads as an external module from `/scripts/newsletter.js` and works under the strict `script-src 'self'` CSP. Imported only by `src/components/NewsletterSignup.astro`.
+- `public/scripts/galley.js` — the other. The editorial review client: selection → anchored note. Same static-asset rationale. Loaded only by `src/components/GalleyMargin.astro`, which itself renders only on a signed review link, so this can never reach a publicly cacheable page. See "The galley".
+- `src/lib/remark-source-anchors.js` — remark plugin stamping `data-src="<start>-<end>"` (MDX source lines) on every commentable block. Registered in `astro.config.mjs` under `markdown.remarkPlugins`. The anchoring half of the galley.
+- `src/lib/galley.js` — note validation + `sha256Hex`, shared by the write endpoint and the pull script. Plain JS, same rationale as `csp.js`.
+- `src/lib/galley-relocate.js` — `unmark` / `fold` / `createLocator`, plus the fenced-and-blockquoted emitters for reviewer text. Split out of `galley-pull.mjs` because that script parses argv and shells out to wrangler at import time, so none of this was reachable from `node --test` — and it is the least obvious code in the feature. Unit-tested in `src/lib/galley-relocate.test.js`.
+- `src/pages/api/galley.ts` — `GET`/`POST` galley notes. Authorisation comes entirely from `Astro.locals` (middleware has already verified the token); both methods require `previewReviewer`.
+- `src/components/GalleyMargin.astro` — review chrome (bar, notes panel, composer). Owns its own scoped styles, like `NewsletterSignup.astro`.
+- `scripts/galley-pull.mjs` — pulls notes into `docs/galley/<slug>.md` via `wrangler d1 execute`. No admin endpoint exists, because wrangler already authenticates the operator.
+- `migrations/0001_initial.sql` — the whole D1 schema: `preview_links` (who may see a draft, and who may comment) and `galley_notes` (what they said). Apply with `wrangler d1 migrations apply mjrossi-galley --local|--remote`. One file because the feature shipped as one thing; the next schema change becomes `0002` and is append-only from then on, since a migration is frozen the moment it is applied anywhere real.
 - `public/.assetsignore` — keeps worker artifacts out of the static asset binding.
 - `scripts/smoke.mjs` — post-build smoke test. Checks static artifacts in `dist/client/` (CSS tokens, assets) and then spins up `wrangler dev` to hit every on-demand route. Run via `npm run smoke`.
 - `scripts/make-noise.mjs`, `scripts/make-og.mjs` — one-off regenerators for `public/noise.png` and `public/og.png`.
@@ -152,10 +166,10 @@ Host-based authorization is the weakest primitive here by construction: `context
 **2. Signed expiring links — for the production domain.** Reveals **one** post, on any host:
 
 ```sh
-npm run preview-link -- my-draft                          # 48h, mjrossi.com
-npm run preview-link -- my-draft --hours 4
-npm run preview-link -- my-draft --host http://127.0.0.1:8788
-# → https://mjrossi.com/blog/my-draft/?preview=my-draft.1784634245.74ad2a0d…
+npm run preview-link -- my-draft --remote                 # 48h, mjrossi.com
+npm run preview-link -- my-draft --remote --hours 4
+npm run preview-link -- my-draft --local --host http://127.0.0.1:8788
+# → https://mjrossi.com/blog/my-draft/?preview=my-draft.1784634245.a1b2c3d4e5f60718.74ad2a0d…
 ```
 
 The URL goes to stdout and the metadata to stderr, so it pipes cleanly. The script refuses to mint a link for a slug with no matching file — a typo would otherwise produce a valid-looking link that 404s.
@@ -170,9 +184,30 @@ The URL goes to stdout and the metadata to stderr, so it pipes cleanly. The scri
 
 The fixture is visible in `npm run dev` and on `*.workers.dev` previews. That is expected — both surfaces show scheduled posts on purpose.
 
-The token is `<slug>.<exp>.<hmac>`; the slug is inside the signed payload, so a link minted for one draft cannot be edited to open another. Verification uses `crypto.subtle.verify` (constant-time) and checks the signature *before* expiry.
+The token is `<slug>.<exp>.<linkId>.<hmac>`, or `<slug>.<exp>.<reviewer>.<linkId>.<hmac>` when it also grants galley notes. Every field except the signature is inside the signed payload, so a link minted for one draft cannot be edited to open another, a view-only link cannot have a reviewer spliced in, and the link id cannot be repointed at a different allowlist row. Verification uses `crypto.subtle.verify` (constant-time) and checks the signature *before* expiry.
 
 Any response with either unlock active gets `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`, **overriding** whatever was set. This is the one place middleware overrides rather than setting-if-absent — a cached or indexed draft is precisely the failure being avoided.
+
+#### Every link is revocable, and that is what `preview_links` is for
+
+**A signature is necessary but not sufficient.** Every minted link — view-only and review alike — gets a row in the `preview_links` table, and `src/middleware.ts` requires that row, un-revoked, before the token grants anything. Withdraw one with:
+
+```sh
+just preview-roster my-draft --remote                     # what is outstanding, and its state
+just preview-roster-all --remote                          # every link, across all posts
+just preview-revoke my-draft a1b2c3d4e5f60718 --remote    # take one back
+just preview-revoke my-draft --revoke-all --remote        # take back every live link
+```
+
+**Revoking removes reading as well as writing** — the post 404s for that link. Taking a draft back from someone should take the draft, not just the comment box. Rows are never deleted, so a withdrawn link stays listed as `revoked <date>` rather than vanishing from the inventory.
+
+**The roster is the only inventory that exists.** A token is recorded nowhere else, so a link missing from it cannot be revoked, only waited out. `just preview-roster <slug>` answers for one post; **`just preview-roster-all` answers for every post**, which is the one to reach for when you can't remember which draft a link was minted for — without it, a forgotten slug meant a link you could not withdraw at all. `--hours` still matters regardless: mint with a window that matches the round (`--hours 96` for a week's reading, not the 48h default doubled "just in case"), because revocation needs someone to notice the link went astray before it helps.
+
+**Minting now needs D1, and this is the accepted cost.** `just preview-link` writes its row before printing the URL — a link that verifies but has no row is refused on arrival, which looks exactly like the feature being broken, so a failed insert hands out nothing at all. That means minting against production needs an API token carrying **D1:Edit**, and minting for local work needs `--local` against a migrated database. While D1 is unavailable, no preview link works. That failure is recoverable and immediately visible; links that cannot be withdrawn are neither. `npm run dev` is unaffected — it shows scheduled posts outright, so preview links were never the local mechanism.
+
+**Everything fails closed.** No signing key, no `DB` binding, a D1 error, a missing row, or a revoked row all resolve to no grant. There is deliberately no branch in this feature where a failure widens access.
+
+**Neither pre-allowlist token shape verifies any more.** `<slug>.<exp>.<sig>` and `<slug>.<exp>.<reviewer>.<sig>` predate link ids and have no row to revoke, so honouring either would leave a permanent grant outside the allowlist. They were removed rather than deprecated because the galley had not shipped when this landed and no link of either shape was ever issued. Rotating `PREVIEW_SIGNING_KEY` remains the blunt instrument that invalidates everything at once.
 
 Setup:
 
@@ -180,11 +215,116 @@ Setup:
 openssl rand -hex 32                      # generate
 # → .dev.vars as PREVIEW_SIGNING_KEY (also read by scripts/preview-link.mjs)
 wrangler secret put PREVIEW_SIGNING_KEY   # same value, production
+
+wrangler d1 migrations apply mjrossi-galley --remote   # creates both tables
 ```
+
+**The migration is not optional:** until it is applied, `preview_links` does not exist and *every* mint fails with "no such table" — view-only links included, not just review ones.
 
 If `PREVIEW_SIGNING_KEY` is unset the worker rejects every link and only the `*.workers.dev` unlock remains — nothing else breaks.
 
 Wherever a scheduled post is visible, it carries a `Scheduled` badge (`.post-scheduled`). The badge keys off `isPublished`, not the preview flag, so it can only ever appear on a post that isn't live.
+
+### The galley
+
+Inline editorial review. Editors open a link, read the real rendered post, select a passage, and leave a note. Notes come back anchored and structured, so applying them to the MDX is mechanical rather than interpretive. Named for the galley proof — the pre-publication print sent out for correction.
+
+```sh
+just preview-link my-draft --remote --reviewer jd   # one link per editor, mint with initials
+just galley my-draft --remote                       # → docs/galley/my-draft.md
+```
+
+**The galley does not hand out access.** Links are minted, listed, and revoked with `just preview-link` / `preview-roster` / `preview-revoke` — one vocabulary for who may see a draft, whether or not they may comment on it. The galley owns the notes, the margin, the anchoring, and the pull. That boundary is why there is no `galley-link`: a command that issued access from inside the galley namespace is exactly what made revoking one feel like it belonged to a different feature.
+
+**Git holds the post. D1 holds the conversation about the post.** That split is the whole design. Notes are ephemeral, relational collaboration state (many notes × many reviewers × per revision); a post is a durable versioned artifact whose git history is worth reading. Do not migrate posts into the database — `Figure`/`diagrams/*` compile at build time, `astro:assets` optimises images at build time, and frontmatter is Zod-validated at build time. All three would have to be rebuilt at runtime, and the editorial record in commit bodies would become an `updated_at` column.
+
+**Authorisation is the preview token, extended.** A token is `<slug>.<exp>.<linkId>.<sig>` (view-only) or `<slug>.<exp>.<reviewer>.<linkId>.<sig>` (view + comment). The signed payload is every field except the signature, so the shape is authenticated: a view-only link can't have a reviewer spliced in, a review link can't be stripped back to look like a plain one, and neither can be repointed at a different allowlist row. Reviewer is read from the token, never from the request body, so a note can't be attributed to someone who didn't write it. Editors need no account and no GitHub.
+
+**A review link can be withdrawn.** It is an ordinary preview link with a reviewer inside the signature, so it is recorded in `preview_links` and `just preview-revoke <slug> <id> --remote` takes it back — reading included, so the draft 404s for that link. `just preview-roster <slug> --remote` lists what is outstanding, and `just preview-roster-all --remote` lists every link across every post. See "Previewing a scheduled post" above for the full mechanism, the fail-closed behaviour, and the D1 dependency that minting now carries.
+
+Two things that scoping does *not* solve, and still need judgement. Mint with a window that matches the round (`--hours 96` for a week's reading, not the 48h default doubled "just in case"), because revocation needs someone to notice the link went astray before it helps. And treat the write quota in `src/pages/api/galley.ts` as the bound in the meantime — 60 notes per reviewer per hour, asserted live in smoke.
+
+**That quota is one SQL statement, and it has to stay one.** The count is a subquery inside the `INSERT ... SELECT ... WHERE`, and a refusal arrives as `meta.changes === 0` rather than as an error. Split back into a `SELECT COUNT(*)` followed by an `INSERT` and the bound holds only against a polite client: two round-trips let concurrent requests all read the same pre-flood count, all pass, and all insert. Smoke fires 90 notes in parallel and asserts no more than the quota lands — measured at 69 accepted against a cap of 60 with the check-then-insert version, so this is the observed behaviour and not a theoretical race.
+
+The flood collects with `Promise.allSettled`, and the reason is worth keeping: under `Promise.all` one dropped connection rejects the whole batch, surfaces as `smoke: ERROR — fetch failed`, and takes the ~40 assertions after it down with no indication of which one mattered. `wrangler dev` drops connections under far less load than this — `fetchExpectingNon5xx` exists for exactly that. **But tolerance needs a floor under it**, which is what the `galley: the flood actually reached the endpoint` check is: `accepted <= quota` is vacuously true when nothing was accepted, so a run where the worker died mid-flood would otherwise go green on a dead endpoint. Verified by fault injection — dropping 70 of 90 requests fails the floor check while `accepted <= quota` still passes, which is precisely the false green the floor exists to convert into a red.
+
+**The token rides in a URL, so `Referrer-Policy` is load-bearing.** A draft under review links outward like any other post, and `strict-origin-when-cross-origin` (from `src/lib/security-headers.js`) is what keeps `?preview=…` out of third-party referer logs. Relaxing that header to `unsafe-url` would hand every outstanding review link to every site a draft links to, silently and with nothing else in the system noticing.
+
+**Anchoring is two-part, and both parts are load-bearing.** `remark-source-anchors` stamps `data-src="<start>-<end>"` on each block; the client records that range *plus* the quoted text and ~32 characters either side. The line range is exact but goes stale on the next revision — which is the normal case, since review happens in rounds. The quote survives revision but is ambiguous alone. Each note also stores a SHA-256 of the **whole .mdx file, frontmatter included** — anchors are absolute line numbers, so adding one tag shifts every one of them, and a body-only hash would call that "unchanged".
+
+`galley-pull.mjs` compares that hash against the file and, where the quote is still findable, reports `now line N` with the current text. Where it isn't, it says so rather than printing a line number pointing at unrelated prose. Ambiguous matches deliberately resolve to nothing — confidently naming one of three identical sentences is how a note gets applied in the wrong section.
+
+**Typography must be folded before searching.** Smartypants renders `'` as `’` and `--` as an em dash, so an editor's selection never matches the source byte-for-byte. `galley-relocate.js` folds both sides; without it every note would look like it had drifted.
+
+**Inline markdown must be stripped from the source side, and only from the source side.** A quote comes from `block.textContent`, which carries no markup at all, while the search runs against raw `.mdx` — so a selection spanning a link, emphasis, or a code span is not a substring of the line holding it (`we shipped [the Atlas](…) last spring` vs `we shipped the Atlas last spring`). Every post here has inline links and editors select whole sentences, so without `unmark` the quote half of the anchor is dead exactly when the line range has gone stale and it is the only half left. One-directional on purpose: folding the quote side would mean guessing at markup the client already discarded, and a wrong guess produces a confident match on the *wrong* passage, whereas over-stripping the source merely fails to match — which is already reported safely.
+
+**`data-src` ships on every block of every published post, not just drafts under review.** `remark-source-anchors` runs at build time, where there is no request to condition on — the alternative is a second build of the whole content collection, which is not worth it. The cost is ~15 bytes per block and the disclosure that a post's paragraphs occupy given MDX line numbers, which is public in this repo anyway. Worth knowing before treating a `data-src` in production HTML as a bug.
+
+**Scope is unchanged from a read-only link.** A review link grants *writing*, not *reach*: still one post, still not `/blog`, still not tag pages, and above all still not `/blog/rss.xml` — the feed is what triggers Buttondown's irreversible send. `previewReviewer` must never reach `src/lib/blog.ts` or the RSS route; smoke greps for exactly that and separately proves it live.
+
+**The second JS carve-out is tighter than the first.** `galley.js` loads only when `previewReviewer` is set *and* `previewSlug` matches the post being rendered — which is only ever true on a response middleware has already forced to `no-store` + `noindex`. It is structurally incapable of reaching a publicly cacheable page, where `newsletter.js` ships on every `/blog` hit. Don't loosen that gate in `BlogPost.astro`.
+
+**The CSS does not inherit that gate for free, and this bit is easy to get wrong.** Astro hoists a processed `<style>` into the *route's* stylesheet from the static module graph, not from the runtime condition that renders the component — so a plain `<style>` in `GalleyMargin.astro` ships every `.galley-*` rule as a render-blocking stylesheet on every published post, invisibly, with no galley markup in the HTML to give it away. The block is therefore `is:inline`, which also happens to be the only way it works at all: scoped styles compile to `.galley-bar[data-astro-cid-…]`, and every element they target is created at runtime by `galley.js` via `createElement`, so it never carries the attribute. `smoke.mjs` asserts both directions — no `galley-` in the built CSS bundles, and no `galley-` in a published post's HTML.
+
+**No admin surface.** Notes are read with `wrangler d1 execute`, which is already authenticated as you. The deployed worker has no way to list notes across posts, because handing someone one draft must not hand them the rest.
+
+Setup, once:
+
+```sh
+wrangler d1 migrations apply mjrossi-galley --remote
+```
+
+**The API token needs D1 permissions.** This was a real failure once and is worth recognising if it recurs, but the token in `mise.local.toml` has D1 today — `wrangler d1 info mjrossi-galley` and `just galley <slug> --remote` both work.
+
+`CLOUDFLARE_API_TOKEN` is set in the shell and wrangler prefers it over an OAuth login. If that token lacks D1, every `--remote` D1 command fails with:
+
+```
+The given account is not valid or is not authorized to access this service [code: 7403]
+```
+
+That is a token-scope problem, not a wrangler or account problem — the account is correct and `wrangler whoami` will happily list it. Fix by adding **D1:Edit** to the token at <https://dash.cloudflare.com/profile/api-tokens>, or by unsetting `CLOUDFLARE_API_TOKEN` and using `wrangler login`. Until then `just galley <slug> --local` is the only one that works; the deployed worker is unaffected, since it reaches D1 through its binding rather than the API.
+
+Smoke migrates the local database itself — `wrangler dev` does not apply migrations on startup, and without that step the galley assertions fail with "no such table", which reads like a broken endpoint rather than an unmigrated fixture.
+
+#### Trying the galley locally
+
+The whole loop runs on your machine, against the local D1 that `just preview` and `just smoke` share. `npm run dev` is **not** the way in — it runs Astro alone, with no worker, no `/api/*`, and no database, so the margin cannot save anything. Use `just preview`.
+
+```sh
+just galley-migrate --local                  # once, and after any new migration
+just preview                                 # build + wrangler dev on 127.0.0.1:8788
+
+# in another shell — any post works, published or scheduled
+just preview-link smoke-scheduled-fixture --local \
+  --host http://127.0.0.1:8788 --reviewer jd
+# → http://127.0.0.1:8788/blog/smoke-scheduled-fixture/?preview=…
+
+# open that URL, select a sentence, leave a note, then:
+just galley smoke-scheduled-fixture --local  # → docs/galley/<slug>.md
+just preview-roster-all --local              # what you have minted locally
+```
+
+`smoke-scheduled-fixture` is the permanently future-dated fixture post, which makes it the natural target: it exercises the scheduled-post path as well as the galley, and it 404s without a token exactly as a real draft does.
+
+Three things that will otherwise cost you time:
+
+- **The port is 8788, and it is pinned for this reason.** `just preview` sets `--port 8788` (in `package.json`) rather than taking wrangler's default, so it matches `just smoke` and the `--host` above is the same in both. A link minted for one port simply 404s on the other — the host is inside the URL, not the signature, so nothing warns you.
+- **`--local` is required, and it must match on both ends.** Minting writes the allowlist row; pulling reads the notes. Point either at the wrong database and you get a link refused on arrival, or "no notes" for a post that has them. Both messages now name the database they used, which is the fastest way to spot it.
+- **Clean up after yourself if you used a real slug.** Local notes and links persist in `.wrangler/state` between runs. `just smoke` only clears its own fixture rows (`preview_links` for the fixture slug, and `galley_notes` for its own reviewer label), so a stray note left under another reviewer on the fixture post can skew smoke's counts. Delete it, or use a throwaway slug.
+
+#### The authoring workflow this implies
+
+**Branch preview URLs cannot be used for review.** `*.workers.dev` hosts sit behind Cloudflare Access, so an editor without a service token gets a login page instead of the post. Review therefore happens through signed links on `mjrossi.com`, which means the draft must already be on `main` with a future `pubDate`. Long-lived draft branches are incompatible with this feature.
+
+1. Draft on a branch until it's a structurally complete first draft. Messy commits are fine — `main` is squash-only, so they never land.
+2. PR → squash-merge to `main` with a future `pubDate` (~3 weeks out). One commit; hidden on every surface.
+3. `just preview-link my-draft --remote --reviewer <initials>` per editor.
+4. `just galley my-draft --remote` → apply → **one revision PR per review round**.
+5. Set `pubDate` to the real date.
+
+`main` gets ~2–4 commits per post. That is deliberate: the revision commits carry the editorial reasoning, and squashing them into the original post commit would destroy the most useful part of the history.
+
+Accept knowingly: from step 2 the post exists in production storage. Every surface hides it, but its cover image is fetchable at an unguessable hashed `_astro/` URL — don't schedule a post whose cover image is itself the announcement.
 
 ### Publishing
 
@@ -196,7 +336,7 @@ Wherever a scheduled post is visible, it carries a `Scheduled` badge (`.post-sch
 
 The blog index has an email signup form (`src/components/NewsletterSignup.astro`) that forwards to Buttondown via `src/pages/api/subscribe.ts`. Buttondown polls `/blog/rss.xml` and emails new posts automatically — the publishing flow stays "write MDX, `git push`."
 
-**JS carve-out:** This is the only client-side JavaScript on the site. The Turnstile loader + form handler load *only* on `/blog`. Do not lift `NewsletterSignup.astro` into `Base.astro`, `BlogPost.astro`, or any shared chrome. Smoke asserts the form is absent on `/` as a regression guard.
+**JS carve-out:** This is one of two client-side JavaScript files (the other is the galley review client, which only loads on a signed review link). The Turnstile loader + form handler load *only* on `/blog`. Do not lift `NewsletterSignup.astro` into `Base.astro`, `BlogPost.astro`, or any shared chrome. Smoke asserts the form is absent on `/` as a regression guard.
 
 **Env vars** (see `mise.local.toml.example` and `.dev.vars.example`):
 
@@ -239,6 +379,8 @@ These are two separate ownership layers; **no variable appears in both files, no
 
 - **mise → shell env → Astro build.** mise's `[env]` table sets shell environment variables. Astro/Vite reads them via `process.env` / `import.meta.env` at build time. Only `PUBLIC_*` vars are ever surfaced this way — they're public by design (they end up in static HTML).
 - **wrangler → `.dev.vars` → Worker runtime.** Wrangler dev reads `.dev.vars` at startup and injects the values into the Worker's `env` binding namespace. These never reach shell env, the browser, or any other tool's `process.env`. In production, `wrangler secret put` replaces `.dev.vars` (encrypted at rest in Cloudflare's secret store).
+
+**mise does not pin wrangler, and must not start.** mise's own Node cookbook endorses declaring npm CLIs as mise `[tools]`, and that is right for tools the build merely *runs* (tsc, eslint). wrangler is not one: it is a `peerDependency` of `@astrojs/cloudflare` and is imported as a library by `@cloudflare/vite-plugin` during `astro build`, so it must resolve from `node_modules` no matter what — a mise pin could only ever duplicate the `package.json` one, never replace it. And a duplicate is not inert here, because wrangler bundles workerd and **workerd owns the schema of `.wrangler/state`**: an older wrangler cannot open state a newer one has written, and dies at runtime startup with `table _cf_ALARM has 3 columns but 2 values were supplied` / `The Workers runtime failed to start`. That message is version skew between two wranglers, not a corrupt database — the D1 rows are fine. This happened: `mise.development.toml` held 4.90.1 while `package.json` held 4.115.0, and `just galley-migrate --local` (the one recipe then calling bare `wrangler`) died before reaching the migration. The fix has three parts, all of which matter — every recipe and script invokes `npx wrangler`; `mise.toml` puts `{{config_root}}/node_modules/.bin` on PATH via `[env] _.path`, so a bare `wrangler` typed in the shell is also the pinned one; and `mise.development.toml` carries a note telling the next person not to re-add the pin.
 
 That separation is intentional: keeping worker secrets out of shell env means only wrangler can see them — a small but real defense-in-depth boundary that we don't want to collapse just to centralise into one file. "Prefer mise where possible" means mise is the default for shell-level vars; wrangler's `.dev.vars` exists because runtime secrets belong to wrangler's contract, not because we're doubling up.
 
@@ -296,7 +438,14 @@ CI handles this via `MISE_ENV=ci` in `.github/workflows/build.yml`, so the issue
 
 **Other smoke gotchas worth knowing:**
 
-- **A previous smoke run left wrangler running.** The script spawns `wrangler dev` on port 8788 and traps SIGINT/SIGTERM to clean up, but a hard kill (timeout, `kill -9`, sandbox shutdown) leaves the process orphaned. Symptom: smoke prints `Address already in use (127.0.0.1:8788)` and bails. Fix: `pkill -9 -f wrangler && pkill -9 -f workerd` (and confirm with `lsof -i :8788`), then re-run.
+- **`wrangler dev` died mid-run, and smoke exited 75.** A handler somewhere returned a response without reading the request body it was sent. `wrangler dev` puts a ProxyWorker between the client and the Worker, and an unread body leaves that hop holding a stream nobody drains; after enough of them the connection goes with `Network connection lost.`, wrangler's ProxyController treats that as fatal, and the dev server exits partway through the run. Production Cloudflare does not care, so this is a local-dev and CI failure only — but it takes out `just preview` too, for anyone whose review link has been revoked while the galley client keeps posting.
+
+  `refuse` in `src/lib/server.ts` is the fix, and it **drains** (`arrayBuffer()`) rather than cancelling. That looks backwards — `request.body.cancel()` is the tidy-looking option — but cancelling does not release the hop. Measured against `/api/galley` with 400 unauthorised POSTs: no drain died at request 29, `cancel()` died at 20, `arrayBuffer()` went 400-for-400 and stayed up. Don't optimise it back to a cancel. Any new early return from a handler that can be sent a body belongs behind it; the one deliberate exception is `parseJson`'s 413, which is the single refusal that is *about* the body being too large.
+
+  Recognise it by the report, which names it: `smoke: wrangler dev EXITED MID-RUN` (or `is NOT ANSWERING`), followed by the tail of wrangler's own log. Everything listed above that line is collateral — requests in flight when the runtime went away come back `500`, and the rest are refused. Before smoke knew to say so this surfaced as four galley assertions failing, including "a valid token wrote to a post it was not minted for", which is alarming and was never true. The exit code is 75 rather than 1 to keep that distinction machine-readable. CI does **not** retry it: that was tried, and both attempts died at the same check.
+
+- **A previous smoke run left wrangler running.** The script spawns `wrangler dev` on port 8788 and traps SIGINT/SIGTERM to clean up, but a hard kill (timeout, `kill -9`, sandbox shutdown) leaves the process orphaned. Symptom: smoke prints `Address already in use (127.0.0.1:8788)` and bails. Fix: `just kill-smoke` (or `pkill -9 -f wrangler && pkill -9 -f workerd`, confirmed with `lsof -i :8788`), then re-run.
+- **The run *after* a hard kill can fail once, and it does not look like a toolchain problem.** `kill -9` leaves the local D1 SQLite WAL uncheckpointed (`.wrangler/state/v3/d1/**/*.sqlite-wal`, which can be a couple of hundred KB), and the next `wrangler dev` startup is unreliable against it. Observed twice, both times immediately after a `pkill -9`: a galley check fails with `got 500` on a request that should never reach D1, then the worker dies and the rest of the run reports `smoke: ERROR — fetch failed`. Six runs with no preceding hard kill all passed. **Just run it again** — the state recovers on the next clean open. Only start investigating if it fails twice in a row without a kill in between.
 - **Cold-start wrangler can take 30–60s** in slow environments. The script's internal `READY_TIMEOUT_MS` is 30s; if your wrapper has its own timeout, give smoke at least 2 minutes end-to-end.
 - **Build is stale.** Smoke reads `dist/client/` plus on-demand routes from the worker bundle. If you tweak source files and run smoke without rebuilding, you're testing the previous build. Always `npm run build && npm run smoke` together (or use the chained commands above).
 

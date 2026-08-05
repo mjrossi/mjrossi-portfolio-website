@@ -3,6 +3,7 @@ import sitemap from '@astrojs/sitemap';
 import mdx from '@astrojs/mdx';
 
 import cloudflare from "@astrojs/cloudflare";
+import remarkSourceAnchors from './src/lib/remark-source-anchors.js';
 
 export default defineConfig({
   site: 'https://mjrossi.com',
@@ -11,6 +12,12 @@ export default defineConfig({
     mdx(),
     sitemap(),
   ],
+  // Applies to .md and .mdx alike: @astrojs/mdx extends the markdown config by
+  // default (extendMarkdownConfig), so the anchors the galley depends on are
+  // stamped on every post without configuring the integration separately.
+  markdown: {
+    remarkPlugins: [remarkSourceAnchors],
+  },
   adapter: cloudflare({ imageService: 'compile' }),
   fonts: [
     {

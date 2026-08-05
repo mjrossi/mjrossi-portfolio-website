@@ -53,6 +53,23 @@
       "binding": "SESSION",
       "id": "0d4700ae1ed342579b0e0cb79cd8c4c1"
     }
+  ],
+
+  // Galley notes — editorial feedback on scheduled posts (see CLAUDE.md).
+  // This holds the conversation ABOUT a post; posts themselves stay in git as
+  // MDX. `database_id` is an account-scoped identifier, not a credential, so
+  // it belongs in the committed config like any other binding.
+  //
+  // Schema lives in migrations/. Apply with:
+  //   wrangler d1 migrations apply mjrossi-galley --local    (dev + smoke)
+  //   wrangler d1 migrations apply mjrossi-galley --remote   (production)
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mjrossi-galley",
+      "database_id": "b2991a10-908c-42e3-a762-22c9b4f666b5",
+      "migrations_dir": "migrations"
+    }
   ]
 
   // ── Preview environment isolation (not active) ──────────────

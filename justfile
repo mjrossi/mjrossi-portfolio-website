@@ -74,13 +74,83 @@ secret name:
 # post"; that scoping is what keeps a review link away from the feed that
 # triggers the Buttondown send). Needs PREVIEW_SIGNING_KEY in .dev.vars or
 # the environment; without it the script exits with setup instructions.
+#
+# --reviewer LABEL adds permission to leave galley notes, attributed to that
+# label. One link per editor; they need no account and no GitHub. The label is
+# recorded on every note and lands in the committed review file, so use
+# initials — nothing anonymises it later.
+#
+# This is the ONLY command that issues access. The galley reads and applies
+# notes; it does not hand out links, which is why a link is withdrawn with
+# `just preview-revoke` whether or not it names a reviewer.
+#
+# The link is recorded in the preview_links allowlist as it is minted, so it
+# can be withdrawn later — see `just preview-roster` / `just preview-revoke`.
+# That means minting needs D1: a token carrying D1:Edit, or --local for the
+# database `just preview` and `just smoke` use.
+#
+# NOTE: a link you hand to someone else must point at production (the default),
+# not a branch preview. *.workers.dev preview hosts sit behind Cloudflare
+# Access, so an editor without a service token gets a login page instead of the
+# post. That is why a draft is merged to main with a future pubDate before
+# review — see CLAUDE.md, "The galley".
 # usage: just preview-link my-draft
 #        just preview-link my-draft --hours 4
-#        just preview-link my-draft --host http://127.0.0.1:8788
+#        just preview-link my-draft --reviewer jd
+#        just preview-link my-draft --reviewer mr --hours 96
+#        just preview-link my-draft --host http://127.0.0.1:8788 --local
 [group('ops')]
-[doc('mint a signed preview link for one scheduled post (needs PREVIEW_SIGNING_KEY)')]
+[doc('mint a signed preview link for one scheduled post; --reviewer LABEL to allow notes')]
 preview-link slug *flags:
     npm run preview-link -- {{slug}} {{flags}}
+
+# list every preview link minted for a post, with its state (live, expired, or
+# revoked). This is the ONLY inventory -- a token is recorded nowhere else, so
+# a link missing from this list cannot be revoked, only waited out.
+# usage: just preview-roster my-draft
+#        just preview-roster my-draft --local
+[group('ops')]
+[doc('list the preview links outstanding for one post')]
+preview-roster slug *flags:
+    npm run preview-roster -- {{slug}} {{flags}}
+
+# revoke a preview link. Takes READING away as well as writing: middleware
+# refuses the whole grant, so the post 404s for that link. Rows are kept, so a
+# revoked link stays visible in `just preview-roster`.
+#
+# Always scoped to the named post, so a mistyped id belonging to another draft
+# does nothing rather than withdrawing someone else's link.
+# usage: just preview-revoke my-draft a1b2c3d4e5f60718
+#        just preview-revoke my-draft --revoke-all
+[group('ops')]
+[doc('revoke one preview link, or --revoke-all for a post')]
+preview-revoke slug id *flags:
+    npm run preview-roster -- {{slug}} {{ if id == "--revoke-all" { "--revoke-all" } else { "--revoke " + id } }} {{flags}}
+
+# apply the D1 schema in migrations/ to the galley database. Run once against
+# --remote before the first real review round, and against --local whenever a
+# new migration lands (`just smoke` migrates the local database itself, so this
+# is only needed for `just preview`/`just dev` sessions).
+#
+# --remote needs an API token carrying D1:Edit; without it wrangler reports
+# "not authorized to access this service [code: 7403]", which is a token-scope
+# problem rather than an account one — see CLAUDE.md, "The galley".
+# usage: just galley-migrate --local
+#        just galley-migrate --remote
+[group('ops')]
+[doc('apply migrations/ to the galley D1 database (--local or --remote)')]
+galley-migrate target='--local':
+    wrangler d1 migrations apply mjrossi-galley {{target}}
+
+# pull editorial notes for a post into docs/galley/<slug>.md, ready to apply
+# alongside the .mdx. Reads D1 through wrangler, which is already authenticated
+# as you — there is no admin endpoint on the deployed worker.
+# usage: just galley my-draft
+#        just galley my-draft --local
+[group('ops')]
+[doc('pull galley notes for one post into docs/galley/')]
+galley slug *flags:
+    npm run galley -- {{slug}} {{flags}}
 
 # manual fallback — Cloudflare Workers Builds deploys automatically on
 # git push (see CLAUDE.md's Newsletter env table / dashboard build

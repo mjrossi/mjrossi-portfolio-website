@@ -645,8 +645,122 @@ const wrangler = spawn(
     'wrangler', 'dev', '--port', String(PORT), '--ip', '127.0.0.1', '--log-level', 'warn',
     ...PREVIEW_KEY_ARGS,
   ],
-  { stdio: ['ignore', 'ignore', 'inherit'] },
+  // stdout was 'ignore' and stderr 'inherit'. Both are piped now so a runtime
+  // that dies mid-run can be told apart from an assertion that genuinely
+  // failed — see reportRuntimeDiagnostics below for why that distinction was
+  // worth the plumbing. stderr is still forwarded live, so ordinary output is
+  // unchanged; stdout is buffered and only printed when something has gone
+  // wrong, since `--log-level warn` makes it empty on a healthy run.
+  { stdio: ['ignore', 'pipe', 'pipe'] },
 );
+
+// ── runtime diagnostics ────────────────────────────
+//
+// `wrangler dev` can exit in the middle of a run. When it does, every fetch
+// after that point either 500s or is refused outright, and each one lands as a
+// named assertion failure — so the report blames the checks that happened to be
+// in flight rather than the runtime that vanished underneath them. A CI failure
+// on this suite once read as four galley violations, including "a valid token
+// wrote to a post it was not minted for", when in fact the worker had already
+// died and no token had written anything.
+//
+// So: watch the process, and on any failure say what happened to it. The exit
+// SIGNAL is the single most useful datum — it separates an out-of-memory kill
+// from a crash from an orderly exit, and none of the three is reachable from
+// the HTTP side, which sees the same connection error for all of them.
+const WRANGLER_TAIL_LINES = 40;
+// Generous, deliberately. wrangler's own log file carries debug entries the
+// console never shows at --log-level warn, and it is the only place the cause
+// of a mid-run exit is written down. This prints on a failure that has so far
+// only ever happened in CI, where there is no second chance to go and look.
+const WRANGLER_LOG_TAIL_LINES = 120;
+const wranglerOutput = [];
+let wranglerLogPath = null;
+let wranglerExit = null;
+
+function absorbWranglerOutput(chunk, forward) {
+  const text = chunk.toString();
+  if (forward) process.stderr.write(text);
+  // wrangler prints this once, naming a file that holds far more than it puts
+  // on the console. Scraped rather than reconstructed because the directory is
+  // platform-dependent (~/Library/Preferences here, ~/.config in CI).
+  const logged = text.match(/Logs were written to "([^"]+)"/);
+  if (logged) wranglerLogPath = logged[1];
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    wranglerOutput.push(line);
+    if (wranglerOutput.length > WRANGLER_TAIL_LINES) wranglerOutput.shift();
+  }
+}
+
+wrangler.stdout.on('data', (chunk) => absorbWranglerOutput(chunk, false));
+wrangler.stderr.on('data', (chunk) => absorbWranglerOutput(chunk, true));
+// Recorded rather than acted on. Tearing the run down here would lose the
+// assertions still to come, and on a healthy run this fires during the SIGTERM
+// in the finally block, where it means nothing.
+//
+// This handler is a best case, not the mechanism. The child is `npx`, which
+// wraps two more processes before workerd, so a runtime that dies need not take
+// the handle with it — and `process.exit()` in the finally block can outrun the
+// event even when it does. Verified: killing the middle process mid-run left
+// this silent while every remaining fetch was refused. Hence the two
+// topology-independent reads below.
+wrangler.on('exit', (code, signal) => {
+  wranglerExit = { code, signal, afterChecks: passes + fails.length };
+});
+
+/** Did anything answer on the port? The one check that survives any topology. */
+async function runtimeIsListening() {
+  try {
+    await fetch(`${BASE}/`, { redirect: 'manual', signal: AbortSignal.timeout(2000) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function reportRuntimeDiagnostics() {
+  // `exitCode`/`signalCode` are set on the handle as soon as the child is
+  // reaped, so they read true even when the 'exit' event never got delivered.
+  const exit =
+    wranglerExit ??
+    (wrangler.exitCode !== null || wrangler.signalCode !== null
+      ? { code: wrangler.exitCode, signal: wrangler.signalCode, afterChecks: null }
+      : null);
+  const listening = await runtimeIsListening();
+  const died = Boolean(exit) || !listening;
+
+  if (died) {
+    const where = exit?.afterChecks !== null && exit?.afterChecks !== undefined
+      ? `, after ${exit.afterChecks} check(s)`
+      : '';
+    console.error(
+      exit
+        ? `smoke: wrangler dev EXITED MID-RUN — code ${exit.code}, signal ${exit.signal}${where}.`
+        : 'smoke: wrangler dev is NOT ANSWERING on ' + BASE +
+            ' — the runtime died without the process handle noticing.',
+    );
+    console.error(
+      '  The failures above are collateral of that, not assertions the code ' +
+        'actually violated. Debug the runtime, not the checks.',
+    );
+  }
+  if (wranglerOutput.length) {
+    console.error(`smoke: last ${wranglerOutput.length} line(s) of wrangler output:`);
+    for (const line of wranglerOutput) console.error(`  | ${line}`);
+  }
+  // Only when the runtime actually went down. On an ordinary assertion failure
+  // this file says nothing the checks didn't, and it is long.
+  if (died && wranglerLogPath && existsSync(wranglerLogPath)) {
+    try {
+      const tail = readFileSync(wranglerLogPath, 'utf8').split('\n').slice(-WRANGLER_LOG_TAIL_LINES);
+      console.error(`smoke: tail of ${wranglerLogPath}:`);
+      for (const line of tail) if (line.trim()) console.error(`  | ${line}`);
+    } catch (err) {
+      console.error(`smoke: could not read ${wranglerLogPath} — ${err.message}`);
+    }
+  }
+}
 
 let exitCode = 1;
 try {
@@ -1476,6 +1590,7 @@ try {
     for (const f of fails) {
       console.error(`  ✗ ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
     }
+    await reportRuntimeDiagnostics();
   }
 } catch (err) {
   console.error(`smoke: ERROR — ${err.message}`);
@@ -1490,6 +1605,7 @@ try {
       console.error(`  ✗ ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
     }
   }
+  await reportRuntimeDiagnostics();
 } finally {
   wrangler.kill('SIGTERM');
   await new Promise((r) => {

@@ -669,11 +669,12 @@ const wrangler = spawn(
 // from a crash from an orderly exit, and none of the three is reachable from
 // the HTTP side, which sees the same connection error for all of them.
 const WRANGLER_TAIL_LINES = 40;
-// Generous, deliberately. wrangler's own log file carries debug entries the
-// console never shows at --log-level warn, and it is the only place the cause
-// of a mid-run exit is written down. This prints on a failure that has so far
-// only ever happened in CI, where there is no second chance to go and look.
-const WRANGLER_LOG_TAIL_LINES = 120;
+// Counted in log ENTRIES rather than lines — see tailWranglerLog. Generous,
+// deliberately: wrangler's own log file carries debug entries the console never
+// shows at --log-level warn, and it is the only place the cause of a mid-run
+// exit is written down. This prints on a failure that has so far only ever
+// happened in CI, where there is no second chance to go and look.
+const WRANGLER_LOG_TAIL_ENTRIES = 60;
 const wranglerOutput = [];
 let wranglerLogPath = null;
 let wranglerExit = null;
@@ -753,13 +754,52 @@ async function reportRuntimeDiagnostics() {
   // this file says nothing the checks didn't, and it is long.
   if (died && wranglerLogPath && existsSync(wranglerLogPath)) {
     try {
-      const tail = readFileSync(wranglerLogPath, 'utf8').split('\n').slice(-WRANGLER_LOG_TAIL_LINES);
       console.error(`smoke: tail of ${wranglerLogPath}:`);
-      for (const line of tail) if (line.trim()) console.error(`  | ${line}`);
+      for (const line of tailWranglerLog(readFileSync(wranglerLogPath, 'utf8'))) {
+        console.error(`  | ${line}`);
+      }
     } catch (err) {
       console.error(`smoke: could not read ${wranglerLogPath} — ${err.message}`);
     }
   }
+}
+
+/**
+ * The log is a series of `--- <ISO timestamp> <level>` entries terminated by a
+ * bare `---`. A plain line tail is useless on it: startup logs the entire
+ * bundled worker, one quoted source line at a time, which buried the actual
+ * error under 200,000 characters of Astro's client JS the first time this ran
+ * in CI. So elide the body of any entry long enough to be one of those dumps,
+ * and keep the entries themselves — the error and the stack that follows it are
+ * short, and it is the sequence of entries either side that says what happened.
+ *
+ * @param {string} text
+ */
+function tailWranglerLog(text) {
+  const HEADER = /^--- \d{4}-\d{2}-\d{2}T[\d:.]+Z \w+$/;
+  const MAX_ENTRY_LINES = 12;
+  const entries = [];
+  let current = null;
+  for (const line of text.split('\n')) {
+    if (HEADER.test(line)) {
+      current = [line];
+      entries.push(current);
+    } else if (line.trim() === '---') {
+      current = null;
+    } else if (current && line.trim()) {
+      current.push(line);
+    }
+  }
+  const out = [];
+  for (const entry of entries.slice(-WRANGLER_LOG_TAIL_ENTRIES)) {
+    if (entry.length > MAX_ENTRY_LINES) {
+      out.push(...entry.slice(0, MAX_ENTRY_LINES));
+      out.push(`      … ${entry.length - MAX_ENTRY_LINES} more line(s) elided`);
+    } else {
+      out.push(...entry);
+    }
+  }
+  return out;
 }
 
 let exitCode = 1;

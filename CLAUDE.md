@@ -35,8 +35,9 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **two** scoped pieces
 - `src/lib/schedule.js` — `isPublished(pubDate, now?)`, the scheduled-publishing predicate. Plain JS (like `csp.js`) so `node --test` can import it without `astro:content`. Unit-tested in `src/lib/schedule.test.js`; see "Scheduled publishing" under Blog.
 - `src/lib/preview.js` — the two scheduled-post preview unlocks: `isPreviewHost(hostname)` (`*.workers.dev` branch/version hosts → show drafts, but **not** the Worker's own production alias) and `signPreviewToken` / `verifyPreviewGrant` (signed, expiring, single-post links). Also exports `newLinkId` / `LINK_ID_RE` — every token carries a link id naming its row in `preview_links`, which is what makes it revocable — and `WORKER_NAME`, which must stay equal to `name` in `wrangler.jsonc` (smoke asserts it). `signPreviewToken` takes the same object `verifyPreviewGrant` returns, so minting and verifying stay symmetric. Deliberately **DB-free**: the allowlist lookup lives in `src/lib/preview-links.js`, so this one module still runs in the worker, under `node --test`, and in `scripts/preview-link.mjs` — the code that mints links is the code that verifies them. Unit-tested in `src/lib/preview.test.js`; see "Previewing a scheduled post".
 - `src/lib/preview-links.js` — `isLinkActive(DB, id)`, the `preview_links` allowlist lookup that makes a link revocable. Called by `src/middleware.ts`, and plain JS rather than inline in it for one reason: middleware imports `astro:middleware`, so `node --test` cannot load it, and this was the only fail-closed branch in the feature with no persistent test — `return false` in a bare `catch` is one character from `return true`. Takes the store as an argument (duck-typed, so a test passes a three-line stub) rather than importing a binding, which is what keeps `preview.js` DB-free as well. Unit-tested in `src/lib/preview-links.test.js`, which covers the two paths smoke cannot reach over HTTP: a missing `DB` binding and a store that throws.
-- `scripts/preview-link.mjs` — mints a signed preview link (`npm run preview-link -- <slug> [--hours N] [--host URL] [--reviewer LABEL] [--local]`). Reads `PREVIEW_SIGNING_KEY` from the environment or `.dev.vars`; validates the slug against real content before signing. **Records the link in `preview_links` before printing the URL** — a link whose row failed to write would be refused on arrival, so a failed insert hands out nothing. URL on stdout, metadata (including the link id to revoke by) on stderr.
-- `scripts/preview-roster.mjs` — lists and revokes preview links for one post (`just preview-roster` / `just preview-revoke`). The only inventory of issued links there is. No admin endpoint, same rationale as `galley-pull.mjs`.
+- `scripts/preview-link.mjs` — mints a signed preview link (`npm run preview-link -- <slug> (--remote | --local) [--hours N] [--host URL] [--reviewer LABEL]`). Reads `PREVIEW_SIGNING_KEY` from the environment or `.dev.vars`; validates the slug against real content before signing. **Records the link in `preview_links` before printing the URL** — a link whose row failed to write would be refused on arrival, so a failed insert hands out nothing. URL on stdout, metadata (including the link id to revoke by) on stderr.
+- `scripts/preview-roster.mjs` — lists and revokes preview links (`just preview-roster` / `just preview-roster-all` / `just preview-revoke`). The only inventory of issued links there is. `--all` lists every link across every post, grouped by post, because a link whose slug you have forgotten is otherwise unrevocable — the per-post scoping that matters in the worker doesn't apply to a CLI already authenticated as you. **Revoking stays per-post**, so a mistyped id can't withdraw another draft's link. No admin endpoint, same rationale as `galley-pull.mjs`.
+- `scripts/database-target.mjs` — `chooseDatabase({ local, remote })` and `databaseLabel(local)`. Every operator script that touches D1 (`preview-link`, `preview-roster`, `galley-pull`) requires an explicit `--remote` or `--local` and prints which one it used. There is **no default**: `--local` used to be opt-in on a production default, so forgetting it silently wrote a real row, and pointing a read at the wrong database answered "no links minted" / "no notes" for one that was never queried. Both mistakes are invisible at the time. `smoke.mjs` is exempt — not operator-facing, and local by construction.
 - `scripts/d1.mjs` — `DB_NAME`, `d1Query`, `d1Exec`, `d1Migrate`. The single place this repo shells out to `wrangler d1 execute`; throws rather than exiting so each caller keeps its own `die()` prefix. Preserves three distinct failure messages that must not collapse into one: unreachable database, unparseable output, and output that parsed but is not the `[{ results: [...] }]` shape. The third throws rather than returning `[]` — a silent empty result from `d1Query` would make `preview-roster` report "no links minted" for a table it never actually read, and that list is the only inventory of issued links there is.
 - `scripts/links-db.mjs` — the only owner of `preview_links` SQL. Validates its own inputs (`SLUG_RE`, `LINK_ID_RE`, `Number.isInteger`), because wrangler's `--command` takes a string rather than bound parameters and that shape check is what makes the interpolation safe. `smoke.mjs` seeds fixtures through the same `recordLinks` production mints through.
 - `scripts/content.mjs` — `resolvePostSource(slug)`, the `<slug>.mdx` / `<slug>/index.mdx` probe shared by `preview-link.mjs` and `galley-pull.mjs`.
@@ -165,9 +166,9 @@ Host-based authorization is the weakest primitive here by construction: `context
 **2. Signed expiring links — for the production domain.** Reveals **one** post, on any host:
 
 ```sh
-npm run preview-link -- my-draft                          # 48h, mjrossi.com
-npm run preview-link -- my-draft --hours 4
-npm run preview-link -- my-draft --host http://127.0.0.1:8788 --local
+npm run preview-link -- my-draft --remote                 # 48h, mjrossi.com
+npm run preview-link -- my-draft --remote --hours 4
+npm run preview-link -- my-draft --local --host http://127.0.0.1:8788
 # → https://mjrossi.com/blog/my-draft/?preview=my-draft.1784634245.a1b2c3d4e5f60718.74ad2a0d…
 ```
 
@@ -192,14 +193,15 @@ Any response with either unlock active gets `Cache-Control: no-store` and `X-Rob
 **A signature is necessary but not sufficient.** Every minted link — view-only and review alike — gets a row in the `preview_links` table, and `src/middleware.ts` requires that row, un-revoked, before the token grants anything. Withdraw one with:
 
 ```sh
-just preview-roster my-draft                     # what is outstanding, and its state
-just preview-revoke my-draft a1b2c3d4e5f60718    # take one back
-just preview-revoke my-draft --revoke-all        # take back every live link
+just preview-roster my-draft --remote                     # what is outstanding, and its state
+just preview-roster-all --remote                          # every link, across all posts
+just preview-revoke my-draft a1b2c3d4e5f60718 --remote    # take one back
+just preview-revoke my-draft --revoke-all --remote        # take back every live link
 ```
 
 **Revoking removes reading as well as writing** — the post 404s for that link. Taking a draft back from someone should take the draft, not just the comment box. Rows are never deleted, so a withdrawn link stays listed as `revoked <date>` rather than vanishing from the inventory.
 
-**`just preview-roster` is the only inventory that exists.** A token is recorded nowhere else, so a link missing from that list cannot be revoked, only waited out. `--hours` therefore still matters: mint with a window that matches the round (`--hours 96` for a week's reading, not the 48h default doubled "just in case").
+**The roster is the only inventory that exists.** A token is recorded nowhere else, so a link missing from it cannot be revoked, only waited out. `just preview-roster <slug>` answers for one post; **`just preview-roster-all` answers for every post**, which is the one to reach for when you can't remember which draft a link was minted for — without it, a forgotten slug meant a link you could not withdraw at all. `--hours` still matters regardless: mint with a window that matches the round (`--hours 96` for a week's reading, not the 48h default doubled "just in case"), because revocation needs someone to notice the link went astray before it helps.
 
 **Minting now needs D1, and this is the accepted cost.** `just preview-link` writes its row before printing the URL — a link that verifies but has no row is refused on arrival, which looks exactly like the feature being broken, so a failed insert hands out nothing at all. That means minting against production needs an API token carrying **D1:Edit**, and minting for local work needs `--local` against a migrated database. While D1 is unavailable, no preview link works. That failure is recoverable and immediately visible; links that cannot be withdrawn are neither. `npm run dev` is unaffected — it shows scheduled posts outright, so preview links were never the local mechanism.
 
@@ -228,8 +230,8 @@ Wherever a scheduled post is visible, it carries a `Scheduled` badge (`.post-sch
 Inline editorial review. Editors open a link, read the real rendered post, select a passage, and leave a note. Notes come back anchored and structured, so applying them to the MDX is mechanical rather than interpretive. Named for the galley proof — the pre-publication print sent out for correction.
 
 ```sh
-just preview-link my-draft --reviewer jd   # one link per editor, mint with initials
-just galley my-draft                       # → docs/galley/my-draft.md
+just preview-link my-draft --remote --reviewer jd   # one link per editor, mint with initials
+just galley my-draft --remote                       # → docs/galley/my-draft.md
 ```
 
 **The galley does not hand out access.** Links are minted, listed, and revoked with `just preview-link` / `preview-roster` / `preview-revoke` — one vocabulary for who may see a draft, whether or not they may comment on it. The galley owns the notes, the margin, the anchoring, and the pull. That boundary is why there is no `galley-link`: a command that issued access from inside the galley namespace is exactly what made revoking one feel like it belonged to a different feature.
@@ -238,7 +240,7 @@ just galley my-draft                       # → docs/galley/my-draft.md
 
 **Authorisation is the preview token, extended.** A token is `<slug>.<exp>.<linkId>.<sig>` (view-only) or `<slug>.<exp>.<reviewer>.<linkId>.<sig>` (view + comment). The signed payload is every field except the signature, so the shape is authenticated: a view-only link can't have a reviewer spliced in, a review link can't be stripped back to look like a plain one, and neither can be repointed at a different allowlist row. Reviewer is read from the token, never from the request body, so a note can't be attributed to someone who didn't write it. Editors need no account and no GitHub.
 
-**A review link can be withdrawn.** It is an ordinary preview link with a reviewer inside the signature, so it is recorded in `preview_links` and `just preview-revoke <slug> <id>` takes it back — reading included, so the draft 404s for that link. `just preview-roster <slug>` lists what is outstanding. See "Previewing a scheduled post" above for the full mechanism, the fail-closed behaviour, and the D1 dependency that minting now carries.
+**A review link can be withdrawn.** It is an ordinary preview link with a reviewer inside the signature, so it is recorded in `preview_links` and `just preview-revoke <slug> <id> --remote` takes it back — reading included, so the draft 404s for that link. `just preview-roster <slug> --remote` lists what is outstanding, and `just preview-roster-all --remote` lists every link across every post. See "Previewing a scheduled post" above for the full mechanism, the fail-closed behaviour, and the D1 dependency that minting now carries.
 
 Two things that scoping does *not* solve, and still need judgement. Mint with a window that matches the round (`--hours 96` for a week's reading, not the 48h default doubled "just in case"), because revocation needs someone to notice the link went astray before it helps. And treat the write quota in `src/pages/api/galley.ts` as the bound in the meantime — 60 notes per reviewer per hour, asserted live in smoke.
 
@@ -270,7 +272,7 @@ Setup, once:
 wrangler d1 migrations apply mjrossi-galley --remote
 ```
 
-**The API token needs D1 permissions.** This was a real failure once and is worth recognising if it recurs, but the token in `mise.local.toml` has D1 today — `wrangler d1 info mjrossi-galley` and `just galley <slug>` against `--remote` both work.
+**The API token needs D1 permissions.** This was a real failure once and is worth recognising if it recurs, but the token in `mise.local.toml` has D1 today — `wrangler d1 info mjrossi-galley` and `just galley <slug> --remote` both work.
 
 `CLOUDFLARE_API_TOKEN` is set in the shell and wrangler prefers it over an OAuth login. If that token lacks D1, every `--remote` D1 command fails with:
 
@@ -278,9 +280,35 @@ wrangler d1 migrations apply mjrossi-galley --remote
 The given account is not valid or is not authorized to access this service [code: 7403]
 ```
 
-That is a token-scope problem, not a wrangler or account problem — the account is correct and `wrangler whoami` will happily list it. Fix by adding **D1:Edit** to the token at <https://dash.cloudflare.com/profile/api-tokens>, or by unsetting `CLOUDFLARE_API_TOKEN` and using `wrangler login`. Until then `just galley <slug>` works only with `--local`; the deployed worker is unaffected, since it reaches D1 through its binding rather than the API.
+That is a token-scope problem, not a wrangler or account problem — the account is correct and `wrangler whoami` will happily list it. Fix by adding **D1:Edit** to the token at <https://dash.cloudflare.com/profile/api-tokens>, or by unsetting `CLOUDFLARE_API_TOKEN` and using `wrangler login`. Until then `just galley <slug> --local` is the only one that works; the deployed worker is unaffected, since it reaches D1 through its binding rather than the API.
 
 Smoke migrates the local database itself — `wrangler dev` does not apply migrations on startup, and without that step the galley assertions fail with "no such table", which reads like a broken endpoint rather than an unmigrated fixture.
+
+#### Trying the galley locally
+
+The whole loop runs on your machine, against the local D1 that `just preview` and `just smoke` share. `npm run dev` is **not** the way in — it runs Astro alone, with no worker, no `/api/*`, and no database, so the margin cannot save anything. Use `just preview`.
+
+```sh
+just galley-migrate --local                  # once, and after any new migration
+just preview                                 # build + wrangler dev on 127.0.0.1:8788
+
+# in another shell — any post works, published or scheduled
+just preview-link smoke-scheduled-fixture --local \
+  --host http://127.0.0.1:8788 --reviewer jd
+# → http://127.0.0.1:8788/blog/smoke-scheduled-fixture/?preview=…
+
+# open that URL, select a sentence, leave a note, then:
+just galley smoke-scheduled-fixture --local  # → docs/galley/<slug>.md
+just preview-roster-all --local              # what you have minted locally
+```
+
+`smoke-scheduled-fixture` is the permanently future-dated fixture post, which makes it the natural target: it exercises the scheduled-post path as well as the galley, and it 404s without a token exactly as a real draft does.
+
+Three things that will otherwise cost you time:
+
+- **The port is 8788, and it is pinned for this reason.** `just preview` sets `--port 8788` (in `package.json`) rather than taking wrangler's default, so it matches `just smoke` and the `--host` above is the same in both. A link minted for one port simply 404s on the other — the host is inside the URL, not the signature, so nothing warns you.
+- **`--local` is required, and it must match on both ends.** Minting writes the allowlist row; pulling reads the notes. Point either at the wrong database and you get a link refused on arrival, or "no notes" for a post that has them. Both messages now name the database they used, which is the fastest way to spot it.
+- **Clean up after yourself if you used a real slug.** Local notes and links persist in `.wrangler/state` between runs. `just smoke` only clears its own fixture rows (`preview_links` for the fixture slug, and `galley_notes` for its own reviewer label), so a stray note left under another reviewer on the fixture post can skew smoke's counts. Delete it, or use a throwaway slug.
 
 #### The authoring workflow this implies
 
@@ -288,8 +316,8 @@ Smoke migrates the local database itself — `wrangler dev` does not apply migra
 
 1. Draft on a branch until it's a structurally complete first draft. Messy commits are fine — `main` is squash-only, so they never land.
 2. PR → squash-merge to `main` with a future `pubDate` (~3 weeks out). One commit; hidden on every surface.
-3. `just preview-link my-draft --reviewer <initials>` per editor.
-4. `just galley my-draft` → apply → **one revision PR per review round**.
+3. `just preview-link my-draft --remote --reviewer <initials>` per editor.
+4. `just galley my-draft --remote` → apply → **one revision PR per review round**.
 5. Set `pubDate` to the real date.
 
 `main` gets ~2–4 commits per post. That is deliberate: the revision commits carry the editorial reasoning, and squashing them into the original post commit would destroy the most useful part of the history.
@@ -408,7 +436,8 @@ CI handles this via `MISE_ENV=ci` in `.github/workflows/build.yml`, so the issue
 
 **Other smoke gotchas worth knowing:**
 
-- **A previous smoke run left wrangler running.** The script spawns `wrangler dev` on port 8788 and traps SIGINT/SIGTERM to clean up, but a hard kill (timeout, `kill -9`, sandbox shutdown) leaves the process orphaned. Symptom: smoke prints `Address already in use (127.0.0.1:8788)` and bails. Fix: `pkill -9 -f wrangler && pkill -9 -f workerd` (and confirm with `lsof -i :8788`), then re-run.
+- **A previous smoke run left wrangler running.** The script spawns `wrangler dev` on port 8788 and traps SIGINT/SIGTERM to clean up, but a hard kill (timeout, `kill -9`, sandbox shutdown) leaves the process orphaned. Symptom: smoke prints `Address already in use (127.0.0.1:8788)` and bails. Fix: `just kill-smoke` (or `pkill -9 -f wrangler && pkill -9 -f workerd`, confirmed with `lsof -i :8788`), then re-run.
+- **The run *after* a hard kill can fail once, and it does not look like a toolchain problem.** `kill -9` leaves the local D1 SQLite WAL uncheckpointed (`.wrangler/state/v3/d1/**/*.sqlite-wal`, which can be a couple of hundred KB), and the next `wrangler dev` startup is unreliable against it. Observed twice, both times immediately after a `pkill -9`: a galley check fails with `got 500` on a request that should never reach D1, then the worker dies and the rest of the run reports `smoke: ERROR — fetch failed`. Six runs with no preceding hard kill all passed. **Just run it again** — the state recovers on the next clean open. Only start investigating if it fails twice in a row without a kill in between.
 - **Cold-start wrangler can take 30–60s** in slow environments. The script's internal `READY_TIMEOUT_MS` is 30s; if your wrapper has its own timeout, give smoke at least 2 minutes end-to-end.
 - **Build is stale.** Smoke reads `dist/client/` plus on-demand routes from the worker bundle. If you tweak source files and run smoke without rebuilding, you're testing the previous build. Always `npm run build && npm run smoke` together (or use the chained commands above).
 

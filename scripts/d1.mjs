@@ -104,14 +104,29 @@ export function d1Query(sql, { local = false } = {}) {
   // Parsed OUTSIDE the call above, so a wrangler output-format change reports
   // itself rather than borrowing the "have you migrated?" advice, which would
   // send the operator to a database that was never the problem.
+  let parsed;
   try {
-    return JSON.parse(extractJson(raw))[0]?.results ?? [];
+    parsed = JSON.parse(extractJson(raw));
   } catch (err) {
     throw new Error(
       `wrangler returned output this script could not parse as JSON: ${err.message}\n` +
         `  first 200 characters were: ${JSON.stringify(raw.slice(0, 200))}`,
     );
   }
+  // Valid JSON in the wrong shape is its own failure, and it must not resolve to
+  // an empty result set. `[0]?.results ?? []` would turn a future wrangler that
+  // wraps its output differently into "this query matched nothing" -- silently,
+  // and with exit code 0. preview-roster.mjs is the only inventory of issued
+  // links there is, so an empty list from it has to mean the table is empty
+  // rather than that this parse gave up.
+  if (!Array.isArray(parsed) || !parsed[0] || !Array.isArray(parsed[0].results)) {
+    throw new Error(
+      'wrangler returned JSON in a shape this script does not recognise ' +
+        '(expected [{ results: [...] }]).\n' +
+        `  first 200 characters were: ${JSON.stringify(raw.slice(0, 200))}`,
+    );
+  }
+  return parsed[0].results;
 }
 
 /**

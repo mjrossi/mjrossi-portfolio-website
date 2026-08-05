@@ -1058,18 +1058,50 @@ try {
   //
   // Runs last in this section, since it fills the hour's allowance. The
   // post-migration DELETE keeps it idempotent across runs.
-  const flood = await Promise.all(
-    Array.from({ length: 90 }, (_, i) =>
+  // allSettled, not all. 90 parallel requests is the most aggressive thing this
+  // suite does, and wrangler dev has been observed dropping connections under
+  // far gentler load (see fetchExpectingNon5xx below, which exists for exactly
+  // that). Under Promise.all a single ECONNRESET rejects the whole batch, lands
+  // in the outer catch as "smoke: ERROR — fetch failed", and takes the ~40
+  // assertions after this one with it — turning a transport blip into a total
+  // run failure that names nothing.
+  //
+  // But tolerating failures is only safe with a floor underneath. allSettled on
+  // its own would let a run where the worker died mid-flood report zero accepted
+  // and sail through "accepted <= quota" — the assertion would be vacuously true
+  // and the suite would go green on a dead endpoint. FLOOD_MIN_USABLE is what
+  // stops that: enough requests have to come back with a status this test can
+  // actually reason about before its conclusions mean anything.
+  const FLOOD_SIZE = 90;
+  const FLOOD_MIN_USABLE = 81; // 90 % of the batch; tolerate a handful of blips
+  const floodResults = await Promise.allSettled(
+    Array.from({ length: FLOOD_SIZE }, (_, i) =>
       postNote(galleyToken, {
         slug: FIXTURE_SLUG, kind: 'comment', quote: 'test fixture', body: `flood ${i}`,
       }).then((res) => res.status)),
   );
+  const flood = floodResults.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+  const dropped = floodResults.length - flood.length;
   const accepted = flood.filter((s) => s === 200).length;
   const refused = flood.filter((s) => s === 429).length;
+  // Only 200 and 429 are answers to the question being asked. A 5xx means the
+  // endpoint fell over rather than deciding, so it is counted as noise here and
+  // reported by the floor check rather than being read as "not accepted".
+  const usable = accepted + refused;
+  const seen = [...new Set(flood)].sort().join(', ') || 'none';
+  const tally = `${usable}/${FLOOD_SIZE} usable (${accepted} accepted, ${refused} refused` +
+    `, ${flood.length - usable} other, ${dropped} dropped) — statuses seen: ${seen}`;
+
+  check(
+    'galley: the flood actually reached the endpoint',
+    usable >= FLOOD_MIN_USABLE,
+    `${tally}\n    too few requests came back to judge the quota by — the two ` +
+      'checks below would be vacuously true, so this fails instead of them passing',
+  );
   check(
     'galley: the write quota stops a flooded review link',
     refused > 0,
-    `90 concurrent notes, none refused — statuses seen: ${[...new Set(flood)].join(', ')}`,
+    `${FLOOD_SIZE} concurrent notes, none refused — ${tally}`,
   );
   // The bound has to hold under concurrency, not merely exist. Anything over
   // the cap means the count was observed and then invalidated before the row
@@ -1077,8 +1109,8 @@ try {
   check(
     'galley: the quota holds under concurrent writes',
     accepted <= GALLEY_WRITE_QUOTA,
-    `${accepted} of 90 concurrent notes were accepted, quota is ${GALLEY_WRITE_QUOTA}` +
-      ' — check-then-insert raced past the limit',
+    `${accepted} of ${FLOOD_SIZE} concurrent notes were accepted, quota is ` +
+      `${GALLEY_WRITE_QUOTA} — check-then-insert raced past the limit (${tally})`,
   );
 
   // 8. The anchoring contract, end to end. A data-src in served HTML must name

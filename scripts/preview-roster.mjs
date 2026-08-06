@@ -167,10 +167,10 @@ try {
     const who = row.reviewer ?? '—';
     const expires = new Date(row.exp * 1000).toISOString().slice(0, 16).replace('T', ' ');
     // Headroom, shown only where it is actionable. A revoked link cannot be
-    // extended at all, and a row minted before ceilings existed (max_exp NULL)
-    // has none -- in both cases the absence of this suffix is the answer.
+    // extended at all, and a link already standing at its cap has nowhere to go
+    // -- in both cases the absence of this suffix is the answer.
     const ceiling =
-      !row.revoked_at && row.max_exp != null && row.max_exp > row.exp
+      !row.revoked_at && row.max_exp > row.exp
         ? `  · extend to ${new Date(row.max_exp * 1000).toISOString().slice(0, 10)}`
         : '';
     return `  ${row.id}  ${who.padEnd(14)}  expires ${expires}  ${state}${ceiling}`;

@@ -7,29 +7,33 @@
 -- sending a second URL, because `exp` is part of the signed payload and cannot
 -- be edited in place.
 --
--- Two clocks now, and the split is the whole point:
+-- ONE CLOCK, AND A CAP THE SIGNATURE ENFORCES:
 --
---   the token's exp  -- the CEILING. Signed, therefore immutable. The furthest
---                       this link can EVER work, checked by verifyPreviewGrant.
---   preview_links.exp -- the EFFECTIVE expiry. Mutable, checked by isLinkActive,
---                       and what `just preview-extend` moves.
+--   preview_links.exp -- THE CLOCK. The expiry every request is judged against,
+--                        checked by isLinkActive, and the thing
+--                        `just preview-extend` moves.
+--   the token's exp   -- THE CAP. Signed, therefore immutable, and therefore
+--                        unreachable from the CLI: the furthest that clock can
+--                        ever be wound.
 --
 -- Extending is then one UPDATE and the URL in the reviewer's hands is unchanged.
--- The ceiling is what stops that from becoming an indefinite grant.
+-- The cap is what stops that from becoming an indefinite grant.
 --
--- Note that the worker does not need this column at all -- it enforces the
--- ceiling from the token and the expiry from `exp`, both of which predate this
+-- Note that the worker does not need this column at all -- it enforces the cap
+-- from the token and the expiry from `exp`, both of which predate this
 -- migration. `max_exp` exists so the CLI can refuse an extension the worker
 -- would silently reject on arrival, which would otherwise look exactly like the
 -- feature being broken.
 
 -- Epoch SECONDS, like `exp` and like the token it mirrors.
 --
--- NULL means a row minted before ceilings existed. Those links were signed with
--- a token whose exp equalled this row's exp, so they have no headroom at all and
--- cannot be extended -- which is both historically accurate and the fail-closed
--- reading. scripts/links-db.mjs requires `max_exp IS NOT NULL` to extend.
-ALTER TABLE preview_links ADD COLUMN max_exp INTEGER;
+-- NOT NULL, so there is no "row without a cap" state for anything above this
+-- line to reason about. DEFAULT 0 is required to add a NOT NULL column to an
+-- existing table at all, and it is also the fail-closed value: a row that
+-- somehow arrives without an explicit ceiling gets one already in the past, so
+-- `exp <= max_exp` is false and extendLink refuses to move it rather than
+-- moving it past a signature that will never honour the result.
+ALTER TABLE preview_links ADD COLUMN max_exp INTEGER NOT NULL DEFAULT 0;
 
 -- No index change. Every access to this table is by primary key (the worker's
 -- allowlist lookup, and extend) or through the existing (slug, created_at) index

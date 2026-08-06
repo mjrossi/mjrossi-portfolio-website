@@ -11,13 +11,14 @@
 // lapse. Before it existed, "give them another two days" meant minting a second
 // link, sending a second URL, and leaving the first one live until it expired.
 //
-// It works because a preview link has two expiries (migrations/0002):
+// It works because the expiry a request is judged against is not the one inside
+// the signature (migrations/0002):
 //
-//   the token's exp   -- signed, immutable, and therefore unreachable from
-//                        here. The CEILING: the furthest this link can ever
-//                        work, whatever the row says.
-//   preview_links.exp -- the EFFECTIVE expiry, checked by isLinkActive on every
-//                        request. This is what moves.
+//   preview_links.exp -- THE CLOCK, checked by isLinkActive on every request.
+//                        This is what moves.
+//   the token's exp   -- THE CAP. Signed, immutable, and therefore unreachable
+//                        from here: the furthest that clock can ever be wound,
+//                        whatever the row says.
 //
 // --hours is a NEW WINDOW MEASURED FROM NOW, not time added to what is left.
 // Same reading as `just preview-link --hours`, and it means this command
@@ -26,9 +27,9 @@
 //
 // Refusals are specific on purpose. An UPDATE that changes nothing looks
 // identical for a link that never existed, one that belongs to another post,
-// one already revoked, one minted before ceilings existed, and one asking for
-// more time than its signature will ever honour. Extending is what you do when
-// somebody is waiting, so "nothing happened" is not a usable answer.
+// one already revoked, and one asking for more time than its signature will
+// ever honour. Extending is what you do when somebody is waiting, so "nothing
+// happened" is not a usable answer.
 
 import { LINK_ID_RE, SLUG_RE } from '../src/lib/preview.js';
 import { chooseDatabase, databaseLabel } from './database-target.mjs';
@@ -141,12 +142,6 @@ if (changed.length === 0) {
     die(
       `link ${id} was revoked on ${new Date(row.revoked_at).toISOString().slice(0, 10)} ` +
         `(${where}).\n  Revoking is final — mint a fresh link with just preview-link instead.`,
-    );
-  }
-  if (row.max_exp == null) {
-    die(
-      `link ${id} was minted before links had a ceiling, so it cannot be extended (${where}).\n` +
-        '  Its signature expires when its row does. Mint a fresh link with just preview-link.',
     );
   }
   if (exp > row.max_exp) {

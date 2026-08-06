@@ -62,8 +62,7 @@ function reviewerLiteral(reviewer) {
  * immutable, and the furthest extendLink can ever move `exp`. It DEFAULTS TO
  * `exp`, i.e. no headroom -- a caller that forgets it mints a link that cannot
  * be extended rather than one that can be extended past its signature, which is
- * the fail-closed direction and matches how rows minted before migration 0002
- * (max_exp NULL) already behave.
+ * the fail-closed direction.
  *
  * @param {{ id: string, slug: string, reviewer?: string | null, exp: number,
  *           maxExp?: number, createdAt?: number, revokedAt?: number | null }[]} rows
@@ -105,7 +104,7 @@ export function recordLinks(rows, { local = false } = {}) {
  *
  * This is the whole of `just preview-extend`. The URL in the reviewer's hands
  * is unchanged, because `exp` here is not the one inside the signature -- see
- * migrations/0002 for the two clocks.
+ * migrations/0002 for the clock and the cap above it.
  *
  * THE CEILING IS ENFORCED IN THE STATEMENT, not by the caller. A read-then-write
  * would be two round-trips with a window between them, and would put the one
@@ -113,14 +112,10 @@ export function recordLinks(rows, { local = false } = {}) {
  * script rather than in the module that owns the table. Same argument as the
  * galley write quota being a single INSERT ... SELECT.
  *
- * `max_exp IS NOT NULL` excludes rows minted before ceilings existed: their
- * tokens expire when their `exp` did, so extending one would produce a row
- * claiming a life the signature will not honour.
- *
  * RETURNS THE ROW IT ACTUALLY CHANGED, empty when it changed nothing, for the
  * same reason revokeLinks does: every refusal here (no such link, wrong post,
- * revoked, past the ceiling, no ceiling at all) is otherwise indistinguishable
- * from success. The caller is expected to look up why and say so.
+ * revoked, past the ceiling) is otherwise indistinguishable from success. The
+ * caller is expected to look up why and say so.
  *
  * @param {string} slug
  * @param {string} id
@@ -135,7 +130,7 @@ export function extendLink(slug, id, exp, { local = false } = {}) {
   return d1Query(
     `UPDATE preview_links SET exp = ${exp} ` +
       `WHERE slug = '${slug}' AND id = '${id}' AND revoked_at IS NULL ` +
-      `AND max_exp IS NOT NULL AND ${exp} <= max_exp ` +
+      `AND ${exp} <= max_exp ` +
       'RETURNING id, exp, max_exp',
     { local },
   );
@@ -223,7 +218,7 @@ const COLUMNS = 'id, slug, reviewer, exp, max_exp, created_at, revoked_at';
  * @param {string} id
  * @param {{ local?: boolean }} [opts]
  * @returns {{ id: string, slug: string, reviewer: string | null, exp: number,
- *             max_exp: number | null, created_at: number,
+ *             max_exp: number, created_at: number,
  *             revoked_at: number | null } | null}
  */
 export function getLink(slug, id, { local = false } = {}) {
@@ -242,7 +237,7 @@ export function getLink(slug, id, { local = false } = {}) {
  * @param {string} slug
  * @param {{ local?: boolean }} [opts]
  * @returns {{ id: string, slug: string, reviewer: string | null, exp: number,
- *             max_exp: number | null, created_at: number,
+ *             max_exp: number, created_at: number,
  *             revoked_at: number | null }[]}
  */
 export function listLinks(slug, { local = false } = {}) {
@@ -266,7 +261,7 @@ export function listLinks(slug, { local = false } = {}) {
  *
  * @param {{ local?: boolean }} [opts]
  * @returns {{ id: string, slug: string, reviewer: string | null, exp: number,
- *             max_exp: number | null, created_at: number,
+ *             max_exp: number, created_at: number,
  *             revoked_at: number | null }[]}
  */
 export function listAllLinks({ local = false } = {}) {

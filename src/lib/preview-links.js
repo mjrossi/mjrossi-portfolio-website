@@ -28,19 +28,21 @@
  * whereas the worst outcome of failing open is an unpublished draft served to a
  * link the operator believes they revoked.
  *
- * TWO conditions, because there are two clocks (see migrations/0002):
+ * TWO conditions (see migrations/0002):
  *
  *   revoked_at IS NULL -- nobody has withdrawn it.
- *   exp is in the future -- the EFFECTIVE expiry, which `just preview-extend`
- *                           moves in place so a reviewer needing more time
- *                           keeps the URL they already have.
+ *   exp is in the future -- THE CLOCK. The expiry a request is actually judged
+ *                           against, which `just preview-extend` moves in place
+ *                           so a reviewer needing more time keeps the URL they
+ *                           already have.
  *
  * The token carries its own exp, checked by verifyPreviewGrant before this
- * function is ever reached. That one is signed and therefore immutable: it is
- * the CEILING an extension cannot pass, not the expiry. Both are enforced, so
- * dropping either still leaves a link that expires -- but dropping this one
- * silently promotes every link to its full ceiling, which is why smoke asserts
- * a row-expired link 404s even with a perfectly valid token.
+ * function is ever reached. That one is signed and therefore immutable, which
+ * is exactly why it cannot be the working expiry: it is the CAP on how far the
+ * clock above can be wound, not the clock. Both are enforced, so dropping
+ * either still leaves a link that expires -- but dropping this one silently
+ * promotes every link to its full cap, which is why smoke asserts a row-expired
+ * link 404s even with a perfectly valid token.
  *
  * A row is live only when `revoked_at` is exactly null. A column that came back
  * missing or undefined is treated as revoked -- unrecognised shapes resolve to

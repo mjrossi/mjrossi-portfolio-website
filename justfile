@@ -174,8 +174,10 @@ preview-roster-all *flags:
 #
 # --hours is a new window measured FROM NOW, not time added to what is left, so
 # this shortens as readily as it extends. A link can never be pushed past the
-# ceiling it was signed with when it was minted (30 days out); past that, mint a
-# fresh one. `just preview-roster` shows the ceiling as `extend to <date>`.
+# ceiling it was signed with when it was minted (30 days out), nor past the post's
+# own pubDate — once the post is public the link has nothing left to grant. Past
+# either, mint a fresh one. `just preview-roster` shows the reachable limit as
+# `extend to <date>`.
 #
 # --remote or --local is REQUIRED. Extending the wrong database reports success
 # while the link the reviewer holds goes on expiring.
@@ -185,6 +187,23 @@ preview-roster-all *flags:
 [doc('move the expiry of a live preview link — the URL is unchanged (--remote|--local)')]
 preview-extend slug id *flags:
     npm run preview-extend -- {{slug}} {{id}} {{flags}}
+
+# re-clamp EVERY live link for a post. This is the command for "I pushed the
+# date out": a link's expiry is capped at the post's pubDate when it is minted,
+# so moving that date leaves every outstanding link expiring on the old one.
+#
+# It works because minting caps the ROW but leaves the SIGNATURE ceiling 30 days
+# out, so a slipped launch still has headroom to extend into. As with a single
+# link, not one URL changes — nothing is re-sent and no reviewer learns their
+# link was about to lapse.
+#
+# Exits non-zero if any live link could not be moved, naming it: a link signed
+# with a ceiling short of the new date has to be reminted.
+# usage: just preview-extend-all my-draft --remote --hours 120
+[group('review')]
+[doc('re-clamp every live preview link for a post after moving its pubDate (--remote|--local)')]
+preview-extend-all slug *flags:
+    npm run preview-extend -- {{slug}} --all {{flags}}
 
 # revoke a preview link. Takes READING away as well as writing: middleware
 # refuses the whole grant, so the post 404s for that link. Rows are kept, so a

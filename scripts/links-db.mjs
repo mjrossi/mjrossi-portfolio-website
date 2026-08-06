@@ -1,8 +1,9 @@
 // The only file that knows the columns of preview_links.
 //
 // Four callers touch the allowlist -- preview-link.mjs records,
-// preview-roster.mjs lists and revokes, preview-extend.mjs moves an expiry, and
-// smoke.mjs seeds fixtures -- and spreading one table's SQL across them would
+// preview-roster.mjs lists and revokes, preview-extend.mjs moves an expiry (one
+// link, or every live one for a post), and smoke.mjs seeds fixtures -- and
+// spreading one table's SQL across them would
 // mean restating the column list
 // and the "this interpolation is safe" argument once per script. Here that
 // argument is made once and ENFORCED: every value reaching a statement below
@@ -130,6 +131,39 @@ export function extendLink(slug, id, exp, { local = false } = {}) {
   return d1Query(
     `UPDATE preview_links SET exp = ${exp} ` +
       `WHERE slug = '${slug}' AND id = '${id}' AND revoked_at IS NULL ` +
+      `AND ${exp} <= max_exp ` +
+      'RETURNING id, exp, max_exp',
+    { local },
+  );
+}
+
+/**
+ * Move the effective expiry of EVERY live link for one post.
+ *
+ * This is `just preview-extend <slug> --all`, and it exists for one situation:
+ * the pubDate moved. A link's expiry is clamped to publication when it is minted,
+ * so pushing a draft back leaves every outstanding link expiring on the old date
+ * — and reminting them would defeat the point of extending at all. One statement
+ * re-clamps the lot, and not one reviewer's URL changes.
+ *
+ * Same ceiling, enforced the same way and in the same place: rows whose signature
+ * will not reach the new expiry are simply not matched, so an --all that moves
+ * four links out of five reports four. That is why this RETURNS THE ROWS IT
+ * CHANGED rather than a count — the caller names the ones it could not move.
+ *
+ * Scoped to the slug, like every other write here.
+ *
+ * @param {string} slug
+ * @param {number} exp new effective expiry, epoch SECONDS
+ * @param {{ local?: boolean }} [opts]
+ * @returns {{ id: string, exp: number, max_exp: number }[]} the rows it moved
+ */
+export function extendLinks(slug, exp, { local = false } = {}) {
+  checkSlug(slug);
+  checkInteger(exp, 'exp');
+  return d1Query(
+    `UPDATE preview_links SET exp = ${exp} ` +
+      `WHERE slug = '${slug}' AND revoked_at IS NULL ` +
       `AND ${exp} <= max_exp ` +
       'RETURNING id, exp, max_exp',
     { local },

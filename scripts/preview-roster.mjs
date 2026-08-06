@@ -30,8 +30,15 @@
 // `just preview-extend <slug> <id> --hours N` moves its expiry in place, and the
 // URL the reviewer holds keeps working. The `extend to <date>` suffix on a row
 // below is how far that can go — see scripts/preview-extend.mjs.
+//
+// A link whose POST HAS PUBLISHED reads `spent`, not `live`. Its row may not have
+// expired, but the draft it was minted to show is public and it grants nothing a
+// plain URL doesn't. Nothing needs doing about a spent link; the label exists so
+// the roster's answer to "what is outstanding?" stays true.
 
 import { LINK_ID_RE, SLUG_RE } from '../src/lib/preview.js';
+import { clampToPublication, isPublished } from '../src/lib/schedule.js';
+import { readPubDate } from './content.mjs';
 import { chooseDatabase, databaseLabel } from './database-target.mjs';
 import { listAllLinks, listLinks, revokeLinks } from './links-db.mjs';
 
@@ -152,26 +159,59 @@ try {
 
   const nowSec = Math.floor(Date.now() / 1000);
 
+  // When each post goes live, read once per slug from its own frontmatter. A
+  // published post ends its links: the draft they were minted to show is public,
+  // so they grant nothing a plain URL doesn't. Reporting those as `live` is what
+  // made the roster answer "what is outstanding?" with "everything, forever".
+  //
+  // Tolerant of a missing or unreadable post, and deliberately so. This list is
+  // the only inventory of issued links there is, and a link minted against a
+  // post since renamed or deleted is exactly the one you most need to see in
+  // order to revoke it — failing the whole listing over it would be the wrong
+  // trade. Such a row simply shows its own expiry, as before.
+  const pubDates = new Map();
+  function publicationOf(slug) {
+    if (!pubDates.has(slug)) {
+      try {
+        pubDates.set(slug, readPubDate(slug));
+      } catch {
+        pubDates.set(slug, null);
+      }
+    }
+    return pubDates.get(slug);
+  }
+
   /** One link, as a line. Shared so both modes render identically. */
   function format(row) {
+    const pubDate = publicationOf(row.slug);
+    const published = pubDate !== null && isPublished(pubDate);
     // `expired` is no longer just a label: since migrations/0002 this is the
     // expiry isLinkActive enforces, so a row reading expired here is a link
-    // already 404ing in the reviewer's browser.
+    // already 404ing in the reviewer's browser. `spent` is the same idea one
+    // step on — the row may not have expired, but the post it guarded is public.
     const state = row.revoked_at
       ? `revoked ${new Date(row.revoked_at).toISOString().slice(0, 10)}`
       : row.exp <= nowSec
         ? 'expired'
-        : 'live';
+        : published
+          ? `spent (published ${pubDate.toISOString().slice(0, 10)})`
+          : 'live';
     // A view-only link has no reviewer. Shown as a dash rather than blank so
     // the column stays readable and "who holds this?" has a visible answer.
     const who = row.reviewer ?? '—';
     const expires = new Date(row.exp * 1000).toISOString().slice(0, 16).replace('T', ' ');
     // Headroom, shown only where it is actionable. A revoked link cannot be
-    // extended at all, and a link already standing at its cap has nowhere to go
-    // -- in both cases the absence of this suffix is the answer.
+    // extended at all, a spent one has nothing to be extended to, and a link
+    // already standing at its cap has nowhere to go -- in every case the absence
+    // of this suffix is the answer.
+    //
+    // The cap shown is the SIGNATURE ceiling or PUBLICATION, whichever comes
+    // first, because that is what `just preview-extend` will actually honour.
+    // Showing the raw ceiling would advertise headroom the clamp then removes.
+    const limit = pubDate === null ? row.max_exp : clampToPublication(row.max_exp, pubDate);
     const ceiling =
-      !row.revoked_at && row.max_exp > row.exp
-        ? `  · extend to ${new Date(row.max_exp * 1000).toISOString().slice(0, 10)}`
+      !row.revoked_at && !published && limit > row.exp
+        ? `  · extend to ${new Date(limit * 1000).toISOString().slice(0, 10)}`
         : '';
     return `  ${row.id}  ${who.padEnd(14)}  expires ${expires}  ${state}${ceiling}`;
   }
@@ -188,7 +228,12 @@ try {
         console.log(`  ${row.slug}`);
         current = row.slug;
       }
-      if (!row.revoked_at && row.exp > nowSec) live++;
+      // "Still live" excludes spent rows for the same reason format() labels
+      // them differently: a link to a post that is already public is not
+      // outstanding in any sense that matters.
+      const pubDate = publicationOf(row.slug);
+      const spent = pubDate !== null && isPublished(pubDate);
+      if (!row.revoked_at && row.exp > nowSec && !spent) live++;
       console.log(format(row));
     }
     console.log('');

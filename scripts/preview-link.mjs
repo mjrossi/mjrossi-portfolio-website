@@ -31,6 +31,13 @@
 // furthest that link can ever be extended. So mint the window you actually
 // mean: a short one costs nothing now that more time does not mean a new link.
 //
+// PUBLICATION CUTS IT SHORTER STILL. The row's expiry is clamped to the post's
+// pubDate, because a link to a draft has nothing left to grant once the draft is
+// public — and left running it would hold the galley open on a live post. The
+// SIGNATURE ceiling is deliberately not clamped, so pushing pubDate back leaves
+// headroom: `just preview-extend <slug> --all` then re-clamps every outstanding
+// link to the new date, and not one URL changes.
+//
 // Signs with PREVIEW_SIGNING_KEY, read from the environment or (more usually)
 // from .dev.vars. That file is the local home for worker-runtime secrets, and
 // it is the one place a worker secret is legitimately read outside wrangler:
@@ -40,7 +47,8 @@
 // (src/lib/preview.js), so a link that verifies here verifies in production.
 
 import { newLinkId, signPreviewToken, SLUG_RE } from '../src/lib/preview.js';
-import { resolvePostSource } from './content.mjs';
+import { clampToPublication, isPublished, publicationTime } from '../src/lib/schedule.js';
+import { readPubDate, resolvePostSource } from './content.mjs';
 import { chooseDatabase, databaseLabel } from './database-target.mjs';
 import { readDevVar } from './dev-vars.mjs';
 import { recordLinks } from './links-db.mjs';
@@ -158,6 +166,15 @@ if (!resolvePostSource(slug)) {
   die(`no post found for slug ${JSON.stringify(slug)} (looked for ${slug}.mdx and ${slug}/index.mdx)`);
 }
 
+// When the post goes live, which is also when this link stops being worth
+// anything. Read from the same frontmatter the build reads — see readPubDate.
+let pubDate;
+try {
+  pubDate = readPubDate(slug);
+} catch (err) {
+  die(err.message);
+}
+
 // ── key ──────────────────────────────────────────────
 
 // Env wins over .dev.vars; the file parse is shared with scripts/smoke.mjs so
@@ -185,8 +202,29 @@ if (!key) {
 // window up front, so there is no headroom left to extend into. Said out loud
 // below rather than left to be discovered later.
 const nowSec = Math.floor(Date.now() / 1000);
-const exp = nowSec + Math.round(hours * 3600);
+const requested = nowSec + Math.round(hours * 3600);
 const maxExp = nowSec + Math.round(Math.max(hours, CEILING_HOURS) * 3600);
+
+// PUBLICATION IS THE THIRD BOUND on the clock, after the requested window and
+// the signature ceiling — and usually the first one to bite. A link exists to
+// show someone a post that isn't public yet, so it has nothing left to grant the
+// moment it is; letting it run on would leave the galley open on a live post and
+// the roster reporting a link as live when it is merely still in the table.
+//
+// An ALREADY-PUBLISHED post skips the clamp and mints exactly as before. The
+// clamp would hand back an expiry in the past — a link dead on arrival — and
+// minting against a live post is a legitimate thing to do: it is how the local
+// galley trial loop in CLAUDE.md works, on whichever post is handy.
+const live = isPublished(pubDate);
+const exp = live ? requested : clampToPublication(requested, pubDate);
+const cappedByPublication = !live && exp < requested;
+
+// How far `just preview-extend` could actually move this link. The signature
+// ceiling is one limit and publication is the other, and the roster's own
+// `extend to` suffix means the same thing — reporting the raw ceiling here would
+// promise headroom that preview-extend then clamps away.
+const extendLimit = live ? maxExp : Math.min(maxExp, publicationTime(pubDate));
+
 const linkId = newLinkId();
 const token = await signPreviewToken({ slug, exp: maxExp, reviewer, linkId }, key);
 const url = new URL(`/blog/${slug}/`, host);
@@ -212,12 +250,25 @@ console.log(url.href);
 // out, by getting a 404 that reads like the post was pulled.
 console.error(`\n  database: ${databaseLabel(useLocal)}`);
 console.error(`  post:     ${slug}`);
-console.error(`  expires:  ${new Date(exp * 1000).toISOString()} (${hours}h)`);
 console.error(
-  maxExp > exp
-    ? `  extend:   up to ${new Date(maxExp * 1000).toISOString()} — the URL above ` +
+  live
+    ? `  publish:  already live since ${pubDate.toISOString()}`
+    : `  publish:  ${pubDate.toISOString()} — this link ends there`,
+);
+console.error(
+  cappedByPublication
+    ? `  expires:  ${new Date(exp * 1000).toISOString()} — publication, not the ${hours}h asked for`
+    : `  expires:  ${new Date(exp * 1000).toISOString()} (${hours}h)`,
+);
+console.error(
+  extendLimit > exp
+    ? `  extend:   up to ${new Date(extendLimit * 1000).toISOString()} — the URL above ` +
         'keeps working, so nothing is re-sent'
-    : `  extend:   no headroom — --hours ${hours} already reaches the ceiling, so ` +
+    : cappedByPublication
+      ? '  extend:   not while the date stands — this link already runs to publication.\n' +
+        `            Push pubDate back and re-run just preview-extend ${slug} --all ${target};\n` +
+        `            the signature allows up to ${new Date(maxExp * 1000).toISOString()}.`
+      : `  extend:   no headroom — --hours ${hours} already reaches the ceiling, so ` +
         'a longer window means a new link',
 );
 console.error(
@@ -229,3 +280,14 @@ console.error('  scope:    this post only — the link does not reveal anything 
 console.error(`  link id:  ${linkId}`);
 console.error(`    revoke:  just preview-revoke ${slug} ${linkId} ${target}`);
 console.error(`    extend:  just preview-extend ${slug} ${linkId} --hours N ${target}\n`);
+
+// Said out loud, because it is the one case where a correct link is useless. A
+// post an hour from publication mints a link with an hour on it, which reads as
+// a broken feature to whoever opens it after lunch.
+if (cappedByPublication && exp - nowSec < 3600) {
+  const minutes = Math.max(1, Math.round((exp - nowSec) / 60));
+  console.error(
+    `  NOTE: ${slug} publishes in ${minutes} minute(s), so that is all this link has.\n` +
+      '        It is about to be public anyway — send the plain URL instead.\n',
+  );
+}

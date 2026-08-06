@@ -17,14 +17,23 @@ const readLabel = postReadingTime(post);
 // See BlogPostEntry.astro — keyed off the pubDate, not the preview flag.
 const scheduled = !isPublished(pubDate);
 
-// The galley renders only for a signed preview link that named a reviewer, and
-// only on the post that link authorises. Both halves matter: previewReviewer
-// alone would put the review chrome on every post the reader can reach, and
-// middleware only guarantees no-store + noindex on responses where a preview
-// signal is live. This gate is the reason the second client-JS carve-out can
-// never appear on a publicly cacheable page — smoke asserts it.
+// The galley renders only for a signed preview link that named a reviewer, only
+// on the post that link authorises, and only while that post is still a draft.
+// All three matter: previewReviewer alone would put the review chrome on every
+// post the reader can reach, and middleware only guarantees no-store + noindex
+// on responses where a preview signal is live. This gate is the reason the
+// second client-JS carve-out can never appear on a publicly cacheable page —
+// smoke asserts it.
+//
+// `scheduled` is the belt to a brace applied at mint time. `just preview-link`
+// caps a link's expiry at pubDate, so a link normally expires as its post goes
+// live and never reaches this gate; that cap is a snapshot, though, and moving
+// pubDate EARLIER afterwards is exactly what the authoring workflow does at step
+// 5. This is what stops a link outstanding from that move holding the review
+// margin open over a published post. /api/galley enforces the same rule, because
+// this one is a UI condition and authorisation cannot live in the UI.
 const reviewer =
-  Astro.locals.previewReviewer && Astro.locals.previewSlug === post.id
+  Astro.locals.previewReviewer && Astro.locals.previewSlug === post.id && scheduled
     ? Astro.locals.previewReviewer
     : null;
 ---

@@ -9,9 +9,11 @@ import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { request as httpRequest } from 'node:http';
 import { signPreviewToken, WORKER_NAME } from '../src/lib/preview.js';
+import { isPublished } from '../src/lib/schedule.js';
+import { CONTENT_DIR, readPubDate } from './content.mjs';
 import { readDevVar } from './dev-vars.mjs';
 import { d1Exec, d1Migrate } from './d1.mjs';
-import { clearLinks, extendLink, getLink, recordLinks } from './links-db.mjs';
+import { clearLinks, extendLink, extendLinks, getLink, recordLinks } from './links-db.mjs';
 
 const DIST = resolve('dist/client');
 const PORT = Number(process.env.SMOKE_PORT ?? 8788);
@@ -25,6 +27,31 @@ const FIXTURE_TAG = 'smoke-fixture';
 // A slug that names no real post, used by the cross-slug assertions: a token
 // minted for another draft must not open or write to the fixture.
 const OTHER_SLUG = 'some-other-draft';
+
+// A post that is ALREADY PUBLISHED, for the other end of a link's life: minting
+// caps a link's expiry at pubDate, but that cap is a snapshot, and moving
+// pubDate earlier afterwards (which the authoring workflow does at step 5)
+// leaves a live row on a public post. The galley must be shut anyway.
+//
+// Discovered rather than named, so this cannot rot into pointing at a post whose
+// date moved — every real post is past-dated today, and the fixture is the only
+// scheduled one, but that is a fact about the content and not a contract.
+const PUBLISHED_SLUG = readdirSync(CONTENT_DIR)
+  .map((entry) => entry.replace(/\.mdx$/, ''))
+  .filter((slug) => slug !== FIXTURE_SLUG)
+  .sort()
+  .find((slug) => {
+    try {
+      const pubDate = readPubDate(slug);
+      return pubDate !== null && isPublished(pubDate);
+    } catch {
+      return false;
+    }
+  });
+if (!PUBLISHED_SLUG) {
+  console.error('smoke: no published post found — the published-link assertions cannot run');
+  process.exit(1);
+}
 
 // D1 database holding galley notes. Must match wrangler.jsonc's database_name.
 const GALLEY_DB = 'mjrossi-galley';
@@ -55,6 +82,9 @@ const UNKNOWN_LINK_ID = '99998888aaaabbbb'; // deliberately never inserted
 const ROW_EXPIRED_LINK_ID = '1111aaaa2222bbbb'; // valid token, expired ROW
 const EXTEND_PROBE_ID = '3333cccc4444dddd'; // extendLink's own round-trip
 const EXTEND_REVOKED_ID = '5555eeee6666ffff'; // revoked, but with headroom left
+const EXTEND_ALL_ROOM_ID = '7777aaaa8888bbbb'; // --all: ceiling reaches the new date
+const EXTEND_ALL_STUCK_ID = '9999cccc0000dddd'; // --all: ceiling falls short of it
+const PUBLISHED_LINK_ID = '2222eeee3333ffff'; // live review link, published post
 
 // Sign with whatever key the worker will actually hold. wrangler dev reads
 // .dev.vars and that wins over --var, so a developer with a real key there
@@ -602,7 +632,10 @@ try {
 // only ever touch rows this file wrote.
 try {
   d1Exec(`DELETE FROM galley_notes WHERE reviewer = '${SMOKE_REVIEWER}'`, { local: true });
-  clearLinks([FIXTURE_SLUG, OTHER_SLUG], { local: true });
+  // PUBLISHED_SLUG is a real post, so this does clear any local preview links you
+  // minted for it by hand. Local only (clearLinks refuses --remote), and the
+  // alternative is a fixed fixture id colliding with itself on the second run.
+  clearLinks([FIXTURE_SLUG, OTHER_SLUG, PUBLISHED_SLUG], { local: true });
 } catch (err) {
   console.error(`smoke: could not clear previous ${GALLEY_DB} rows\n${err.message}`);
   process.exit(1);
@@ -665,6 +698,33 @@ try {
         maxExp: NOW_SEC + 7200,
         revokedAt: Date.now(),
       },
+      // extendLinks (`--all`) needs two rows on one post that differ ONLY in
+      // headroom, so a single call can be shown to move one and not the other.
+      // A ceiling short of the new date is what "mint a fresh link" looks like
+      // after a pubDate slips further than the signature allows.
+      {
+        id: EXTEND_ALL_ROOM_ID,
+        slug: OTHER_SLUG,
+        reviewer: null,
+        exp: NOW_SEC + 3600,
+        maxExp: NOW_SEC + 100_000,
+      },
+      {
+        id: EXTEND_ALL_STUCK_ID,
+        slug: OTHER_SLUG,
+        reviewer: null,
+        exp: NOW_SEC + 3600,
+        maxExp: NOW_SEC + 3600,
+      },
+      // A perfectly good review link on a post that has ALREADY published: row
+      // live, un-revoked, far-future expiry, token valid. Everything the galley
+      // checks passes except the post being a draft, which is the point.
+      {
+        id: PUBLISHED_LINK_ID,
+        slug: PUBLISHED_SLUG,
+        reviewer: SMOKE_REVIEWER,
+        exp: FAR_FUTURE_EXP,
+      },
       // The allowlist's own negative case. UNKNOWN_LINK_ID is deliberately
       // absent — a well-signed token for a row that was never written.
       {
@@ -722,6 +782,38 @@ try {
     'extend: a revoked link cannot be extended back to life',
     revoked.length === 0,
     `got ${JSON.stringify(revoked)} — revoking is supposed to be final`,
+  );
+
+  // `just preview-extend <slug> --all`, the command for "I pushed the date out".
+  // One statement over every live link for a post, with the SAME ceiling clause:
+  // a partial result is the expected outcome, not an error, so it has to be
+  // visible in what comes back or the caller cannot name the links it missed.
+  const target = NOW_SEC + 50_000;
+  const movedAll = extendLinks(OTHER_SLUG, target, { local: true });
+  const movedIds = movedAll.map((row) => row.id);
+  check(
+    'extend --all: moves every live link whose ceiling reaches the new date',
+    movedIds.includes(EXTEND_ALL_ROOM_ID),
+    `moved ${JSON.stringify(movedIds)} — a link with headroom was left behind`,
+  );
+  check(
+    'extend --all: leaves a link whose ceiling falls short',
+    !movedIds.includes(EXTEND_ALL_STUCK_ID),
+    'a link was extended past the ceiling it was signed with',
+  );
+  check(
+    'extend --all: does not touch a revoked link',
+    !movedIds.includes(EXTEND_REVOKED_ID),
+    'revoking is supposed to be final, including in bulk',
+  );
+  // Scoping is asserted through extendLink above rather than repeated here on
+  // purpose: the only honest way to prove it in bulk is to run an --all against
+  // FIXTURE_SLUG, which would rewrite the far-future expiries every assertion
+  // below depends on. Both statements carry the same `WHERE slug = '…'`.
+  check(
+    'extend --all: the row it reported moving really moved',
+    getLink(OTHER_SLUG, EXTEND_ALL_ROOM_ID, { local: true })?.exp === target,
+    'the UPDATE reported a change the table does not show',
   );
 } catch (err) {
   console.error(`smoke: extendLink round-trip failed\n${err.message}`);
@@ -1292,6 +1384,54 @@ try {
     'galley: a review link does NOT create the fixture-only tag page',
     galleyTag.status === 404,
     `got ${galleyTag.status} — a galley link widened a tag listing`,
+  );
+
+  // 4b. PUBLICATION ENDS THE GRANT. Everything above tests a link to a draft.
+  // This is the far end of a link's life: a valid, un-revoked, unexpired review
+  // link whose post is already public.
+  //
+  // Minting normally makes this unreachable — `just preview-link` caps the row's
+  // expiry at pubDate — but that cap is a snapshot taken at mint time, and the
+  // authoring workflow moves pubDate EARLIER at step 5. So this is the state a
+  // real link genuinely lands in, and nothing else in this file is in it: every
+  // other fixture points at the permanently-future-dated post, so if both gates
+  // were deleted the suite would stay green.
+  const publishedToken = await signPreviewToken(
+    { slug: PUBLISHED_SLUG, exp: FAR_FUTURE_EXP, reviewer: SMOKE_REVIEWER, linkId: PUBLISHED_LINK_ID },
+    PREVIEW_KEY);
+  const pq = `preview=${encodeURIComponent(publishedToken)}`;
+
+  const publishedPage = await fetch(`${BASE}/blog/${PUBLISHED_SLUG}/?${pq}`);
+  const publishedHtml = await publishedPage.text();
+  check(
+    'published: the post still renders for a spent review link',
+    publishedPage.status === 200,
+    `got ${publishedPage.status} — the post is public; the token must not take that away`,
+  );
+  check(
+    'published: a spent review link does NOT render the galley margin',
+    !publishedHtml.includes('/scripts/galley.js') && !publishedHtml.includes('galley-'),
+    'the review chrome is open over a post that has already shipped',
+  );
+
+  // The gate above is a render condition; this is the one that decides whether a
+  // note can be written. A client that keeps posting after the chrome vanishes,
+  // or one driven by hand, has to meet the same rule.
+  const publishedWrite = await postNote(publishedToken, {
+    slug: PUBLISHED_SLUG,
+    kind: 'comment',
+    body: 'smoke note on a published post',
+  });
+  check(
+    'published: /api/galley refuses a note on a published post',
+    publishedWrite.status === 403,
+    `got ${publishedWrite.status} — the endpoint accepted a note for a post that is already live`,
+  );
+  const publishedRead = await fetch(`${BASE}/api/galley?${pq}`);
+  check(
+    'published: /api/galley refuses to list notes for a published post',
+    publishedRead.status === 403,
+    `got ${publishedRead.status}`,
   );
 
   // 5. Validation is actually wired to the endpoint. src/lib/galley.test.js

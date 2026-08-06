@@ -1,13 +1,13 @@
 ---
 title: "Scheduled-post fixture (not a real post)"
 description: "A permanently-future-dated post that exists so scripts/smoke.mjs can prove scheduled posts stay hidden and preview links stay scoped."
-pubDate: 2099-01-01
+pubDate: 2099-01-01T12:00:00Z
 tags: ["smoke-fixture"]
 ---
 
 This is not a real article. It is a **test fixture**.
 
-Its `pubDate` is set to 2099-01-01 so it is always in the future, which means
+Its `pubDate` is set to 2099-01-01T12:00:00Z so it is always in the future, which means
 production must never show it — not on `/blog`, not on `/blog/tag/smoke-fixture`,
 not at its own URL, and above all not in `/blog/rss.xml`, which is what triggers
 the Buttondown email to real subscribers.

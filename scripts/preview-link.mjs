@@ -25,6 +25,12 @@
 // That means minting needs D1 — a token carrying D1:Edit for production, or
 // --local for the database `just preview` and `just smoke` run against.
 //
+// --hours is the EFFECTIVE window and is recorded on the row, where
+// `just preview-extend` can move it later without changing the URL. The token
+// is signed with a ceiling further out (CEILING_HOURS below), which is the
+// furthest that link can ever be extended. So mint the window you actually
+// mean: a short one costs nothing now that more time does not mean a new link.
+//
 // Signs with PREVIEW_SIGNING_KEY, read from the environment or (more usually)
 // from .dev.vars. That file is the local home for worker-runtime secrets, and
 // it is the one place a worker secret is legitimately read outside wrangler:
@@ -41,6 +47,16 @@ import { recordLinks } from './links-db.mjs';
 
 const DEFAULT_HOURS = 48;
 const DEFAULT_HOST = 'https://mjrossi.com';
+
+// The ceiling: how far past the requested window the SIGNED exp is set, and so
+// the furthest `just preview-extend` can ever move this link. Two clocks, one
+// signed and one not -- see migrations/0002 for why.
+//
+// 30 days is chosen to cover a slow review round without becoming a de facto
+// permanent grant. Minting policy, so it lives here rather than in
+// src/lib/preview.js, which is the copy that ships to the worker and is
+// deliberately free of anything the worker does not need.
+const CEILING_HOURS = 720;
 
 function die(message) {
   console.error(`preview-link: ${message}`);
@@ -161,9 +177,18 @@ if (!key) {
 
 // ── mint ─────────────────────────────────────────────
 
-const exp = Math.floor(Date.now() / 1000) + Math.round(hours * 3600);
+// Two expiries. `exp` is the effective one and lives in the row, where
+// `just preview-extend` can move it without changing the URL. `maxExp` is the
+// ceiling and goes inside the signature, where nothing can move it at all.
+//
+// --hours longer than the ceiling collapses them: you asked for the whole
+// window up front, so there is no headroom left to extend into. Said out loud
+// below rather than left to be discovered later.
+const nowSec = Math.floor(Date.now() / 1000);
+const exp = nowSec + Math.round(hours * 3600);
+const maxExp = nowSec + Math.round(Math.max(hours, CEILING_HOURS) * 3600);
 const linkId = newLinkId();
-const token = await signPreviewToken({ slug, exp, reviewer, linkId }, key);
+const token = await signPreviewToken({ slug, exp: maxExp, reviewer, linkId }, key);
 const url = new URL(`/blog/${slug}/`, host);
 url.searchParams.set('preview', token);
 
@@ -171,13 +196,15 @@ url.searchParams.set('preview', token);
 // signature and is then refused by middleware, which looks exactly like the
 // feature being broken — so if this fails, no URL is handed out at all.
 try {
-  recordLinks([{ id: linkId, slug, reviewer, exp }], { local: useLocal });
+  recordLinks([{ id: linkId, slug, reviewer, exp, maxExp }], { local: useLocal });
 } catch (err) {
   die(
     `minted a token but could not record it in the ${databaseLabel(useLocal)} ` +
       `database, so it would be refused on arrival:\n${err.message}`,
   );
 }
+
+const target = useLocal ? '--local' : '--remote';
 
 console.log(url.href);
 // Which database is printed FIRST, and on every mint. A link recorded in the
@@ -187,12 +214,18 @@ console.error(`\n  database: ${databaseLabel(useLocal)}`);
 console.error(`  post:     ${slug}`);
 console.error(`  expires:  ${new Date(exp * 1000).toISOString()} (${hours}h)`);
 console.error(
+  maxExp > exp
+    ? `  extend:   up to ${new Date(maxExp * 1000).toISOString()} — the URL above ` +
+        'keeps working, so nothing is re-sent'
+    : `  extend:   no headroom — --hours ${hours} already reaches the ceiling, so ` +
+        'a longer window means a new link',
+);
+console.error(
   reviewer
     ? `  grants:   read + leave galley notes, attributed to "${reviewer}"`
     : '  grants:   read only — pass --reviewer LABEL to let them leave notes',
 );
 console.error('  scope:    this post only — the link does not reveal anything else');
-console.error(
-  `  link id:  ${linkId}  (just preview-revoke ${slug} ${linkId} ` +
-    `${useLocal ? '--local' : '--remote'})\n`,
-);
+console.error(`  link id:  ${linkId}`);
+console.error(`    revoke:  just preview-revoke ${slug} ${linkId} ${target}`);
+console.error(`    extend:  just preview-extend ${slug} ${linkId} --hours N ${target}\n`);

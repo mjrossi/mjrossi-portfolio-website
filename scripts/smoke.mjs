@@ -11,7 +11,7 @@ import { request as httpRequest } from 'node:http';
 import { signPreviewToken, WORKER_NAME } from '../src/lib/preview.js';
 import { readDevVar } from './dev-vars.mjs';
 import { d1Exec, d1Migrate } from './d1.mjs';
-import { clearLinks, recordLinks } from './links-db.mjs';
+import { clearLinks, extendLink, getLink, recordLinks } from './links-db.mjs';
 
 const DIST = resolve('dist/client');
 const PORT = Number(process.env.SMOKE_PORT ?? 8788);
@@ -47,11 +47,14 @@ const GALLEY_WRITE_QUOTA = 60;
 // stated reason for failing.
 const VIEW_LINK_ID = 'aaaa0000bbbb1111'; // the view-only fixture link
 const WRONG_SLUG_ID = 'bbbb1111cccc2222'; // view-only, minted for another post
-const EXPIRED_LINK_ID = 'cccc2222dddd3333'; // live row, deliberately expired token
+const EXPIRED_LINK_ID = 'cccc2222dddd3333'; // live row, deliberately expired TOKEN
 const LIVE_LINK_ID = 'dddd3333eeee4444'; // the working review link
 const CROSS_SLUG_ID = 'eeee4444ffff5555'; // review link for another post
 const REVOKED_LINK_ID = 'ffff5555aaaa6666'; // seeded already revoked
 const UNKNOWN_LINK_ID = '99998888aaaabbbb'; // deliberately never inserted
+const ROW_EXPIRED_LINK_ID = '1111aaaa2222bbbb'; // valid token, expired ROW
+const EXTEND_PROBE_ID = '3333cccc4444dddd'; // extendLink's own round-trip
+const EXTEND_REVOKED_ID = '5555eeee6666ffff'; // revoked, but with headroom left
 
 // Sign with whatever key the worker will actually hold. wrangler dev reads
 // .dev.vars and that wins over --var, so a developer with a real key there
@@ -614,7 +617,14 @@ try {
 // Seeded through recordLinks, the same function production mints through, so a
 // schema change that breaks minting breaks this fixture in the same commit
 // rather than leaving a green suite pointed at a table nothing writes any more.
-const FAR_FUTURE_EXP = 4102444800; // 2100-01-01; the token's own exp is what expires
+// A link has TWO expiries since migrations/0002: the row's `exp`, which
+// isLinkActive enforces and `just preview-extend` moves, and the token's, which
+// is signed and is the ceiling above it. Both have to pass. Rows below are
+// far-future unless the assertion using them is specifically about expiry, so
+// each token's own exp decides — except ROW_EXPIRED_LINK_ID, which is the
+// mirror image and the only proof that the row half is wired up at all.
+const FAR_FUTURE_EXP = 4102444800; // 2100-01-01
+const NOW_SEC = Math.floor(Date.now() / 1000);
 try {
   recordLinks(
     [
@@ -623,8 +633,38 @@ try {
       // Live row, expired token — so `preview: expired token 404s` still fails
       // for the reason it is named after.
       { id: EXPIRED_LINK_ID, slug: FIXTURE_SLUG, reviewer: null, exp: FAR_FUTURE_EXP },
+      // The reverse: an expired ROW under a token that is still perfectly valid,
+      // with a far-future ceiling so the signature cannot be what refuses it.
+      // Nothing else in this file fails if isLinkActive stops checking `exp` —
+      // every other row is far-future, so dropping that check would silently
+      // promote every link to its full ceiling and the suite would stay green.
+      {
+        id: ROW_EXPIRED_LINK_ID,
+        slug: FIXTURE_SLUG,
+        reviewer: null,
+        exp: NOW_SEC - 60,
+        maxExp: FAR_FUTURE_EXP,
+      },
       { id: LIVE_LINK_ID, slug: FIXTURE_SLUG, reviewer: SMOKE_REVIEWER, exp: FAR_FUTURE_EXP },
       { id: CROSS_SLUG_ID, slug: OTHER_SLUG, reviewer: SMOKE_REVIEWER, exp: FAR_FUTURE_EXP },
+      // extendLink's own fixtures, on OTHER_SLUG so they cannot disturb a count
+      // on the fixture post. Headroom of exactly one hour, so "at the ceiling"
+      // and "one second past it" are both reachable.
+      {
+        id: EXTEND_PROBE_ID,
+        slug: OTHER_SLUG,
+        reviewer: null,
+        exp: NOW_SEC + 3600,
+        maxExp: NOW_SEC + 7200,
+      },
+      {
+        id: EXTEND_REVOKED_ID,
+        slug: OTHER_SLUG,
+        reviewer: null,
+        exp: NOW_SEC + 3600,
+        maxExp: NOW_SEC + 7200,
+        revokedAt: Date.now(),
+      },
       // The allowlist's own negative case. UNKNOWN_LINK_ID is deliberately
       // absent — a well-signed token for a row that was never written.
       {
@@ -639,6 +679,52 @@ try {
   );
 } catch (err) {
   console.error(`smoke: could not seed ${GALLEY_DB} preview_links fixtures\n${err.message}`);
+  process.exit(1);
+}
+
+// ── extendLink, before the worker is even up ─────────
+//
+// This is the only place links-db's SQL actually executes under test:
+// src/lib/*.test.js cannot reach it (the module shells out to wrangler at
+// import time), and no HTTP request touches it either. The ceiling clause is
+// the whole safety property of `just preview-extend` — without it an extendable
+// link becomes a permanent one — and it lives in a WHERE clause, where a typo
+// is silent and reads as "extended successfully".
+try {
+  const extended = extendLink(OTHER_SLUG, EXTEND_PROBE_ID, NOW_SEC + 7200, { local: true });
+  check(
+    'extend: moves the expiry up to the ceiling',
+    extended.length === 1 && extended[0].exp === NOW_SEC + 7200,
+    `got ${JSON.stringify(extended)}`,
+  );
+
+  const tooFar = extendLink(OTHER_SLUG, EXTEND_PROBE_ID, NOW_SEC + 7201, { local: true });
+  check(
+    'extend: one second past the ceiling changes nothing',
+    tooFar.length === 0,
+    `got ${JSON.stringify(tooFar)} — the signed ceiling is not being enforced`,
+  );
+  check(
+    'extend: a refused extension leaves the old expiry in place',
+    getLink(OTHER_SLUG, EXTEND_PROBE_ID, { local: true })?.exp === NOW_SEC + 7200,
+    'the row moved despite the UPDATE reporting no change',
+  );
+
+  const wrongPost = extendLink(FIXTURE_SLUG, EXTEND_PROBE_ID, NOW_SEC + 7200, { local: true });
+  check(
+    'extend: an id belonging to another post changes nothing',
+    wrongPost.length === 0,
+    `got ${JSON.stringify(wrongPost)} — extending is not scoped to the named post`,
+  );
+
+  const revoked = extendLink(OTHER_SLUG, EXTEND_REVOKED_ID, NOW_SEC + 7200, { local: true });
+  check(
+    'extend: a revoked link cannot be extended back to life',
+    revoked.length === 0,
+    `got ${JSON.stringify(revoked)} — revoking is supposed to be final`,
+  );
+} catch (err) {
+  console.error(`smoke: extendLink round-trip failed\n${err.message}`);
   process.exit(1);
 }
 
@@ -1053,12 +1139,30 @@ try {
     `got ${wrongSlug.status} — a signed token unlocked a post it was not minted for`,
   );
 
-  // An expired token must 404 the post exactly like no token at all.
+  // An expired token must 404 the post exactly like no token at all. This is
+  // the CEILING half — the exp inside the signature, which nothing can move.
   const expiredToken = await signPreviewToken(
     { slug: FIXTURE_SLUG, exp: Math.floor(Date.now() / 1000) - 60, linkId: EXPIRED_LINK_ID },
     PREVIEW_KEY);
   const expired = await fetch(`${BASE}/blog/${FIXTURE_SLUG}/?preview=${encodeURIComponent(expiredToken)}`);
   check('preview: expired token 404s the scheduled post', expired.status === 404, `got ${expired.status}`);
+
+  // The ROW half, and the one that actually decides when a link dies: the token
+  // below is signed, unexpired, and points at an un-revoked row whose own `exp`
+  // has passed. Since migrations/0002 that row is the effective expiry — the
+  // thing `just preview-extend` moves — and the token's exp is only the ceiling
+  // above it, deliberately far out. So if isLinkActive stops reading `exp`,
+  // every link quietly runs to its full 30-day ceiling instead of its stated
+  // window, and this is the only assertion anywhere that goes red.
+  const rowExpiredToken = await signPreviewToken(
+    { slug: FIXTURE_SLUG, exp: FAR_FUTURE_EXP, linkId: ROW_EXPIRED_LINK_ID }, PREVIEW_KEY);
+  const rowExpired = await fetch(`${BASE}/blog/${FIXTURE_SLUG}/?preview=${encodeURIComponent(rowExpiredToken)}`);
+  check(
+    'preview: an expired ROW 404s even with a valid token',
+    rowExpired.status === 404,
+    `got ${rowExpired.status} — the allowlist row's expiry is not being enforced, ` +
+      'so every link lives to its signed ceiling',
+  );
 
   // ── Galley matrix ──────────────────────────────────
   // Everything above tests a READ-ONLY preview link. A galley link grants

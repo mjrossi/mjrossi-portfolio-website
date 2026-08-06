@@ -28,7 +28,15 @@
 #   - `deploy` deliberately leaves MISE_ENV unset, so it picks up the real
 #     production PUBLIC_TURNSTILE_SITE_KEY from mise.toml's base [env].
 #
-# Groups: setup, dev, build, ops, assets, ci.
+# Groups: setup, dev, build, review, ops, assets, ci.
+#
+# `review` is the draft-review workflow and is kept apart from `ops` on
+# purpose: those recipes share one subject (an unpublished post and who may
+# see it), one required flag (--remote|--local, no default anywhere), and one
+# D1 database. `ops` is the unrelated remainder — secrets, deploys, and
+# cleaning up after a hard-killed smoke run. They had grown into one
+# fourteen-recipe list where the only way to tell a link command from a
+# deploy command was to read every doc string.
 
 set shell := ["bash", "-cu"]
 
@@ -78,16 +86,16 @@ build:
 smoke: build
     npm run smoke
 
-# ── ops ──────────────────────────────────────────────
-
-# wrangler secret put NAME — set a production Worker secret
-# usage: just secret BUTTONDOWN_API_KEY
-#        just secret TURNSTILE_SECRET_KEY
-#        just secret PREVIEW_SIGNING_KEY
-[group('ops')]
-[doc('wrangler secret put NAME — set a production Worker secret')]
-secret name:
-    npx wrangler secret put {{name}}
+# ── review ───────────────────────────────────────────
+#
+# Everything to do with showing an unpublished draft to somebody and getting
+# their notes back. All of it is scoped to one post, all of it requires an
+# explicit --remote or --local, and all of it reads or writes the same D1
+# database (`just galley-migrate`).
+#
+# One vocabulary for access: links are minted, listed, extended, and revoked
+# with the preview-* recipes whether or not they name a reviewer. The galley
+# owns the notes, not the letting-in — see CLAUDE.md, "The galley".
 
 # mint a signed, expiring link that reveals ONE scheduled post on its own
 # URL — not /blog, tag pages, or RSS (see CLAUDE.md "Previewing a scheduled
@@ -123,7 +131,7 @@ secret name:
 #        just preview-link my-draft --remote --reviewer jd
 #        just preview-link my-draft --remote --reviewer mr --hours 96
 #        just preview-link my-draft --local --host http://127.0.0.1:8788
-[group('ops')]
+[group('review')]
 [doc('mint a signed preview link for one scheduled post (--remote|--local); --reviewer LABEL to allow notes')]
 preview-link slug *flags:
     npm run preview-link -- {{slug}} {{flags}}
@@ -137,7 +145,7 @@ preview-link slug *flags:
 # wrong answer — see scripts/database-target.mjs.
 # usage: just preview-roster my-draft --remote
 #        just preview-roster my-draft --local
-[group('ops')]
+[group('review')]
 [doc('list the preview links outstanding for one post (--remote|--local)')]
 preview-roster slug *flags:
     npm run preview-roster -- {{slug}} {{flags}}
@@ -154,10 +162,29 @@ preview-roster slug *flags:
 # id can never withdraw another draft's link.
 # usage: just preview-roster-all --remote
 #        just preview-roster-all --local
-[group('ops')]
+[group('review')]
 [doc('list every preview link across all posts (--remote|--local)')]
 preview-roster-all *flags:
     npm run preview-roster -- --all {{flags}}
+
+# move a live link's expiry without minting a new one. THE URL DOES NOT CHANGE
+# — there is nothing to re-send, which is the whole point: before this, "give
+# them another two days" meant a second link, a second URL, and the first one
+# still live until it lapsed.
+#
+# --hours is a new window measured FROM NOW, not time added to what is left, so
+# this shortens as readily as it extends. A link can never be pushed past the
+# ceiling it was signed with when it was minted (30 days out); past that, mint a
+# fresh one. `just preview-roster` shows the ceiling as `extend to <date>`.
+#
+# --remote or --local is REQUIRED. Extending the wrong database reports success
+# while the link the reviewer holds goes on expiring.
+# usage: just preview-extend my-draft a1b2c3d4e5f60718 --remote
+#        just preview-extend my-draft a1b2c3d4e5f60718 --hours 96 --remote
+[group('review')]
+[doc('move the expiry of a live preview link — the URL is unchanged (--remote|--local)')]
+preview-extend slug id *flags:
+    npm run preview-extend -- {{slug}} {{id}} {{flags}}
 
 # revoke a preview link. Takes READING away as well as writing: middleware
 # refuses the whole grant, so the post 404s for that link. Rows are kept, so a
@@ -167,11 +194,15 @@ preview-roster-all *flags:
 # does nothing rather than withdrawing someone else's link. Reports what it
 # actually withdrew — "nothing to revoke" is a distinct outcome from success.
 #
+# Revoking is final: a revoked row cannot be extended back to life. If the link
+# is fine and only the window is short, `just preview-extend` is the gentler
+# instrument and leaves the reviewer's URL alone.
+#
 # --remote or --local is REQUIRED; revoking the wrong database leaves a live
 # link live while telling you it is gone.
 # usage: just preview-revoke my-draft a1b2c3d4e5f60718 --remote
 #        just preview-revoke my-draft --revoke-all --remote
-[group('ops')]
+[group('review')]
 [doc('revoke one preview link, or --revoke-all for a post (--remote|--local)')]
 preview-revoke slug id *flags:
     npm run preview-roster -- {{slug}} {{ if id == "--revoke-all" { "--revoke-all" } else { "--revoke " + id } }} {{flags}}
@@ -191,7 +222,7 @@ preview-revoke slug id *flags:
 # three lines up.
 # usage: just galley-migrate --local
 #        just galley-migrate --remote
-[group('ops')]
+[group('review')]
 [doc('apply migrations/ to the galley D1 database (--local or --remote)')]
 galley-migrate target:
     @case "{{target}}" in \
@@ -208,10 +239,25 @@ galley-migrate target:
 # a post that has them, which reads like the editors never wrote any.
 # usage: just galley my-draft --remote
 #        just galley my-draft --local
-[group('ops')]
+[group('review')]
 [doc('pull galley notes for one post into docs/galley/ (--remote|--local)')]
 galley slug *flags:
     npm run galley -- {{slug}} {{flags}}
+
+# ── ops ──────────────────────────────────────────────
+#
+# The unrelated remainder: secrets, deploys, and cleaning up after a smoke run
+# that was hard-killed. Anything to do with drafts and who may read them is in
+# `review` above.
+
+# wrangler secret put NAME — set a production Worker secret
+# usage: just secret BUTTONDOWN_API_KEY
+#        just secret TURNSTILE_SECRET_KEY
+#        just secret PREVIEW_SIGNING_KEY
+[group('ops')]
+[doc('wrangler secret put NAME — set a production Worker secret')]
+secret name:
+    npx wrangler secret put {{name}}
 
 # manual fallback — Cloudflare Workers Builds deploys automatically on
 # git push (see CLAUDE.md's Newsletter env table / dashboard build

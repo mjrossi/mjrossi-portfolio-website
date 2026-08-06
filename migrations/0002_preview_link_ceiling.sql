@@ -1,0 +1,36 @@
+-- Give every preview link a ceiling, so its expiry can be moved without
+-- reminting it.
+--
+-- Before this, `exp` was display-only: src/lib/preview-links.js read nothing but
+-- `revoked_at`, and the effective expiry lived inside the token's signature.
+-- That made "give the reviewer another two days" mean minting a second link and
+-- sending a second URL, because `exp` is part of the signed payload and cannot
+-- be edited in place.
+--
+-- Two clocks now, and the split is the whole point:
+--
+--   the token's exp  -- the CEILING. Signed, therefore immutable. The furthest
+--                       this link can EVER work, checked by verifyPreviewGrant.
+--   preview_links.exp -- the EFFECTIVE expiry. Mutable, checked by isLinkActive,
+--                       and what `just preview-extend` moves.
+--
+-- Extending is then one UPDATE and the URL in the reviewer's hands is unchanged.
+-- The ceiling is what stops that from becoming an indefinite grant.
+--
+-- Note that the worker does not need this column at all -- it enforces the
+-- ceiling from the token and the expiry from `exp`, both of which predate this
+-- migration. `max_exp` exists so the CLI can refuse an extension the worker
+-- would silently reject on arrival, which would otherwise look exactly like the
+-- feature being broken.
+
+-- Epoch SECONDS, like `exp` and like the token it mirrors.
+--
+-- NULL means a row minted before ceilings existed. Those links were signed with
+-- a token whose exp equalled this row's exp, so they have no headroom at all and
+-- cannot be extended -- which is both historically accurate and the fail-closed
+-- reading. scripts/links-db.mjs requires `max_exp IS NOT NULL` to extend.
+ALTER TABLE preview_links ADD COLUMN max_exp INTEGER;
+
+-- No index change. Every access to this table is by primary key (the worker's
+-- allowlist lookup, and extend) or through the existing (slug, created_at) index
+-- (the roster).

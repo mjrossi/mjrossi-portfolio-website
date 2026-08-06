@@ -25,6 +25,11 @@
 // Revoking sets revoked_at; rows are never deleted, so a withdrawn link stays
 // listed rather than vanishing. It removes READING as well as writing — the
 // post 404s for that link.
+//
+// A live link that is merely running short does not need revoking and reminting:
+// `just preview-extend <slug> <id> --hours N` moves its expiry in place, and the
+// URL the reviewer holds keeps working. The `extend to <date>` suffix on a row
+// below is how far that can go — see scripts/preview-extend.mjs.
 
 import { LINK_ID_RE, SLUG_RE } from '../src/lib/preview.js';
 import { chooseDatabase, databaseLabel } from './database-target.mjs';
@@ -149,6 +154,9 @@ try {
 
   /** One link, as a line. Shared so both modes render identically. */
   function format(row) {
+    // `expired` is no longer just a label: since migrations/0002 this is the
+    // expiry isLinkActive enforces, so a row reading expired here is a link
+    // already 404ing in the reviewer's browser.
     const state = row.revoked_at
       ? `revoked ${new Date(row.revoked_at).toISOString().slice(0, 10)}`
       : row.exp <= nowSec
@@ -158,7 +166,14 @@ try {
     // the column stays readable and "who holds this?" has a visible answer.
     const who = row.reviewer ?? '—';
     const expires = new Date(row.exp * 1000).toISOString().slice(0, 16).replace('T', ' ');
-    return `  ${row.id}  ${who.padEnd(14)}  expires ${expires}  ${state}`;
+    // Headroom, shown only where it is actionable. A revoked link cannot be
+    // extended at all, and a row minted before ceilings existed (max_exp NULL)
+    // has none -- in both cases the absence of this suffix is the answer.
+    const ceiling =
+      !row.revoked_at && row.max_exp != null && row.max_exp > row.exp
+        ? `  · extend to ${new Date(row.max_exp * 1000).toISOString().slice(0, 10)}`
+        : '';
+    return `  ${row.id}  ${who.padEnd(14)}  expires ${expires}  ${state}${ceiling}`;
   }
 
   if (all) {
@@ -177,13 +192,16 @@ try {
       console.log(format(row));
     }
     console.log('');
+    const target = useLocal ? '--local' : '--remote';
     console.error(`  ${rows.length} link(s) across posts, ${live} still live`);
-    console.error(`  revoke:  just preview-revoke <slug> <id> ${useLocal ? '--local' : '--remote'}\n`);
+    console.error(`  extend:  just preview-extend <slug> <id> --hours N ${target}`);
+    console.error(`  revoke:  just preview-revoke <slug> <id> ${target}\n`);
   } else {
     console.log(`Preview links — ${slug} (${where})\n`);
     for (const row of rows) console.log(format(row));
     console.log('');
     const target = useLocal ? '--local' : '--remote';
+    console.error(`  extend one:  just preview-extend ${slug} <id> --hours N ${target}`);
     console.error(`  revoke one:  just preview-revoke ${slug} <id> ${target}`);
     console.error(`  revoke all:  just preview-revoke ${slug} --revoke-all ${target}\n`);
   }

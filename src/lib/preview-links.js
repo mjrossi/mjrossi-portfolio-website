@@ -21,31 +21,57 @@
  *
  * Every preview token names a row in preview_links, and a link is only as good
  * as that row. Fails closed on every path -- no store, no id, a store that
- * throws, a query that rejects, a missing row, or a revoked one all return
- * false. There is deliberately no branch here where a failure widens access:
- * the worst outcome of a D1 problem is that preview links stop working, which
- * is recoverable and immediately visible, whereas the worst outcome of failing
- * open is an unpublished draft served to a link the operator believes they
- * revoked.
+ * throws, a query that rejects, a missing row, a revoked one, or one whose
+ * expiry has passed all return false. There is deliberately no branch here
+ * where a failure widens access: the worst outcome of a D1 problem is that
+ * preview links stop working, which is recoverable and immediately visible,
+ * whereas the worst outcome of failing open is an unpublished draft served to a
+ * link the operator believes they revoked.
+ *
+ * TWO conditions, because there are two clocks (see migrations/0002):
+ *
+ *   revoked_at IS NULL -- nobody has withdrawn it.
+ *   exp is in the future -- the EFFECTIVE expiry, which `just preview-extend`
+ *                           moves in place so a reviewer needing more time
+ *                           keeps the URL they already have.
+ *
+ * The token carries its own exp, checked by verifyPreviewGrant before this
+ * function is ever reached. That one is signed and therefore immutable: it is
+ * the CEILING an extension cannot pass, not the expiry. Both are enforced, so
+ * dropping either still leaves a link that expires -- but dropping this one
+ * silently promotes every link to its full ceiling, which is why smoke asserts
+ * a row-expired link 404s even with a perfectly valid token.
  *
  * A row is live only when `revoked_at` is exactly null. A column that came back
  * missing or undefined is treated as revoked -- unrecognised shapes resolve to
- * no grant, in the same direction as every other branch here.
+ * no grant, in the same direction as every other branch here. `exp` is read the
+ * same way: anything that is not a finite number is treated as expired.
  *
  * By primary key only. The slug is already inside the signed payload, so the
  * signature binds id↔slug and a second predicate here would add nothing.
  *
  * @param {{ prepare: (sql: string) => any } | null | undefined} DB
  * @param {string | null | undefined} id link id from the signed payload
+ * @param {number} [now] epoch MS; injectable so the boundary is testable
  * @returns {Promise<boolean>}
  */
-export async function isLinkActive(DB, id) {
+export async function isLinkActive(DB, id, now = Date.now()) {
   if (!DB || !id) return false;
   try {
-    const row = await DB.prepare('SELECT revoked_at FROM preview_links WHERE id = ?')
+    const row = await DB.prepare('SELECT revoked_at, exp FROM preview_links WHERE id = ?')
       .bind(id)
       .first();
-    return row != null && row.revoked_at === null;
+    if (row == null || row.revoked_at !== null) return false;
+    // `exp` is epoch SECONDS (like the token's, and unlike created_at/revoked_at
+    // in the same table -- each column matches the thing it mirrors). Number.isFinite
+    // rather than the global isFinite, so a string or NaN is rejected instead of
+    // coerced, and rather than a bare `> now` comparison, which would let
+    // undefined through as NaN-false only by accident.
+    //
+    // Exclusive, exactly as verifyPreviewGrant treats the token's own exp: a row
+    // whose exp is precisely now has expired. The two comparisons are written
+    // the same way on purpose.
+    return Number.isFinite(row.exp) && row.exp * 1000 > now;
   } catch {
     return false;
   }

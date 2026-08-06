@@ -1,8 +1,9 @@
 // The only file that knows the columns of preview_links.
 //
 // Four callers touch the allowlist -- preview-link.mjs records,
-// preview-roster.mjs lists and revokes, smoke.mjs seeds fixtures -- and
-// spreading one table's SQL across them would mean restating the column list
+// preview-roster.mjs lists and revokes, preview-extend.mjs moves an expiry, and
+// smoke.mjs seeds fixtures -- and spreading one table's SQL across them would
+// mean restating the column list
 // and the "this interpolation is safe" argument once per script. Here that
 // argument is made once and ENFORCED: every value reaching a statement below
 // has been shape-checked in this file, so no caller can weaken it by forgetting.
@@ -57,8 +58,15 @@ function reviewerLiteral(reviewer) {
  * Plural so a caller needing several rows pays one wrangler round-trip rather
  * than N -- which is what keeps smoke's fixture seeding cheap.
  *
+ * `maxExp` is the ceiling: the token's own exp, which is signed and therefore
+ * immutable, and the furthest extendLink can ever move `exp`. It DEFAULTS TO
+ * `exp`, i.e. no headroom -- a caller that forgets it mints a link that cannot
+ * be extended rather than one that can be extended past its signature, which is
+ * the fail-closed direction and matches how rows minted before migration 0002
+ * (max_exp NULL) already behave.
+ *
  * @param {{ id: string, slug: string, reviewer?: string | null, exp: number,
- *           revokedAt?: number | null }[]} rows
+ *           maxExp?: number, createdAt?: number, revokedAt?: number | null }[]} rows
  * @param {{ local?: boolean }} [opts]
  */
 export function recordLinks(rows, { local = false } = {}) {
@@ -70,13 +78,65 @@ export function recordLinks(rows, { local = false } = {}) {
     const id = checkLinkId(row.id);
     const slug = checkSlug(row.slug);
     const exp = checkInteger(row.exp, 'exp');
+    const maxExp = checkInteger(row.maxExp ?? exp, 'maxExp');
+    // A ceiling below the effective expiry is not a security hole -- the token
+    // check would refuse the difference anyway -- but it is a row that says
+    // something untrue, and the roster would report a link as live past the
+    // point its own signature stops verifying.
+    if (maxExp < exp) {
+      throw new Error(`links-db: maxExp ${maxExp} is earlier than exp ${exp} for link ${id}`);
+    }
     const createdAt = checkInteger(row.createdAt ?? now, 'createdAt');
     const revokedAt = row.revokedAt == null ? 'NULL' : checkInteger(row.revokedAt, 'revokedAt');
-    return `('${id}', '${slug}', ${reviewerLiteral(row.reviewer ?? null)}, ${exp}, ${createdAt}, ${revokedAt})`;
+    return (
+      `('${id}', '${slug}', ${reviewerLiteral(row.reviewer ?? null)}, ` +
+      `${exp}, ${maxExp}, ${createdAt}, ${revokedAt})`
+    );
   });
   d1Exec(
-    'INSERT INTO preview_links (id, slug, reviewer, exp, created_at, revoked_at) VALUES ' +
+    'INSERT INTO preview_links (id, slug, reviewer, exp, max_exp, created_at, revoked_at) VALUES ' +
       `${values.join(', ')}`,
+    { local },
+  );
+}
+
+/**
+ * Move a link's effective expiry, without touching the link itself.
+ *
+ * This is the whole of `just preview-extend`. The URL in the reviewer's hands
+ * is unchanged, because `exp` here is not the one inside the signature -- see
+ * migrations/0002 for the two clocks.
+ *
+ * THE CEILING IS ENFORCED IN THE STATEMENT, not by the caller. A read-then-write
+ * would be two round-trips with a window between them, and would put the one
+ * invariant that keeps an extendable link from becoming a permanent one in the
+ * script rather than in the module that owns the table. Same argument as the
+ * galley write quota being a single INSERT ... SELECT.
+ *
+ * `max_exp IS NOT NULL` excludes rows minted before ceilings existed: their
+ * tokens expire when their `exp` did, so extending one would produce a row
+ * claiming a life the signature will not honour.
+ *
+ * RETURNS THE ROW IT ACTUALLY CHANGED, empty when it changed nothing, for the
+ * same reason revokeLinks does: every refusal here (no such link, wrong post,
+ * revoked, past the ceiling, no ceiling at all) is otherwise indistinguishable
+ * from success. The caller is expected to look up why and say so.
+ *
+ * @param {string} slug
+ * @param {string} id
+ * @param {number} exp new effective expiry, epoch SECONDS
+ * @param {{ local?: boolean }} [opts]
+ * @returns {{ id: string, exp: number, max_exp: number }[]} one row, or none
+ */
+export function extendLink(slug, id, exp, { local = false } = {}) {
+  checkSlug(slug);
+  checkLinkId(id);
+  checkInteger(exp, 'exp');
+  return d1Query(
+    `UPDATE preview_links SET exp = ${exp} ` +
+      `WHERE slug = '${slug}' AND id = '${id}' AND revoked_at IS NULL ` +
+      `AND max_exp IS NOT NULL AND ${exp} <= max_exp ` +
+      'RETURNING id, exp, max_exp',
     { local },
   );
 }
@@ -143,19 +203,52 @@ export function clearLinks(slugs, { local = false } = {}) {
 
 // ── reads ────────────────────────────────────────────
 
+/** The column list every read below shares. */
+const COLUMNS = 'id, slug, reviewer, exp, max_exp, created_at, revoked_at';
+
+/**
+ * One link, by post and id.
+ *
+ * Exists to EXPLAIN A REFUSAL, never to gate one -- extendLink and revokeLinks
+ * both decide in their own statement, so nothing here is load-bearing and a
+ * stale read cannot widen anything. `just preview-extend` calls it only after
+ * an UPDATE has already changed nothing, to say which of the several silent
+ * reasons applied.
+ *
+ * Scoped by slug as well as id, like every other write in this file: an id
+ * belonging to another post reads as "no such link" rather than answering about
+ * a draft the operator did not name.
+ *
+ * @param {string} slug
+ * @param {string} id
+ * @param {{ local?: boolean }} [opts]
+ * @returns {{ id: string, slug: string, reviewer: string | null, exp: number,
+ *             max_exp: number | null, created_at: number,
+ *             revoked_at: number | null } | null}
+ */
+export function getLink(slug, id, { local = false } = {}) {
+  checkSlug(slug);
+  checkLinkId(id);
+  const rows = d1Query(
+    `SELECT ${COLUMNS} FROM preview_links WHERE slug = '${slug}' AND id = '${id}'`,
+    { local },
+  );
+  return rows[0] ?? null;
+}
+
 /**
  * Every link minted for one post, oldest first.
  *
  * @param {string} slug
  * @param {{ local?: boolean }} [opts]
  * @returns {{ id: string, slug: string, reviewer: string | null, exp: number,
- *             created_at: number, revoked_at: number | null }[]}
+ *             max_exp: number | null, created_at: number,
+ *             revoked_at: number | null }[]}
  */
 export function listLinks(slug, { local = false } = {}) {
   checkSlug(slug);
   return d1Query(
-    'SELECT id, slug, reviewer, exp, created_at, revoked_at FROM preview_links ' +
-      `WHERE slug = '${slug}' ORDER BY created_at ASC`,
+    `SELECT ${COLUMNS} FROM preview_links WHERE slug = '${slug}' ORDER BY created_at ASC`,
     { local },
   );
 }
@@ -173,12 +266,11 @@ export function listLinks(slug, { local = false } = {}) {
  *
  * @param {{ local?: boolean }} [opts]
  * @returns {{ id: string, slug: string, reviewer: string | null, exp: number,
- *             created_at: number, revoked_at: number | null }[]}
+ *             max_exp: number | null, created_at: number,
+ *             revoked_at: number | null }[]}
  */
 export function listAllLinks({ local = false } = {}) {
-  return d1Query(
-    'SELECT id, slug, reviewer, exp, created_at, revoked_at FROM preview_links ' +
-      'ORDER BY slug ASC, created_at ASC',
-    { local },
-  );
+  return d1Query(`SELECT ${COLUMNS} FROM preview_links ORDER BY slug ASC, created_at ASC`, {
+    local,
+  });
 }

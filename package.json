@@ -10,6 +10,7 @@
     "preview": "npm run build && wrangler dev --port 8788",
     "preview-link": "node scripts/preview-link.mjs",
     "preview-roster": "node scripts/preview-roster.mjs",
+    "preview-extend": "node scripts/preview-extend.mjs",
     "galley": "node scripts/galley-pull.mjs",
     "deploy": "npm run build && wrangler deploy"
   },

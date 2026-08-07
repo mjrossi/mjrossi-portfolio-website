@@ -1,6 +1,8 @@
 import type { APIRoute } from 'astro';
+import { getCollection } from 'astro:content';
 import { getEnv, jsonError, jsonOk, methodNotAllowed, parseJson, refuse } from '../../lib/server.ts';
 import { sha256Hex, validateNote } from '../../lib/galley.js';
+import { isPublished } from '../../lib/schedule.js';
 
 // Galley notes — inline editorial review on scheduled posts. See CLAUDE.md.
 //
@@ -13,6 +15,9 @@ import { sha256Hex, validateNote } from '../../lib/galley.js';
 // refuses to touch any other. It deliberately has no "list every post with
 // notes" mode, because the whole point of scoping signed links is that handing
 // someone a draft doesn't hand them the rest of the drafts.
+//
+// And a grant ends when the post does. Once pubDate has passed the draft is
+// public, the review round is over, and both methods refuse — see authorize().
 
 export const prerender = false;
 
@@ -59,13 +64,59 @@ const RATE_WINDOW_MS = 60 * 60 * 1000;
 // low enough that a flooded table can't turn every GET into a huge response.
 const MAX_NOTES_RETURNED = 500;
 
-/** The one authorisation gate. Returns the post and reviewer, or a Response. */
-function authorize(locals: App.Locals): { slug: string; reviewer: string } | Response {
+// When each post goes live, from the collection rather than from RAW_POSTS above.
+// The raw strings would need their frontmatter parsed here, in the worker, by
+// code that would have to reproduce YAML's rules exactly — and getting them
+// wrong by one time zone is the failure src/lib/pubdate.js exists to prevent.
+// The collection has already parsed and schema-validated every one of them.
+//
+// Memoised rather than computed at module scope: this is only ever needed on a
+// request that arrived with a valid preview token, which is rare, and it keeps
+// module initialisation synchronous.
+let pubDates: Map<string, Date> | null = null;
+async function publicationOf(slug: string): Promise<Date | undefined> {
+  if (pubDates === null) {
+    pubDates = new Map((await getCollection('blog')).map((post) => [post.id, post.data.pubDate]));
+  }
+  return pubDates.get(slug);
+}
+
+/**
+ * The one authorisation gate. Returns the post and reviewer, or a Response.
+ *
+ * PUBLICATION ENDS A GRANT. A galley link exists to collect corrections on a
+ * draft; once the post is public there is nothing left to correct in private,
+ * and notes filed against it would arrive in a review round that closed. Minting
+ * already caps a link's expiry at pubDate, so a link normally expires as its post
+ * goes live and never reaches here — but that cap is a snapshot taken at mint
+ * time, and moving pubDate EARLIER afterwards is what the authoring workflow does
+ * at step 5. This is the check that holds in that case.
+ *
+ * Enforced HERE and not only in BlogPost.astro's render condition, because that
+ * one governs whether the margin is drawn and this one governs whether a note can
+ * be written. A client that keeps posting after the chrome disappears — or one
+ * driven by hand — has to meet the same rule.
+ *
+ * A slug the collection does not know falls THROUGH this check rather than being
+ * refused here, and that is deliberate. Publication can only end a grant for a
+ * post that exists, and refusing early would answer "unknown post" to the
+ * cross-slug case — a valid token for another draft — which is refused a few
+ * lines further down for the reason that actually matters. Nothing is widened:
+ * a POST still has to match `note.slug` and then find the post in
+ * SOURCE_BY_SLUG, and a GET for a slug with no post finds no notes.
+ */
+async function authorize(
+  locals: App.Locals,
+): Promise<{ slug: string; reviewer: string } | Response> {
   const slug = locals.previewSlug;
   const reviewer = locals.previewReviewer;
   // Deliberately checks for truthiness rather than `!== null`: middleware
   // leaves these undefined when it hasn't run, and undefined must mean denied.
   if (!slug || !reviewer) return jsonError(403, 'not_authorised');
+
+  const pubDate = await publicationOf(slug);
+  if (pubDate !== undefined && isPublished(pubDate)) return jsonError(403, 'post_published');
+
   return { slug, reviewer };
 }
 
@@ -88,7 +139,7 @@ function dbError(err: unknown): Response {
 }
 
 export const GET: APIRoute = async ({ locals }) => {
-  const grant = authorize(locals);
+  const grant = await authorize(locals);
   if (grant instanceof Response) return grant;
 
   const DB = db();
@@ -134,7 +185,7 @@ export const GET: APIRoute = async ({ locals }) => {
 // hop is left holding a stream nobody drains until the dev server falls over.
 // This is the path that gets hit — a revoked link's client keeps posting.
 export const POST: APIRoute = async ({ locals, request }) => {
-  const grant = authorize(locals);
+  const grant = await authorize(locals);
   if (grant instanceof Response) return refuse(request, grant);
 
   const DB = db();

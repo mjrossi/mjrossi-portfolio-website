@@ -1,0 +1,40 @@
+-- Give every preview link a ceiling, so its expiry can be moved without
+-- reminting it.
+--
+-- Before this, `exp` was display-only: src/lib/preview-links.js read nothing but
+-- `revoked_at`, and the effective expiry lived inside the token's signature.
+-- That made "give the reviewer another two days" mean minting a second link and
+-- sending a second URL, because `exp` is part of the signed payload and cannot
+-- be edited in place.
+--
+-- ONE CLOCK, AND A CAP THE SIGNATURE ENFORCES:
+--
+--   preview_links.exp -- THE CLOCK. The expiry every request is judged against,
+--                        checked by isLinkActive, and the thing
+--                        `just preview-extend` moves.
+--   the token's exp   -- THE CAP. Signed, therefore immutable, and therefore
+--                        unreachable from the CLI: the furthest that clock can
+--                        ever be wound.
+--
+-- Extending is then one UPDATE and the URL in the reviewer's hands is unchanged.
+-- The cap is what stops that from becoming an indefinite grant.
+--
+-- Note that the worker does not need this column at all -- it enforces the cap
+-- from the token and the expiry from `exp`, both of which predate this
+-- migration. `max_exp` exists so the CLI can refuse an extension the worker
+-- would silently reject on arrival, which would otherwise look exactly like the
+-- feature being broken.
+
+-- Epoch SECONDS, like `exp` and like the token it mirrors.
+--
+-- NOT NULL, so there is no "row without a cap" state for anything above this
+-- line to reason about. DEFAULT 0 is required to add a NOT NULL column to an
+-- existing table at all, and it is also the fail-closed value: a row that
+-- somehow arrives without an explicit ceiling gets one already in the past, so
+-- `exp <= max_exp` is false and extendLink refuses to move it rather than
+-- moving it past a signature that will never honour the result.
+ALTER TABLE preview_links ADD COLUMN max_exp INTEGER NOT NULL DEFAULT 0;
+
+-- No index change. Every access to this table is by primary key (the worker's
+-- allowlist lookup, and extend) or through the existing (slug, created_at) index
+-- (the roster).

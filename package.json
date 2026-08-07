@@ -10,6 +10,7 @@
     "preview": "npm run build && wrangler dev --port 8788",
     "preview-link": "node scripts/preview-link.mjs",
     "preview-roster": "node scripts/preview-roster.mjs",
+    "preview-extend": "node scripts/preview-extend.mjs",
     "galley": "node scripts/galley-pull.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
@@ -19,7 +20,8 @@
     "@astrojs/mdx": "^7.0.5",
     "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.3",
-    "astro": "^7.1.6"
+    "astro": "^7.1.6",
+    "js-yaml": "4.3.0"
   },
   "devDependencies": {
     "wrangler": "4.118.0"

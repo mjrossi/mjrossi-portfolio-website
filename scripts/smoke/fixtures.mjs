@@ -373,9 +373,13 @@ export function checkCloseRoundTrip() {
     reopenNote(FIXTURE_SLUG, target, LOCAL) === false,
     'reopen cannot distinguish "put back" from "was never closed"',
   );
+  // One read for both of the assertions below: nothing mutates the table
+  // between them, and every listNotes is a fresh `npx wrangler` spawn on the
+  // pre-launch path of every smoke run.
+  const openIds = listNotes(FIXTURE_SLUG, {}, LOCAL).map((note) => note.id);
   check(
     'reopen: restored the note to the open set',
-    listNotes(FIXTURE_SLUG, {}, LOCAL).some((note) => note.id === target),
+    openIds.includes(target),
     'the live galley assertions below now run against a fixture that is not there',
   );
 
@@ -383,7 +387,7 @@ export function checkCloseRoundTrip() {
   // matrix reads it as the "addressed" case.
   check(
     'close: the closed fixture is still closed',
-    !listNotes(FIXTURE_SLUG, {}, LOCAL).some((note) => note.id === NOTES.closed.id),
+    !openIds.includes(NOTES.closed.id),
     'the closed-round fixture leaked back into the open set',
   );
 }

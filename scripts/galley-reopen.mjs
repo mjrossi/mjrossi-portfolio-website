@@ -16,7 +16,7 @@
 
 import { SLUG_RE } from '../src/lib/preview.js';
 import { resolvePostSource } from './content.mjs';
-import { chooseDatabase, databaseLabel } from './database-target.mjs';
+import { chooseDatabase, databaseFlag, databaseLabel } from './database-target.mjs';
 import { NOTE_ID_RE, listNotes, reopenNote } from './notes-db.mjs';
 
 function die(message) {
@@ -94,4 +94,4 @@ if (!changed) {
 }
 
 console.error(`galley-reopen: note ${noteId} re-opened on ${slug} (${where})`);
-console.error(`               it is back in \`just galley ${slug} ${useLocal ? '--local' : '--remote'}\` and in the reviewer's margin\n`);
+console.error(`               it is back in \`just galley ${slug} ${databaseFlag(useLocal)}\` and in the reviewer's margin\n`);

@@ -160,13 +160,22 @@ const { slug, reviewer, revision } = Astro.props;
     border-top: 0;
   }
 
-  .galley-note-meta {
-    margin: 0 0 0.3rem;
+  /* The small-caps meta label, wherever one appears in the margin: above a note,
+     on the addressed disclosure, above a suggestion. One rule so the three
+     cannot drift a hairline apart. Only the margins differ, below. */
+  .galley-note-meta,
+  .galley-addressed-summary,
+  .galley-note-sublabel,
+  .galley-composer-sublabel {
     font-family: var(--font-ui);
     font-size: 0.72rem;
     color: var(--muted);
     font-variant-caps: all-small-caps;
     letter-spacing: 0.06em;
+  }
+
+  .galley-note-meta {
+    margin: 0 0 0.3rem;
   }
 
   .galley-note-reviewer {
@@ -191,11 +200,6 @@ const { slug, reviewer, revision } = Astro.props;
   }
 
   .galley-addressed-summary {
-    font-family: var(--font-ui);
-    font-size: 0.72rem;
-    color: var(--muted);
-    font-variant-caps: all-small-caps;
-    letter-spacing: 0.06em;
     cursor: pointer;
   }
 
@@ -228,11 +232,6 @@ const { slug, reviewer, revision } = Astro.props;
   .galley-note-sublabel,
   .galley-composer-sublabel {
     margin: 0.6rem 0 0.25rem;
-    font-family: var(--font-ui);
-    font-size: 0.72rem;
-    color: var(--muted);
-    font-variant-caps: all-small-caps;
-    letter-spacing: 0.06em;
   }
 
   .galley-note-suggestion {

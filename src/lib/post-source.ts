@@ -40,8 +40,12 @@ const RAW_POSTS = import.meta.glob('/src/content/blog/**/*.mdx', {
  * Mirrors how Astro's content collection derives an entry id from its path, so a
  * slug that reaches here from a signed grant (which carries a collection id)
  * finds the file it names.
+ *
+ * NOT exported: `revisionOf` below is the only thing either caller needs, and
+ * handing out a map of every post's entire raw source is standing API surface
+ * for a caller this module exists to make unnecessary.
  */
-export const SOURCE_BY_SLUG = new Map<string, string>(
+const SOURCE_BY_SLUG = new Map<string, string>(
   Object.entries(RAW_POSTS).map(([path, raw]) => {
     const rel = path.replace('/src/content/blog/', '').replace(/\.mdx$/, '');
     return [rel.endsWith('/index') ? rel.slice(0, -'/index'.length) : rel, raw];
@@ -61,9 +65,23 @@ export const SOURCE_BY_SLUG = new Map<string, string>(
  * has no way to know the file's bytes, and a note that misreported which
  * revision it was written against would defeat the drift warning it exists to
  * raise. What the client sends is only ever compared against this, never stored.
+ *
+ * Memoised, because the sources are build-time constants inlined into the
+ * bundle: a slug's hash cannot change for the life of an isolate, and this is
+ * called on every review render, on every GET (which the margin now issues on
+ * each tab focus), and on every POST. The PROMISE is cached rather than the
+ * string, so concurrent callers share one digest instead of racing to compute
+ * the same one.
  */
-export async function revisionOf(slug: string): Promise<string | undefined> {
+const REVISIONS = new Map<string, Promise<string>>();
+
+export function revisionOf(slug: string): Promise<string | undefined> {
   const source = SOURCE_BY_SLUG.get(slug);
-  if (source === undefined) return undefined;
-  return sha256Hex(source);
+  if (source === undefined) return Promise.resolve(undefined);
+  let hash = REVISIONS.get(slug);
+  if (hash === undefined) {
+    hash = sha256Hex(source);
+    REVISIONS.set(slug, hash);
+  }
+  return hash;
 }

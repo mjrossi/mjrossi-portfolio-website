@@ -1,4 +1,13 @@
-// Reading a pulled review file back as a manifest of note ids.
+// The format of a pulled review file: where it lives, what a note's meta line
+// looks like, and how to read the ids back out of it.
+//
+// BOTH SIDES LIVE HERE ON PURPOSE. scripts/galley-pull.mjs writes the file and
+// this module reads it back, and the two used to state the shape independently —
+// a template literal on one side, a regex written from memory of it on the
+// other. Anything appended after the id would then make the scan miss those
+// notes, and `galley-close` would close a subset while reporting the remainder
+// as "filed after that pull", naming a reviewer who filed nothing. Silently.
+// So the emitter is exported and the scan is written against it.
 //
 // `just galley-close` closes exactly the notes listed in docs/galley/<slug>.md.
 // That set — rather than "every note written against a revision I have since
@@ -23,11 +32,44 @@
  */
 export const NOTE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-// The meta line scripts/galley-pull.mjs writes above every note:
-//
-//   **jd** · comment · 2026-05-10 · `1f0c…`
-//   **jd** · suggestion · 2026-05-10 · now line 88 · `1f0c…`
-//
+/**
+ * Where `just galley` writes a pulled round, and where `just galley-close`
+ * reads it back from. One definition, because that path is the entire handshake
+ * between the two commands: move it in the writer alone and the close does not
+ * fail on the wrong file, it fails on a MISSING one — "pull the round first",
+ * pointing the operator at the command they just successfully ran.
+ *
+ * @param {string} slug
+ * @returns {string} a repo-relative path
+ */
+export function galleyFile(slug) {
+  return `docs/galley/${slug}.md`;
+}
+
+/**
+ * The meta line above every note in a pulled file, and the only line
+ * noteIdsInMarkdown reads an id from:
+ *
+ *   **jd** · comment · 2026-05-10 · `1f0c…`
+ *   **jd** · suggestion · 2026-05-10 · now line 88 · `1f0c…`
+ *   **jd** · comment · 2026-04-02 · closed 2026-04-09 · `1f0c…`
+ *
+ * THE ID GOES LAST, and the scan below is anchored to that. `detail` is the one
+ * place a caller may add anything — a relocation for an open note, a closure
+ * date for a closed one — so a new field cannot be appended past the id where
+ * the scan would stop seeing it.
+ *
+ * @param {{ reviewer: string, kind: string, when: string,
+ *           detail?: string | null, id: string }} note
+ * @returns {string}
+ */
+export function noteMetaLine({ reviewer, kind, when, detail = null, id }) {
+  const parts = [`**${reviewer}**`, kind, when];
+  if (detail) parts.push(detail);
+  parts.push(`\`${id}\``);
+  return parts.join(' · ');
+}
+
 // Anchored at BOTH ends — starts with the bold reviewer label, ends with the
 // backticked id — because the alternative is what this replaced: scanning the
 // whole document for a backticked UUID.
@@ -47,12 +89,14 @@ const META_LINE_RE = /^\*\*[^*]+\*\*.*·\s*`([0-9a-f-]{36})`$/;
 // the close rule in noteIdsInMarkdown.
 const FENCE_RE = /^\s*(`{3,}|~{3,})/;
 
-// The appendix `just galley <slug> --all` writes. Matched per line rather than
-// with a `split(/^## Closed notes$/m)` over the whole document, because a
-// reviewer's suggestion is emitted verbatim inside a fence and can contain that
-// exact line — which would cut the manifest short and leave every note after it
-// open while the operator was told they were "filed after that pull".
-const APPENDIX_RE = /^## Closed notes$/;
+/**
+ * The heading `just galley <slug> --all` writes above the closed-round
+ * appendix, and the line the scan below stops at. Exported so galley-pull.mjs
+ * emits this exact string rather than a second copy of it: rename it in the
+ * writer alone and the cut stops firing, closed ids re-enter the manifest, and
+ * the close reports "lists 14 note(s) … 6 closed" with nothing saying why.
+ */
+export const CLOSED_HEADING = '## Closed notes';
 
 /**
  * Every note id a pulled review file lists, in order, deduplicated.
@@ -98,10 +142,11 @@ export function noteIdsInMarkdown(text) {
     // with closed_at IS NULL — but it would report "lists 14 notes, closed 6"
     // and leave the operator wondering what happened to the other eight.
     //
-    // Inside the loop, so it is reached only OUTSIDE a fence: a suggestion whose
-    // replacement text renames a section to `## Closed notes` cut the manifest
-    // short when this was a split over the raw document.
-    if (APPENDIX_RE.test(line)) break;
+    // Compared per line, and inside the loop so it is reached only OUTSIDE a
+    // fence: a suggestion whose replacement text renames a section to the
+    // heading cut the manifest short when this was a split over the raw
+    // document.
+    if (line === CLOSED_HEADING) break;
     const meta = META_LINE_RE.exec(line.trimEnd());
     if (!meta) continue;
     // Belt and braces: META_LINE_RE's 36-character class admits hyphens

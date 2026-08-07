@@ -33,10 +33,11 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { CLOSED_HEADING, galleyFile, noteMetaLine } from '../src/lib/galley-manifest.js';
 import { createLocator, pushFenced, pushQuoted } from '../src/lib/galley-relocate.js';
 import { SLUG_RE } from '../src/lib/preview.js';
 import { resolvePostSource } from './content.mjs';
-import { chooseDatabase, databaseLabel } from './database-target.mjs';
+import { chooseDatabase, databaseFlag, databaseLabel } from './database-target.mjs';
 import { listNotes } from './notes-db.mjs';
 
 function die(message) {
@@ -200,6 +201,43 @@ lines.push('');
 lines.push('---');
 lines.push('');
 
+/**
+ * A note's own content: what the reviewer quoted, wrote, and proposed.
+ *
+ * Shared by the open-note loop and the closed appendix, which emit exactly this
+ * and differ only in their heading and meta line. EVERY reviewer-authored string
+ * goes through pushQuoted or pushFenced — prefix/suffix are stored verbatim and
+ * newlines survive them, so interpolating any of it raw would let a note forge a
+ * `##` heading in a document whose headings are how notes get attributed to
+ * passages. Keeping that rule in one function is the point of the function.
+ *
+ * @param {string[]} lines
+ * @param {Record<string, unknown>} note
+ * @param {string | null} hint context to print under the quote, already built
+ */
+function pushNoteContent(lines, note, hint = null) {
+  if (note.quote) {
+    pushQuoted(lines, note.quote);
+    lines.push('');
+    if (hint) {
+      lines.push('Context when written:');
+      lines.push('');
+      pushQuoted(lines, `…${hint}…`);
+      lines.push('');
+    }
+  }
+  if (note.body) {
+    pushQuoted(lines, note.body);
+    lines.push('');
+  }
+  if (note.suggestion) {
+    lines.push('Suggested replacement:');
+    lines.push('');
+    pushFenced(lines, note.suggestion, 'md');
+    lines.push('');
+  }
+}
+
 // Group by anchor so several notes on the same passage read together, with
 // unanchored whole-draft notes last.
 const groups = new Map();
@@ -267,49 +305,30 @@ for (const [key, notes] of ordered) {
   lines.push('');
 
   for (const note of notes) {
-    const when = new Date(note.created_at).toISOString().slice(0, 10);
-    let meta = `**${note.reviewer}** · ${note.kind} · ${when}`;
-    // Per-note relocation, for the case the heading could not claim one: the
-    // notes in this group resolve to different lines, so each says where its
-    // own passage went.
-    if (key !== 'general' && !current && note.currentLine) meta += ` · now line ${note.currentLine}`;
-    // The id, in backticks, is what makes this file a manifest -- notes-db.mjs
-    // scans for exactly this shape. Last on the line because it is for the close
-    // command, not for the person reading the note.
-    meta += ` · \`${note.id}\``;
-    lines.push(meta);
+    // The id, in backticks and last on the line, is what makes this file a
+    // manifest -- noteMetaLine and the scan that reads it back are both in
+    // src/lib/galley-manifest.js, so the writer cannot drift from the reader.
+    lines.push(
+      noteMetaLine({
+        reviewer: note.reviewer,
+        kind: note.kind,
+        when: new Date(note.created_at).toISOString().slice(0, 10),
+        // Per-note relocation, for the case the heading could not claim one:
+        // the notes in this group resolve to different lines, so each says
+        // where its own passage went.
+        detail:
+          key !== 'general' && !current && note.currentLine
+            ? `now line ${note.currentLine}`
+            : null,
+        id: note.id,
+      }),
+    );
     lines.push('');
-    if (note.quote) {
-      pushQuoted(lines, note.quote);
-      lines.push('');
-      // Nothing else in this file can point at the passage, so hand over the
-      // context the note was written against. This is the case prefix/suffix
-      // were recorded for and that locate() could not resolve on its own.
-      if (key !== 'general' && !note.currentLine) {
-        const hint = contextHint(note);
-        if (hint) {
-          // Blockquoted like every other reviewer-authored string in this file.
-          // prefix/suffix are stored verbatim and `clean()` only trims the ends,
-          // so newlines survive — interpolating this raw would let a note forge
-          // a `##` heading in a document whose headings are how notes get
-          // attributed to passages.
-          lines.push('Context when written:');
-          lines.push('');
-          pushQuoted(lines, `…${hint}…`);
-          lines.push('');
-        }
-      }
-    }
-    if (note.body) {
-      pushQuoted(lines, note.body);
-      lines.push('');
-    }
-    if (note.suggestion) {
-      lines.push('Suggested replacement:');
-      lines.push('');
-      pushFenced(lines, note.suggestion, 'md');
-      lines.push('');
-    }
+    // Nothing else in this file can point at the passage, so hand over the
+    // context the note was written against. This is the case prefix/suffix were
+    // recorded for and that locate() could not resolve on its own.
+    const hint = key !== 'general' && !note.currentLine ? contextHint(note) : null;
+    pushNoteContent(lines, note, hint);
   }
   lines.push('---');
   lines.push('');
@@ -322,7 +341,9 @@ for (const [key, notes] of ordered) {
 // has already been dealt with; what is wanted here is the record of what was
 // said and when it was retired, not a pointer into the current draft.
 if (closedRows.length > 0) {
-  lines.push('## Closed notes');
+  // The exact string noteIdsInMarkdown stops at, imported rather than retyped:
+  // a rename here alone would let closed ids back into the manifest.
+  lines.push(CLOSED_HEADING);
   lines.push('');
   lines.push(
     `${closedRows.length} note(s) from round(s) already applied or declined. ` +
@@ -330,24 +351,19 @@ if (closedRows.length > 0) {
   );
   lines.push('');
   for (const note of closedRows) {
-    const when = new Date(note.created_at).toISOString().slice(0, 10);
-    const closed = new Date(note.closed_at).toISOString().slice(0, 10);
-    lines.push(`**${note.reviewer}** · ${note.kind} · ${when} · closed ${closed} · \`${note.id}\``);
+    lines.push(
+      noteMetaLine({
+        reviewer: note.reviewer,
+        kind: note.kind,
+        when: new Date(note.created_at).toISOString().slice(0, 10),
+        detail: `closed ${new Date(note.closed_at).toISOString().slice(0, 10)}`,
+        id: note.id,
+      }),
+    );
     lines.push('');
-    if (note.quote) {
-      pushQuoted(lines, note.quote);
-      lines.push('');
-    }
-    if (note.body) {
-      pushQuoted(lines, note.body);
-      lines.push('');
-    }
-    if (note.suggestion) {
-      lines.push('Suggested replacement:');
-      lines.push('');
-      pushFenced(lines, note.suggestion, 'md');
-      lines.push('');
-    }
+    // No context hint: these notes are not being relocated, so there is nothing
+    // to point the author at.
+    pushNoteContent(lines, note);
   }
   lines.push('---');
   lines.push('');
@@ -358,7 +374,7 @@ const markdown = `${lines.join('\n').trimEnd()}\n`;
 if (out === '-') {
   process.stdout.write(markdown);
 } else {
-  const target = resolve(out ?? `docs/galley/${slug}.md`);
+  const target = resolve(out ?? galleyFile(slug));
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, markdown);
   console.log(target.replace(`${process.cwd()}/`, ''));
@@ -372,6 +388,6 @@ if (out === '-') {
   // close run now would retire notes whose fixes are not in the file yet.
   console.error(
     `\n  Applied them? Merge the revision first, then:\n` +
-      `    just galley-close ${slug} ${useLocal ? '--local' : '--remote'}\n`,
+      `    just galley-close ${slug} ${databaseFlag(useLocal)}\n`,
   );
 }

@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isPublished } from '../../src/lib/schedule.js';
-import { CONTENT_DIR, readPubDate } from '../content.mjs';
+import { CONTENT_DIR, readPubDate, resolvePostSource } from '../content.mjs';
 import { readDevVar } from '../dev-vars.mjs';
 
 export const DIST = resolve('dist/client');
@@ -69,8 +69,14 @@ export const SMOKE_REVIEWER_TWO = 'smoke-reviewer-2';
 // Recomputed from disk on every run rather than pinned, because the fixture post
 // is an ordinary file that may be edited. Pinning it would turn any edit to that
 // post into a confusing galley failure.
+//
+// The HASH is deliberately an independent spelling of what post-source.ts does —
+// that is the whole assertion. WHERE the file lives is not: resolvePostSource is
+// the one probe that knows a post is `<slug>.mdx` or `<slug>/index.mdx`, and
+// hand-rolling the first form here would throw at import time, before a single
+// assertion ran, the day the fixture gains a colocated image.
 export const FIXTURE_REVISION = createHash('sha256')
-  .update(readFileSync(resolve(CONTENT_DIR, `${FIXTURE_SLUG}.mdx`), 'utf8'), 'utf8')
+  .update(readFileSync(resolvePostSource(FIXTURE_SLUG), 'utf8'), 'utf8')
   .digest('hex');
 
 // Deliberately not a hash of anything. Stands for "written against a revision

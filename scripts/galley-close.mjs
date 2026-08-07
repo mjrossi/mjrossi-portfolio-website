@@ -28,9 +28,10 @@
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { galleyFile } from '../src/lib/galley-manifest.js';
 import { SLUG_RE } from '../src/lib/preview.js';
 import { resolvePostSource } from './content.mjs';
-import { chooseDatabase, databaseLabel } from './database-target.mjs';
+import { chooseDatabase, databaseFlag, databaseLabel } from './database-target.mjs';
 import { NOTE_ID_RE, closeNotes, listNotes, noteIdsInFile } from './notes-db.mjs';
 
 function die(message) {
@@ -90,26 +91,34 @@ try {
 if (!resolvePostSource(slug)) die(`no post found for slug ${JSON.stringify(slug)}`);
 
 const where = databaseLabel(useLocal);
+const flag = databaseFlag(useLocal);
 
 // ── which notes ──────────────────────────────────────
 
+// `manifest` is BOTH the file read and the mode: null means --note, i.e. one
+// named note and no round. Everything below discriminates on it alone, so the
+// two can never be asked separately and answer differently.
 let ids;
 let manifest = null;
+let shown = null;
 if (noteId !== null) {
   ids = [noteId];
 } else {
-  manifest = resolve(from ?? `docs/galley/${slug}.md`);
+  manifest = resolve(from ?? galleyFile(slug));
+  // What the operator would type, rather than the absolute path resolve() gave
+  // us — every message below names the file.
+  shown = manifest.replace(`${process.cwd()}/`, '');
   if (!existsSync(manifest)) {
     die(
-      `no ${manifest.replace(`${process.cwd()}/`, '')} — pull the round first:\n` +
-        `    just galley ${slug} ${useLocal ? '--local' : '--remote'}\n` +
+      `no ${shown} — pull the round first:\n` +
+        `    just galley ${slug} ${flag}\n` +
         '  (or close a single note with --note <id>)',
     );
   }
   ids = noteIdsInFile(manifest);
   if (ids.length === 0) {
     die(
-      `${manifest.replace(`${process.cwd()}/`, '')} lists no note ids.\n` +
+      `${shown} lists no note ids.\n` +
         '  Files pulled before note ids were printed have none — re-pull to refresh it.',
     );
   }
@@ -129,9 +138,7 @@ try {
 }
 
 if (manifest) {
-  console.error(
-    `galley-close: ${manifest.replace(`${process.cwd()}/`, '')} lists ${ids.length} note(s)`,
-  );
+  console.error(`galley-close: ${shown} lists ${ids.length} note(s)`);
 }
 console.error(`              ${closed.length} closed  (${where})`);
 
@@ -140,9 +147,9 @@ console.error(`              ${closed.length} closed  (${where})`);
 // so say when nothing happened rather than reporting a successful close.
 if (closed.length === 0) {
   console.error(
-    noteId !== null
-      ? '              nothing changed — that note is already closed, or belongs to another post'
-      : '              nothing changed — this round was already closed',
+    manifest
+      ? '              nothing changed — this round was already closed'
+      : '              nothing changed — that note is already closed, or belongs to another post',
   );
 }
 
@@ -169,11 +176,8 @@ if (stillOpen.length > 0) {
       : `\n              ${stillOpen.length} note(s) still open on ${slug} — ${who}`,
   );
   console.error(
-    manifest
-      ? `              pull again before closing another round:\n` +
-          `                just galley ${slug} ${useLocal ? '--local' : '--remote'}\n`
-      : `              read them with:\n` +
-          `                just galley ${slug} ${useLocal ? '--local' : '--remote'}\n`,
+    `              ${manifest ? 'pull again before closing another round:' : 'read them with:'}\n` +
+      `                just galley ${slug} ${flag}\n`,
   );
 } else {
   console.error('');

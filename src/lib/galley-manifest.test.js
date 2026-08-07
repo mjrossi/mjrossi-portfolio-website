@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { NOTE_ID_RE, noteIdsInMarkdown } from './galley-manifest.js';
+import { CLOSED_HEADING, NOTE_ID_RE, noteIdsInMarkdown, noteMetaLine } from './galley-manifest.js';
 import { pushFenced, pushQuoted } from './galley-relocate.js';
 
 // The ids scripts/galley-pull.mjs would print. Fixed rather than randomUUID()'d
@@ -9,9 +9,12 @@ const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
 const C = '33333333-3333-4333-8333-333333333333';
 
-/** The meta line galley-pull.mjs emits above a note. */
-function meta(id, { reviewer = 'jd', kind = 'comment', relocated = false } = {}) {
-  return `**${reviewer}** · ${kind} · 2026-05-10${relocated ? ' · now line 88' : ''} · \`${id}\``;
+// The REAL emitter, not a copy of it. These tests exist to prove the scan reads
+// what galley-pull.mjs writes, and a local template literal here would only
+// prove it reads what this file writes — the two could drift apart and every
+// test would stay green while `just galley-close` silently closed a subset.
+function meta(id, { reviewer = 'jd', kind = 'comment', detail = null } = {}) {
+  return noteMetaLine({ reviewer, kind, when: '2026-05-10', detail, id });
 }
 
 test('finds the id on a note meta line', () => {
@@ -24,7 +27,7 @@ test('finds ids across several notes, in document order', () => {
 });
 
 test('reads the meta line galley-pull writes for a relocated note', () => {
-  assert.deepEqual(noteIdsInMarkdown(meta(A, { kind: 'suggestion', relocated: true })), [A]);
+  assert.deepEqual(noteIdsInMarkdown(meta(A, { kind: 'suggestion', detail: 'now line 88' })), [A]);
 });
 
 test('deduplicates a repeated id', () => {
@@ -104,17 +107,22 @@ test('an unbalanced fence cannot make a forged meta line inside a suggestion clo
 // manifest — the safe direction, but it reported the remainder as notes somebody
 // filed after the pull.
 test('a suggestion containing the appendix heading does not truncate the manifest', () => {
-  assert.deepEqual(noteIdsInMarkdown(fileWithSuggestion('Rename the section to:\n## Closed notes\n')), [A, B]);
+  assert.deepEqual(
+    noteIdsInMarkdown(fileWithSuggestion(`Rename the section to:\n${CLOSED_HEADING}\n`)),
+    [A, B],
+  );
 });
 
 // The appendix `just galley <slug> --all` writes. Those notes are already
 // closed; scanning them is harmless in SQL but makes the command report
 // "lists 14, closed 6" and leaves the operator hunting the other eight.
 test('stops at the closed-notes appendix', () => {
+  // The appendix's own meta line comes from the same emitter — it is a real
+  // note line in every respect, and only the heading above it keeps it out.
   const file = [
     '## Line 42-47', '', meta(A), '',
-    '## Closed notes', '',
-    `**jd** · comment · 2026-04-02 · closed 2026-04-09 · \`${B}\``,
+    CLOSED_HEADING, '',
+    meta(B, { detail: 'closed 2026-04-09' }),
   ].join('\n');
   assert.deepEqual(noteIdsInMarkdown(file), [A]);
 });

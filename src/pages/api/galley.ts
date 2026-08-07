@@ -149,12 +149,16 @@ export const GET: APIRoute = async ({ locals }) => {
   //
   // `revision_hash` is selected but never returned — it is folded into `stale`
   // below. The client has no use for the hash itself, and shipping it would only
-  // invite a reader to believe it meant something they could act on.
+  // invite a reader to believe it meant something they could act on. `closed_at`
+  // is not selected at all, for the same reason migrations/0003 dropped
+  // `status`: which array a note arrives in already says whether it is closed,
+  // so the column could only ever be a constant per query — NULL for every open
+  // note — and a constant in a response is an invitation to read meaning into it.
   const notesFor = (closed: boolean) =>
     DB.prepare(
       `SELECT * FROM (
          SELECT id, reviewer, kind, src_start, src_end, quote, body, suggestion,
-                created_at, closed_at, revision_hash
+                created_at, revision_hash
            FROM galley_notes
           WHERE slug = ? AND closed_at IS ${closed ? 'NOT NULL' : 'NULL'}
           ORDER BY created_at DESC

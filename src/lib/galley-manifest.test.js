@@ -62,6 +62,51 @@ test('resumes after a suggestion that contains a fence of its own', () => {
   assert.deepEqual(noteIdsInMarkdown(lines.join('\n')), [A, B]);
 });
 
+// The tests above pair their inner fences, which is what let a boolean toggle
+// pass them: two flips cancel. An ODD number does not, and it inverted the scan
+// for the whole rest of the file. Both directions of that are below, and both
+// were reproducible against the real pushFenced.
+//
+// The close rule is now CommonMark's — same fence character, at least as long as
+// the opener — which is exactly the guarantee `fenceFor` writes to.
+
+/** Build a pulled file: note A, a suggestion, then note B. */
+function fileWithSuggestion(suggestion) {
+  const lines = [meta(A), '', 'Suggested replacement:', ''];
+  pushFenced(lines, suggestion, 'md');
+  lines.push('', meta(B, { reviewer: 'mr' }));
+  return lines.join('\n');
+}
+
+test('an unbalanced ``` inside a suggestion does not swallow later ids', () => {
+  // fenceFor emits ```` so the block renders correctly; the inner ``` is content.
+  assert.deepEqual(noteIdsInMarkdown(fileWithSuggestion('Open a block:\n```\nthen the code')), [A, B]);
+});
+
+test('an unbalanced ~~~ inside a suggestion does not swallow later ids', () => {
+  // fenceFor only measures BACKTICK runs, so a tilde fence is never lengthened
+  // around — the scan has to not care about it while inside a backtick block.
+  assert.deepEqual(noteIdsInMarkdown(fileWithSuggestion('Use:\n~~~\ncode')), [A, B]);
+});
+
+// THE ONE THAT COSTS AN EXTRA ID. With the scan inverted by an odd inner fence,
+// a meta-shaped line in a reviewer's own suggestion became closable — the exact
+// "one note closes another reviewer's" bug META_LINE_RE was tightened for, and
+// the note actually listed (B) was left open in its place.
+test('an unbalanced fence cannot make a forged meta line inside a suggestion closable', () => {
+  const ids = noteIdsInMarkdown(fileWithSuggestion(`Open with:\n\`\`\`\n${meta(C, { reviewer: 'mr' })}`));
+  assert.ok(!ids.includes(C), 'closed a note that only appeared inside another reviewer’s suggestion');
+  assert.deepEqual(ids, [A, B]);
+});
+
+// The appendix cut is per line and reached only outside a fence. As a split over
+// the raw document it fired on reviewer text too, silently truncating the
+// manifest — the safe direction, but it reported the remainder as notes somebody
+// filed after the pull.
+test('a suggestion containing the appendix heading does not truncate the manifest', () => {
+  assert.deepEqual(noteIdsInMarkdown(fileWithSuggestion('Rename the section to:\n## Closed notes\n')), [A, B]);
+});
+
 // The appendix `just galley <slug> --all` writes. Those notes are already
 // closed; scanning them is harmless in SQL but makes the command report
 // "lists 14, closed 6" and leaves the operator hunting the other eight.

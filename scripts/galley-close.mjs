@@ -157,12 +157,23 @@ if (stillOpen.length > 0) {
   const who = [...byReviewer]
     .map(([reviewer, count]) => `${reviewer} (${count})`)
     .join(', ');
+  // "Filed after that pull" is only true when there WAS a pull. Everything the
+  // manifest listed has just been closed, so whatever is left arrived after it —
+  // that is the concurrent-reviewer signal this command exists to give. Under
+  // --note there is no manifest and no round: these are simply the post's other
+  // open notes, and calling them late-arriving would point the operator at a
+  // reviewer who did nothing.
   console.error(
-    `\n              ${stillOpen.length} note(s) still open, filed after that pull — ${who}`,
+    manifest
+      ? `\n              ${stillOpen.length} note(s) still open, filed after that pull — ${who}`
+      : `\n              ${stillOpen.length} note(s) still open on ${slug} — ${who}`,
   );
   console.error(
-    `              pull again before closing another round:\n` +
-      `                just galley ${slug} ${useLocal ? '--local' : '--remote'}\n`,
+    manifest
+      ? `              pull again before closing another round:\n` +
+          `                just galley ${slug} ${useLocal ? '--local' : '--remote'}\n`
+      : `              read them with:\n` +
+          `                just galley ${slug} ${useLocal ? '--local' : '--remote'}\n`,
   );
 } else {
   console.error('');

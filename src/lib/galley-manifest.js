@@ -42,8 +42,17 @@ export const NOTE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 const META_LINE_RE = /^\*\*[^*]+\*\*.*·\s*`([0-9a-f-]{36})`$/;
 
 // A fence opened by pushFenced. Its content is reviewer-authored and arbitrary,
-// including lines shaped exactly like the meta line above.
+// including lines shaped exactly like the meta line above — and, crucially,
+// including SHORTER fences of its own. Captured rather than merely detected; see
+// the close rule in noteIdsInMarkdown.
 const FENCE_RE = /^\s*(`{3,}|~{3,})/;
+
+// The appendix `just galley <slug> --all` writes. Matched per line rather than
+// with a `split(/^## Closed notes$/m)` over the whole document, because a
+// reviewer's suggestion is emitted verbatim inside a fence and can contain that
+// exact line — which would cut the manifest short and leave every note after it
+// open while the operator was told they were "filed after that pull".
+const APPENDIX_RE = /^## Closed notes$/;
 
 /**
  * Every note id a pulled review file lists, in order, deduplicated.
@@ -55,28 +64,49 @@ const FENCE_RE = /^\s*(`{3,}|~{3,})/;
  * @returns {string[]}
  */
 export function noteIdsInMarkdown(text) {
-  // Stop at the closed-notes appendix `--all` writes. Those ids are already
-  // closed, so scanning them would be harmless — closeNotes matches only rows
-  // with closed_at IS NULL — but it would report "lists 14 notes, closed 6" and
-  // leave the operator wondering what happened to the other eight.
-  const body = String(text).split(/^## Closed notes$/m)[0];
-
   const ids = [];
-  let inFence = false;
-  for (const line of body.split('\n')) {
-    // Toggle rather than match the opening fence's own length: pushFenced picks
-    // a fence longer than the longest run inside, so the closer is whatever
-    // reopens this state. Getting it wrong costs a missed id, never an extra.
-    if (FENCE_RE.test(line)) {
-      inFence = !inFence;
+  // The OPENING fence, held verbatim while inside a block — not a boolean.
+  //
+  // A toggle was wrong in both directions, and not only in theory. pushFenced
+  // picks a fence longer than the longest backtick run in its content
+  // (galley-relocate.js `fenceFor`), precisely so a suggestion containing ```
+  // cannot end the block early — but a toggle flips on that inner ``` anyway,
+  // and `fenceFor` never measures tildes at all, so a lone ~~~ flips it too. An
+  // ODD number of fence-shaped lines inside one suggestion then inverts the scan
+  // for the rest of the file, which costs an EXTRA id and not just a missed one:
+  // a meta-shaped line inside that reviewer's prose becomes closable, which is
+  // exactly the "one note closes another reviewer's" bug this scan exists to
+  // prevent, while the real ids after it are swallowed and reported as notes
+  // someone filed after the pull.
+  //
+  // So: close only on the same fence character, at least as long as the opener.
+  // That is CommonMark's own rule, and it is the rule `fenceFor` already writes
+  // to — which is what makes the reader and the writer agree by construction.
+  let fence = null;
+  for (const line of String(text).split('\n')) {
+    const found = FENCE_RE.exec(line);
+    if (fence !== null) {
+      if (found && found[1][0] === fence[0] && found[1].length >= fence.length) fence = null;
       continue;
     }
-    if (inFence) continue;
-    const found = META_LINE_RE.exec(line.trimEnd());
-    if (!found) continue;
+    if (found) {
+      fence = found[1];
+      continue;
+    }
+    // Stop at the closed-notes appendix `--all` writes. Those ids are already
+    // closed, so scanning them would be harmless — closeNotes matches only rows
+    // with closed_at IS NULL — but it would report "lists 14 notes, closed 6"
+    // and leave the operator wondering what happened to the other eight.
+    //
+    // Inside the loop, so it is reached only OUTSIDE a fence: a suggestion whose
+    // replacement text renames a section to `## Closed notes` cut the manifest
+    // short when this was a split over the raw document.
+    if (APPENDIX_RE.test(line)) break;
+    const meta = META_LINE_RE.exec(line.trimEnd());
+    if (!meta) continue;
     // Belt and braces: META_LINE_RE's 36-character class admits hyphens
     // anywhere, so the full shape is still checked before the id is used.
-    if (NOTE_ID_RE.test(found[1]) && !ids.includes(found[1])) ids.push(found[1]);
+    if (NOTE_ID_RE.test(meta[1]) && !ids.includes(meta[1])) ids.push(meta[1]);
   }
   return ids;
 }

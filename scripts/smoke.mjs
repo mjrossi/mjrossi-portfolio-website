@@ -27,6 +27,16 @@ const FIXTURE_TAG = 'smoke-fixture';
 // A slug that names no real post, used by the cross-slug assertions: a token
 // minted for another draft must not open or write to the fixture.
 const OTHER_SLUG = 'some-other-draft';
+// A THIRD slug, naming no real post either, for the extendLink round-trip alone.
+//
+// Separate from OTHER_SLUG because `extendLinks` is a bulk UPDATE over every live
+// row of one post, and the cross-slug rows live on OTHER_SLUG at a far-future
+// expiry the HTTP assertions 400 lines below depend on. Sharing the slug meant
+// one `--all` quietly rewrote those two expiries to a few hours out — harmless
+// while a run takes minutes, and a confusing failure in the cross-slug checks the
+// moment that bulk target moves or a fixture is reordered. A slug of its own is
+// cheaper than remembering the coupling.
+const EXTEND_SLUG = 'a-third-draft';
 
 // A post that is ALREADY PUBLISHED, for the other end of a link's life: minting
 // caps a link's expiry at pubDate, but that cap is a snapshot, and moving
@@ -628,7 +638,7 @@ try {
 // are not flushed to it when smoke kills the process, so each run starts empty
 // in practice. That is observed wrangler behaviour, not a contract, and it is
 // the kind of thing a version bump changes quietly — so the suite does not
-// depend on it. Scoped to SMOKE_REVIEWER and to the three slugs seeded below, so
+// depend on it. Scoped to SMOKE_REVIEWER and to the four slugs seeded below, so
 // it can only ever touch rows this file wrote. Paired with the identical call at
 // the end of the run — the two lists have to stay equal, or a fixture outlives
 // the run that made it.
@@ -637,7 +647,7 @@ try {
   // PUBLISHED_SLUG is a real post, so this does clear any local preview links you
   // minted for it by hand. Local only (clearLinks refuses --remote), and the
   // alternative is a fixed fixture id colliding with itself on the second run.
-  clearLinks([FIXTURE_SLUG, OTHER_SLUG, PUBLISHED_SLUG], { local: true });
+  clearLinks([FIXTURE_SLUG, OTHER_SLUG, EXTEND_SLUG, PUBLISHED_SLUG], { local: true });
 } catch (err) {
   console.error(`smoke: could not clear previous ${GALLEY_DB} rows\n${err.message}`);
   process.exit(1);
@@ -682,19 +692,21 @@ try {
       },
       { id: LIVE_LINK_ID, slug: FIXTURE_SLUG, reviewer: SMOKE_REVIEWER, exp: FAR_FUTURE_EXP },
       { id: CROSS_SLUG_ID, slug: OTHER_SLUG, reviewer: SMOKE_REVIEWER, exp: FAR_FUTURE_EXP },
-      // extendLink's own fixtures, on OTHER_SLUG so they cannot disturb a count
-      // on the fixture post. Headroom of exactly one hour, so "at the ceiling"
-      // and "one second past it" are both reachable.
+      // extendLink's own fixtures, on EXTEND_SLUG of their own — `--all` below is
+      // a bulk UPDATE over a whole post, and the two cross-slug rows on
+      // OTHER_SLUG are relied on at a far-future expiry long after it runs.
+      // Headroom of exactly one hour, so "at the ceiling" and "one second past
+      // it" are both reachable.
       {
         id: EXTEND_PROBE_ID,
-        slug: OTHER_SLUG,
+        slug: EXTEND_SLUG,
         reviewer: null,
         exp: NOW_SEC + 3600,
         maxExp: NOW_SEC + 7200,
       },
       {
         id: EXTEND_REVOKED_ID,
-        slug: OTHER_SLUG,
+        slug: EXTEND_SLUG,
         reviewer: null,
         exp: NOW_SEC + 3600,
         maxExp: NOW_SEC + 7200,
@@ -706,14 +718,14 @@ try {
       // after a pubDate slips further than the signature allows.
       {
         id: EXTEND_ALL_ROOM_ID,
-        slug: OTHER_SLUG,
+        slug: EXTEND_SLUG,
         reviewer: null,
         exp: NOW_SEC + 3600,
         maxExp: NOW_SEC + 100_000,
       },
       {
         id: EXTEND_ALL_STUCK_ID,
-        slug: OTHER_SLUG,
+        slug: EXTEND_SLUG,
         reviewer: null,
         exp: NOW_SEC + 3600,
         maxExp: NOW_SEC + 3600,
@@ -753,14 +765,14 @@ try {
 // link becomes a permanent one — and it lives in a WHERE clause, where a typo
 // is silent and reads as "extended successfully".
 try {
-  const extended = extendLink(OTHER_SLUG, EXTEND_PROBE_ID, NOW_SEC + 7200, { local: true });
+  const extended = extendLink(EXTEND_SLUG, EXTEND_PROBE_ID, NOW_SEC + 7200, { local: true });
   check(
     'extend: moves the expiry up to the ceiling',
     extended.length === 1 && extended[0].exp === NOW_SEC + 7200,
     `got ${JSON.stringify(extended)}`,
   );
 
-  const tooFar = extendLink(OTHER_SLUG, EXTEND_PROBE_ID, NOW_SEC + 7201, { local: true });
+  const tooFar = extendLink(EXTEND_SLUG, EXTEND_PROBE_ID, NOW_SEC + 7201, { local: true });
   check(
     'extend: one second past the ceiling changes nothing',
     tooFar.length === 0,
@@ -768,7 +780,7 @@ try {
   );
   check(
     'extend: a refused extension leaves the old expiry in place',
-    getLink(OTHER_SLUG, EXTEND_PROBE_ID, { local: true })?.exp === NOW_SEC + 7200,
+    getLink(EXTEND_SLUG, EXTEND_PROBE_ID, { local: true })?.exp === NOW_SEC + 7200,
     'the row moved despite the UPDATE reporting no change',
   );
 
@@ -779,7 +791,7 @@ try {
     `got ${JSON.stringify(wrongPost)} — extending is not scoped to the named post`,
   );
 
-  const revoked = extendLink(OTHER_SLUG, EXTEND_REVOKED_ID, NOW_SEC + 7200, { local: true });
+  const revoked = extendLink(EXTEND_SLUG, EXTEND_REVOKED_ID, NOW_SEC + 7200, { local: true });
   check(
     'extend: a revoked link cannot be extended back to life',
     revoked.length === 0,
@@ -791,7 +803,7 @@ try {
   // a partial result is the expected outcome, not an error, so it has to be
   // visible in what comes back or the caller cannot name the links it missed.
   const target = NOW_SEC + 50_000;
-  const movedAll = extendLinks(OTHER_SLUG, target, { local: true });
+  const movedAll = extendLinks(EXTEND_SLUG, target, { local: true });
   const movedIds = movedAll.map((row) => row.id);
   check(
     'extend --all: moves every live link whose ceiling reaches the new date',
@@ -808,14 +820,22 @@ try {
     !movedIds.includes(EXTEND_REVOKED_ID),
     'revoking is supposed to be final, including in bulk',
   );
-  // Scoping is asserted through extendLink above rather than repeated here on
-  // purpose: the only honest way to prove it in bulk is to run an --all against
-  // FIXTURE_SLUG, which would rewrite the far-future expiries every assertion
-  // below depends on. Both statements carry the same `WHERE slug = '…'`.
   check(
     'extend --all: the row it reported moving really moved',
-    getLink(OTHER_SLUG, EXTEND_ALL_ROOM_ID, { local: true })?.exp === target,
+    getLink(EXTEND_SLUG, EXTEND_ALL_ROOM_ID, { local: true })?.exp === target,
     'the UPDATE reported a change the table does not show',
+  );
+  // Bulk scoping, asserted rather than argued. `--all` is the one statement here
+  // that touches rows it was not handed the ids of, so the blast radius is the
+  // property worth pinning: CROSS_SLUG_ID sits on a DIFFERENT slug at a
+  // far-future expiry, and the HTTP assertions ~400 lines below read it. While
+  // these fixtures shared OTHER_SLUG with it this check could not have been
+  // written — the --all above rewrote that very row, harmlessly but silently.
+  check(
+    'extend --all: leaves another post’s links alone',
+    getLink(OTHER_SLUG, CROSS_SLUG_ID, { local: true })?.exp === FAR_FUTURE_EXP,
+    'a bulk extend reached across slugs — the cross-slug assertions below now ' +
+      'depend on an expiry this statement moved',
   );
 } catch (err) {
   console.error(`smoke: extendLink round-trip failed\n${err.message}`);
@@ -1601,8 +1621,8 @@ try {
   // included — they are seeded before the spawn, so unlike the notes they DO
   // survive to the next run and would collide with the seeding INSERT.
   //
-  // THE SAME THREE SLUGS AS THE SEEDING CLEANUP, and PUBLISHED_SLUG is the one
-  // that has to be here rather than only there. The other two are fixture posts
+  // THE SAME FOUR SLUGS AS THE SEEDING CLEANUP, and PUBLISHED_SLUG is the one
+  // that has to be here rather than only there. The other three are slugs
   // nobody else looks at, so a row surviving to the next run is invisible until
   // that run clears it. PUBLISHED_SLUG is a REAL post: its row shows up in
   // `just preview-roster-all --local` as a live, un-revoked, reviewer-bearing
@@ -1610,7 +1630,7 @@ try {
   // the galley locally" tells the developer not to leave lying about.
   try {
     d1Exec(`DELETE FROM galley_notes WHERE reviewer = '${SMOKE_REVIEWER}'`, { local: true });
-    clearLinks([FIXTURE_SLUG, OTHER_SLUG, PUBLISHED_SLUG], { local: true });
+    clearLinks([FIXTURE_SLUG, OTHER_SLUG, EXTEND_SLUG, PUBLISHED_SLUG], { local: true });
   } catch {
     // Cleanup is best-effort; a stale smoke row never affects production.
   }

@@ -3,7 +3,19 @@
 //
 //   npm run galley -- my-draft --remote            # production notes
 //   npm run galley -- my-draft --local             # the local dev database
+//   npm run galley -- my-draft --remote --all      # closed rounds too
 //   npm run galley -- my-draft --remote --out -    # stdout instead of docs/galley/
+//
+// OPEN NOTES ONLY, unless --all. A note stays in the table once the round it
+// belonged to is closed (`just galley-close`), so without that filter this file
+// would accumulate every note ever left on the post and re-present work already
+// merged as though it still needed doing.
+//
+// THIS FILE IS ALSO A MANIFEST. Every note is printed with its id, and
+// `just galley-close` closes exactly the ids it finds here — which is what keeps
+// a close scoped to the notes the author actually read, rather than to "whatever
+// looks old", a set that silently includes a second reviewer's unread feedback.
+// Commit it alongside the revision that answers it.
 //
 // --remote or --local is REQUIRED; see scripts/database-target.mjs. Pulling
 // from the wrong database reports "no notes" for a post that has them.
@@ -25,7 +37,7 @@ import { createLocator, pushFenced, pushQuoted } from '../src/lib/galley-relocat
 import { SLUG_RE } from '../src/lib/preview.js';
 import { resolvePostSource } from './content.mjs';
 import { chooseDatabase, databaseLabel } from './database-target.mjs';
-import { d1Query } from './d1.mjs';
+import { listNotes } from './notes-db.mjs';
 
 function die(message) {
   console.error(`galley-pull: ${message}`);
@@ -39,6 +51,7 @@ let slug = null;
 let local = false;
 let remote = false;
 let out = null;
+let includeClosed = false;
 
 for (let i = 0; i < argv.length; i++) {
   const arg = argv[i];
@@ -46,6 +59,8 @@ for (let i = 0; i < argv.length; i++) {
     local = true;
   } else if (arg === '--remote') {
     remote = true;
+  } else if (arg === '--all') {
+    includeClosed = true;
   } else if (arg === '--out') {
     out = argv[++i];
     if (!out) die('--out requires a value');
@@ -58,7 +73,7 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 
-if (!slug) die('usage: npm run galley -- <slug> (--remote | --local) [--out PATH]');
+if (!slug) die('usage: npm run galley -- <slug> (--remote | --local) [--all] [--out PATH]');
 // Shape-checked before it reaches the SQL below. SLUG_RE admits no quotes or
 // spaces, which is what makes the interpolation safe.
 if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
@@ -118,36 +133,59 @@ function excerptAt(index) {
 
 // ── read the notes ───────────────────────────────────
 
-const sql = `SELECT id, revision_hash, reviewer, kind, src_start, src_end,
-                    quote, prefix, suffix, body, suggestion, status, created_at
-               FROM galley_notes
-              WHERE slug = '${slug}'
-              ORDER BY created_at ASC`;
-
-// scripts/d1.mjs owns the shell-out, the banner-anchored JSON parse, and the
-// two distinct failure messages (unreachable database vs unparseable output).
-let rows;
+// scripts/notes-db.mjs owns the SQL; scripts/d1.mjs owns the shell-out, the
+// banner-anchored JSON parse, and the two distinct failure messages (unreachable
+// database vs unparseable output).
+let allRows;
 try {
-  rows = d1Query(sql, { local: useLocal });
+  allRows = listNotes(slug, { includeClosed }, { local: useLocal });
 } catch (err) {
   die(err.message);
 }
 
-if (rows.length === 0) {
+// Open notes are the document; closed ones are an appendix under --all. Splitting
+// here rather than in two queries keeps the "N open, M closed" header honest
+// about the same set the body renders.
+const rows = allRows.filter((r) => r.closed_at === null);
+const closedRows = allRows.filter((r) => r.closed_at !== null);
+
+if (allRows.length === 0) {
   // Names the database, because "no notes" and "notes, but in the other one"
   // are indistinguishable otherwise -- and the second is the likelier mistake.
-  console.error(`galley-pull: no notes for ${slug} (${databaseLabel(useLocal)})`);
+  // Says "open" when it is only the filter hiding them, so a post whose whole
+  // round has been closed does not read as a post nobody reviewed.
+  const what = includeClosed ? 'no notes' : 'no open notes';
+  console.error(`galley-pull: ${what} for ${slug} (${databaseLabel(useLocal)})`);
 }
 
 // ── render ───────────────────────────────────────────
 
+// Counted over OPEN notes only. A closed note is drifted almost by definition --
+// the revision that closed it is the one that changed the file -- so counting
+// those would put a drift warning on every pull forever and train the reader to
+// ignore the one that matters.
 const drifted = rows.filter((r) => r.revision_hash !== currentHash).length;
 
 const lines = [];
 lines.push(`# Review notes — ${slug}`);
 lines.push('');
 lines.push(`Pulled ${new Date().toISOString()} from \`${databaseLabel(useLocal)}\`.`);
-lines.push(`${rows.length} note${rows.length === 1 ? '' : 's'}, ${new Set(rows.map((r) => r.reviewer)).size} reviewer(s).`);
+const reviewers = new Set(rows.map((r) => r.reviewer)).size;
+const openLabel = `${rows.length} open note${rows.length === 1 ? '' : 's'}`;
+lines.push(
+  closedRows.length > 0
+    ? `${openLabel}, ${reviewers} reviewer(s) — plus ${closedRows.length} closed, below.`
+    : `${openLabel}, ${reviewers} reviewer(s).`,
+);
+lines.push('');
+// The manifest contract, stated in the artifact itself: `just galley-close`
+// closes the ids printed below and nothing else, so a reader who edits this file
+// by hand needs to know that deleting a note here spares it.
+lines.push(
+  '> Each note carries its id. `just galley-close ' +
+    slug +
+    '` closes exactly the ids in this file — notes filed after this pull are left open.',
+);
 lines.push('');
 if (drifted > 0) {
   lines.push(
@@ -235,6 +273,10 @@ for (const [key, notes] of ordered) {
     // notes in this group resolve to different lines, so each says where its
     // own passage went.
     if (key !== 'general' && !current && note.currentLine) meta += ` · now line ${note.currentLine}`;
+    // The id, in backticks, is what makes this file a manifest -- notes-db.mjs
+    // scans for exactly this shape. Last on the line because it is for the close
+    // command, not for the person reading the note.
+    meta += ` · \`${note.id}\``;
     lines.push(meta);
     lines.push('');
     if (note.quote) {
@@ -273,6 +315,44 @@ for (const [key, notes] of ordered) {
   lines.push('');
 }
 
+// ── closed rounds (--all only) ───────────────────────
+//
+// Flat and unanchored on purpose. These notes were written against revisions the
+// file no longer holds, so relocating them would be guesswork on a passage that
+// has already been dealt with; what is wanted here is the record of what was
+// said and when it was retired, not a pointer into the current draft.
+if (closedRows.length > 0) {
+  lines.push('## Closed notes');
+  lines.push('');
+  lines.push(
+    `${closedRows.length} note(s) from round(s) already applied or declined. ` +
+      `Re-open one with \`just galley-reopen ${slug} --note <id>\`.`,
+  );
+  lines.push('');
+  for (const note of closedRows) {
+    const when = new Date(note.created_at).toISOString().slice(0, 10);
+    const closed = new Date(note.closed_at).toISOString().slice(0, 10);
+    lines.push(`**${note.reviewer}** · ${note.kind} · ${when} · closed ${closed} · \`${note.id}\``);
+    lines.push('');
+    if (note.quote) {
+      pushQuoted(lines, note.quote);
+      lines.push('');
+    }
+    if (note.body) {
+      pushQuoted(lines, note.body);
+      lines.push('');
+    }
+    if (note.suggestion) {
+      lines.push('Suggested replacement:');
+      lines.push('');
+      pushFenced(lines, note.suggestion, 'md');
+      lines.push('');
+    }
+  }
+  lines.push('---');
+  lines.push('');
+}
+
 const markdown = `${lines.join('\n').trimEnd()}\n`;
 
 if (out === '-') {
@@ -282,6 +362,16 @@ if (out === '-') {
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, markdown);
   console.log(target.replace(`${process.cwd()}/`, ''));
-  console.error(`\n  ${rows.length} note(s)${drifted ? `, ${drifted} against an older revision` : ''}`);
-  console.error('  Review, then apply with Claude alongside the .mdx.\n');
+  console.error(
+    `\n  ${rows.length} open note(s)${drifted ? `, ${drifted} against an older revision` : ''}` +
+      `${closedRows.length ? `, ${closedRows.length} closed` : ''}`,
+  );
+  console.error('  Review, then apply with Claude alongside the .mdx.');
+  // Named here because this is where the author is standing when they finish a
+  // round, and because the close has to happen AFTER the revision merges -- a
+  // close run now would retire notes whose fixes are not in the file yet.
+  console.error(
+    `\n  Applied them? Merge the revision first, then:\n` +
+      `    just galley-close ${slug} ${useLocal ? '--local' : '--remote'}\n`,
+  );
 }

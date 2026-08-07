@@ -37,12 +37,19 @@
 interface Props {
   slug: string;
   reviewer: string;
+  /**
+   * SHA-256 of the .mdx this page was rendered from. The client echoes it when
+   * saving a note, and /api/galley refuses one whose page has since moved — see
+   * src/lib/post-source.ts. Null only if the source could not be resolved, which
+   * leaves the client unable to write rather than able to write blind.
+   */
+  revision: string | null;
 }
 
-const { slug, reviewer } = Astro.props;
+const { slug, reviewer, revision } = Astro.props;
 ---
 
-<div id="galley" data-slug={slug} data-reviewer={reviewer}></div>
+<div id="galley" data-slug={slug} data-reviewer={reviewer} data-revision={revision}></div>
 
 {/*
   Handler ships as a static asset at /scripts/galley.js (public/scripts/), for
@@ -95,6 +102,16 @@ const { slug, reviewer } = Astro.props;
 
   .galley-bar-toggle:hover {
     color: var(--accent-hover);
+  }
+
+  /* The draft moved under this page. Given the accent rather than the muted
+     grey the rest of the bar uses, because until the reviewer reloads, every
+     marker is withheld and every line number on screen is wrong. */
+  .galley-bar-stale {
+    margin-left: auto;
+    margin-right: 0.8rem;
+    color: var(--accent);
+    font-style: italic;
   }
 
   /* Notes list. Sits above the bar and is capped so a long review round
@@ -154,6 +171,40 @@ const { slug, reviewer } = Astro.props;
 
   .galley-note-reviewer {
     color: var(--accent);
+  }
+
+  /* Stands where the line number would. A note from an earlier revision has a
+     stored line number, but printing it would send the reviewer to a line that
+     now holds something else — so it says which revision it belongs to instead. */
+  .galley-note-stale {
+    font-style: italic;
+  }
+
+  /* Notes from rounds the author has closed. Collapsed by default and dimmed
+     when open: a second reviewer needs to see that a point was already raised —
+     and whether it was acted on or declined — without it competing with the
+     round actually in progress. */
+  .galley-addressed {
+    margin-top: 0.8rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.6rem;
+  }
+
+  .galley-addressed-summary {
+    font-family: var(--font-ui);
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+  }
+
+  .galley-list-addressed {
+    margin-top: 0.4rem;
+  }
+
+  .galley-note-closed {
+    opacity: 0.62;
   }
 
   .galley-note-quote,

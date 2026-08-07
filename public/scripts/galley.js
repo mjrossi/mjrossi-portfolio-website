@@ -22,6 +22,12 @@
 
   const slug = mount.dataset.slug;
   const reviewer = mount.dataset.reviewer;
+  // The revision of the .mdx this page was rendered from. Echoed when saving so
+  // the endpoint can refuse a note written against a page that has since moved,
+  // and compared against the server's current revision on every read so the
+  // client knows when its own anchors have gone stale wholesale. See
+  // src/lib/post-source.ts.
+  const pageRevision = mount.dataset.revision;
   // Read from the URL rather than a data attribute: the token is already in
   // the address bar, and copying it into the DOM would only widen where it
   // can leak from (an extension reading attributes, a screenshot of devtools).
@@ -32,6 +38,11 @@
   const api = `/api/galley?preview=${encodeURIComponent(token)}`;
 
   let notes = [];
+  let closedNotes = [];
+  // Set when the server's revision no longer matches the page in front of the
+  // reviewer. Every anchor on screen is then suspect, not just the ones the
+  // server flagged — see renderNotes.
+  let pageStale = false;
 
   // ── element helpers ────────────────────────────────
 
@@ -136,14 +147,31 @@
   const barCount = el('button', 'galley-bar-toggle');
   barCount.type = 'button';
   barCount.setAttribute('aria-expanded', 'false');
-  bar.append(barLabel, barCount);
+  // Shown when the draft has been revised under this page. Deliberately in the
+  // bar rather than the panel: it is the one thing a reviewer needs to see
+  // without opening anything, because every marker on the page is wrong until
+  // they reload.
+  const barStale = el('span', 'galley-bar-stale', 'Draft revised — reload to review the current version');
+  barStale.hidden = true;
+  bar.append(barLabel, barStale, barCount);
 
   const panel = el('aside', 'galley-panel');
   panel.hidden = true;
   panel.setAttribute('aria-label', 'Editorial notes');
   const panelList = el('ol', 'galley-list');
   const panelEmpty = el('p', 'galley-empty', 'No notes yet. Select any passage to leave one.');
-  panel.append(el('h2', 'galley-panel-title', 'Notes'), panelEmpty, panelList);
+
+  // Notes from rounds the author has closed. Kept visible, collapsed, because a
+  // second reviewer needs to see that a point was already raised — and whether it
+  // was acted on or declined — rather than re-filing it. A real <details> so the
+  // disclosure works without any of our own state.
+  const addressed = el('details', 'galley-addressed');
+  addressed.hidden = true;
+  const addressedSummary = el('summary', 'galley-addressed-summary');
+  const addressedList = el('ol', 'galley-list galley-list-addressed');
+  addressed.append(addressedSummary, addressedList);
+
+  panel.append(el('h2', 'galley-panel-title', 'Notes'), panelEmpty, panelList, addressed);
 
   const addBtn = el('button', 'galley-add', 'Add note');
   addBtn.type = 'button';
@@ -180,32 +208,59 @@
   // ── rendering ──────────────────────────────────────
 
   function renderCount() {
-    barCount.textContent = notes.length === 1 ? '1 note' : `${notes.length} notes`;
+    const open = notes.length === 1 ? '1 note' : `${notes.length} notes`;
+    barCount.textContent = closedNotes.length > 0 ? `${open} · ${closedNotes.length} addressed` : open;
+  }
+
+  /**
+   * One note in the panel.
+   *
+   * `stale` notes get no line number. The stored `src_start` is an absolute line
+   * in a revision this page is not showing, so printing it would name a line the
+   * reviewer can go and look at and find something else entirely.
+   */
+  function renderNote(note, { closed = false } = {}) {
+    const item = el('li', closed ? 'galley-note galley-note-closed' : 'galley-note');
+    const meta = el('p', 'galley-note-meta');
+    meta.append(el('span', 'galley-note-reviewer', note.reviewer));
+    if (note.src_start && !note.stale && !closed) {
+      meta.append(el('span', 'galley-sep', ' · '), el('span', 'galley-note-line', `line ${note.src_start}`));
+    } else if (note.src_start && note.stale) {
+      // `note.stale`, not `closed`, decides this. A closed note is usually also
+      // stale — the revision that answered it is the one that changed the file —
+      // but not always: closing a round the author declined leaves notes written
+      // against the current source. Badging those "earlier revision" states
+      // something false about a file nobody has touched. They simply get no line
+      // number, which is the same treatment and claims nothing.
+      meta.append(
+        el('span', 'galley-sep', ' · '),
+        el('span', 'galley-note-stale', 'earlier revision'),
+      );
+    }
+    item.append(meta);
+    if (note.quote) item.append(el('blockquote', 'galley-note-quote', note.quote));
+    if (note.body) item.append(el('p', 'galley-note-body', note.body));
+    // Without this a suggestion — a note whose whole content is its
+    // replacement text and whose prose is optional — rendered as an empty
+    // list item, since only `body` was ever displayed.
+    if (note.suggestion) {
+      item.append(el('p', 'galley-note-sublabel', 'Suggested replacement'));
+      item.append(el('pre', 'galley-note-suggestion', note.suggestion));
+    }
+    return item;
   }
 
   function renderNotes() {
     panelList.replaceChildren();
     panelEmpty.hidden = notes.length > 0;
+    for (const note of notes) panelList.append(renderNote(note));
 
-    for (const note of notes) {
-      const item = el('li', 'galley-note');
-      const meta = el('p', 'galley-note-meta');
-      meta.append(el('span', 'galley-note-reviewer', note.reviewer));
-      if (note.src_start) {
-        meta.append(el('span', 'galley-sep', ' · '), el('span', 'galley-note-line', `line ${note.src_start}`));
-      }
-      item.append(meta);
-      if (note.quote) item.append(el('blockquote', 'galley-note-quote', note.quote));
-      if (note.body) item.append(el('p', 'galley-note-body', note.body));
-      // Without this a suggestion — a note whose whole content is its
-      // replacement text and whose prose is optional — rendered as an empty
-      // list item, since only `body` was ever displayed.
-      if (note.suggestion) {
-        item.append(el('p', 'galley-note-sublabel', 'Suggested replacement'));
-        item.append(el('pre', 'galley-note-suggestion', note.suggestion));
-      }
-      panelList.append(item);
-    }
+    addressedList.replaceChildren();
+    addressed.hidden = closedNotes.length === 0;
+    addressedSummary.textContent = `Addressed (${closedNotes.length})`;
+    for (const note of closedNotes) addressedList.append(renderNote(note, { closed: true }));
+
+    barStale.hidden = !pageStale;
     renderCount();
     markAnchors();
   }
@@ -213,14 +268,31 @@
   // Give every block that carries a note a marker, so an editor can see at a
   // glance which passages have already been discussed and doesn't re-file
   // feedback a colleague has left. This is the whole reason notes are shared.
+  //
+  // A MARKER IS ONLY EVER PLACED FOR A NOTE WRITTEN AGAINST THIS EXACT REVISION.
+  // The lookup below is a literal `[data-src="42-47"]` match, with no fallback to
+  // the quote — so once the source has changed, those line numbers either match
+  // nothing or, worse, match whichever block has since moved into that range.
+  // The second case is the one that matters: it badges a paragraph with a note
+  // about prose it never contained, and nothing on screen says so. Skipping
+  // stale notes gives up a highlight; keeping them gives a wrong one.
+  //
+  // Two independent gates, because they fail at different granularities:
+  //   pageStale   — the server has a newer revision than this document, so EVERY
+  //                 anchor here is suspect, including notes the server considers
+  //                 current (they were written against the source we don't have).
+  //   note.stale  — this page is current, but that note predates it.
+  // Closed notes are never passed here at all: they belong to a finished round
+  // and describe a revision this page is not showing.
   function markAnchors() {
     for (const marked of body.querySelectorAll('.galley-marked')) {
       marked.classList.remove('galley-marked');
       marked.removeAttribute('data-galley-count');
     }
+    if (pageStale) return;
     const counts = new Map();
     for (const note of notes) {
-      if (!note.src_start) continue;
+      if (!note.src_start || note.stale) continue;
       const key = `${note.src_start}-${note.src_end}`;
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
@@ -331,6 +403,10 @@
           // src/lib/galley.js requires `body` for a comment and `suggestion`
           // for a suggestion, which is exactly the pair the guard above allows.
           kind: replacement ? 'suggestion' : 'comment',
+          // The revision `src` was read from. The endpoint refuses the note if
+          // this is not the source it currently holds, because the line range
+          // above would then point into a file nobody is looking at.
+          revision: pageRevision,
           src: pending.src,
           quote: pending.quote,
           prefix: pending.prefix,
@@ -347,6 +423,12 @@
         const messages = {
           not_authorised: 'This link can no longer leave notes. Ask for a fresh one.',
           slug_mismatch: 'This link belongs to a different draft.',
+          // The draft moved while this page was open, so the passage this note
+          // is anchored to may no longer be there. Says "copy" because the text
+          // survives in the composer only until the reload, and there is no way
+          // to restore the selection afterwards.
+          stale_page:
+            'This draft was revised while you were reading. Copy your note, reload, and re-select the passage.',
           too_many_notes: "That's a lot of notes in one go — take a short break and continue.",
           body_too_long: 'That note is too long. Try splitting it in two.',
           suggestion_too_long: 'That replacement is too long. Try splitting it in two.',
@@ -381,18 +463,55 @@
 
   // ── load ───────────────────────────────────────────
 
+  // Declared above load() because load() records against it. See refresh().
+  const REFRESH_THROTTLE_MS = 5000;
+  let lastLoad = 0;
+
   async function load() {
+    // EVERY load counts against the throttle, including the one after a save and
+    // the one at startup. Booking it in refresh() alone meant saving a note and
+    // alt-tabbing straight back fired a second GET inside the window the
+    // throttle exists to bound.
+    lastLoad = Date.now();
     try {
       const res = await fetch(api, { headers: { Accept: 'application/json' } });
       if (!res.ok) return;
       const data = await res.json();
       notes = Array.isArray(data.notes) ? data.notes : [];
+      closedNotes = Array.isArray(data.closed) ? data.closed : [];
+      // The server is serving a revision this page was not rendered from, so the
+      // document on screen is behind the one every note is being measured
+      // against. Withholds all markers (see markAnchors) and raises the reload
+      // prompt — without which the first the reviewer would hear of it is a
+      // refused save after typing a note.
+      //
+      // Compared only when both sides are known: a page with no data-revision
+      // cannot write anyway, and guessing "stale" there would show a reload
+      // prompt that reloading does not clear.
+      pageStale = Boolean(pageRevision && data.revision && data.revision !== pageRevision);
       renderNotes();
     } catch {
       // A failed read leaves the bar showing the last known count. The editor
       // can still write; losing the list is not worth an error banner.
     }
   }
+
+  // Reviewers work concurrently, and `load()` otherwise runs exactly twice — at
+  // startup and after this reviewer saves something — so a colleague's note
+  // filed in the meantime never appears. Refreshing when the tab comes back
+  // covers the way the page is actually used (read here, write elsewhere,
+  // return) without polling: an idle tab costs nothing, and the endpoint's
+  // traffic stays proportional to activity rather than to session length.
+  //
+  // Throttled because `visibilitychange` and `focus` both fire on a single
+  // alt-tab back, and the two would otherwise be two requests every time.
+  function refresh() {
+    if (document.hidden) return;
+    if (Date.now() - lastLoad < REFRESH_THROTTLE_MS) return;
+    load();
+  }
+  document.addEventListener('visibilitychange', refresh);
+  window.addEventListener('focus', refresh);
 
   renderCount();
   load();

@@ -1,7 +1,8 @@
 // Shared constants for the smoke suite. Everything here is inert data — no
 // assertions, no I/O beyond reading content frontmatter — so importing this
 // module can never change what the run does or the order it does it in.
-import { readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isPublished } from '../../src/lib/schedule.js';
 import { CONTENT_DIR, readPubDate } from '../content.mjs';
@@ -56,6 +57,26 @@ export const PUBLISHED_SLUG = readdirSync(CONTENT_DIR)
 export const GALLEY_DB = 'mjrossi-galley';
 // Scoped to smoke so a real review file can never be confused with test rows.
 export const SMOKE_REVIEWER = 'smoke-reviewer';
+// A SECOND reviewer on the same post. Notes are shared across reviewers by
+// design — /api/galley scopes a read to the slug and never to the token's own
+// reviewer — because an editor who cannot see a colleague's note re-files it.
+// Nothing pinned that until there were two labels to tell apart.
+export const SMOKE_REVIEWER_TWO = 'smoke-reviewer-2';
+
+// The fixture post's real revision hash: SHA-256 of the whole .mdx, which is what
+// src/lib/post-source.ts computes and what BlogPost.astro stamps onto the page.
+//
+// Recomputed from disk on every run rather than pinned, because the fixture post
+// is an ordinary file that may be edited. Pinning it would turn any edit to that
+// post into a confusing galley failure.
+export const FIXTURE_REVISION = createHash('sha256')
+  .update(readFileSync(resolve(CONTENT_DIR, `${FIXTURE_SLUG}.mdx`), 'utf8'), 'utf8')
+  .digest('hex');
+
+// Deliberately not a hash of anything. Stands for "written against a revision
+// that is no longer on disk", which is the normal state of a note by the second
+// review round and the case the drift machinery exists for.
+export const STALE_REVISION = '0'.repeat(64);
 // Mirrors MAX_NOTES_PER_REVIEWER in src/pages/api/galley.ts. Asserted against
 // the source rather than imported — the endpoint is TypeScript and this suite
 // runs under bare node.

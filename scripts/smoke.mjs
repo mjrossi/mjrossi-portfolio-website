@@ -628,8 +628,10 @@ try {
 // are not flushed to it when smoke kills the process, so each run starts empty
 // in practice. That is observed wrangler behaviour, not a contract, and it is
 // the kind of thing a version bump changes quietly — so the suite does not
-// depend on it. Scoped to SMOKE_REVIEWER and to the two fixture slugs, so it can
-// only ever touch rows this file wrote.
+// depend on it. Scoped to SMOKE_REVIEWER and to the three slugs seeded below, so
+// it can only ever touch rows this file wrote. Paired with the identical call at
+// the end of the run — the two lists have to stay equal, or a fixture outlives
+// the run that made it.
 try {
   d1Exec(`DELETE FROM galley_notes WHERE reviewer = '${SMOKE_REVIEWER}'`, { local: true });
   // PUBLISHED_SLUG is a real post, so this does clear any local preview links you
@@ -1598,9 +1600,17 @@ try {
   // clean table rather than accumulating rows from every previous run. Links
   // included — they are seeded before the spawn, so unlike the notes they DO
   // survive to the next run and would collide with the seeding INSERT.
+  //
+  // THE SAME THREE SLUGS AS THE SEEDING CLEANUP, and PUBLISHED_SLUG is the one
+  // that has to be here rather than only there. The other two are fixture posts
+  // nobody else looks at, so a row surviving to the next run is invisible until
+  // that run clears it. PUBLISHED_SLUG is a REAL post: its row shows up in
+  // `just preview-roster-all --local` as a live, un-revoked, reviewer-bearing
+  // link expiring in 2100, which is exactly the stray row CLAUDE.md's "Trying
+  // the galley locally" tells the developer not to leave lying about.
   try {
     d1Exec(`DELETE FROM galley_notes WHERE reviewer = '${SMOKE_REVIEWER}'`, { local: true });
-    clearLinks([FIXTURE_SLUG, OTHER_SLUG], { local: true });
+    clearLinks([FIXTURE_SLUG, OTHER_SLUG, PUBLISHED_SLUG], { local: true });
   } catch {
     // Cleanup is best-effort; a stale smoke row never affects production.
   }

@@ -91,8 +91,70 @@ test('a quoted timestamp with NO zone is rejected, and the message says how to f
 test('a space-separated quoted timestamp is rejected too', () => {
   // Legal YAML, but `new Date()` on it is implementation-defined, and the fix is
   // the same one: unquote it.
-  assert.equal(coercePubDate('2026-05-10 14:00:00Z').ok, false);
+  const result = coercePubDate('2026-05-10 14:00:00Z');
+  assert.equal(result.ok, false);
+  // Refused for the SPACE, not for a missing zone — it states one. Naming the
+  // wrong punctuation sends the author looking for something they did not omit.
+  assert.doesNotMatch(result.message, /no time zone/);
+  assert.match(result.message, /space/);
 });
+
+// ── the messages have to be followable ───────────────
+//
+// Every literal a message suggests must actually be accepted. This is the
+// property that broke: the "or state the zone" line appended a zone to a string
+// that already carried one and confidently offered `"2026-05-10 14:00:00ZZ"`,
+// which is not a date in any notation. Matching the prose would not have caught
+// that — only running the suggestions back through the same two steps the build
+// takes does, which is what this does.
+
+/** Pull every `pubDate: <literal>` a message offers, quoted or bare. */
+function suggestionsIn(message) {
+  return message
+    .split('pubDate: ')
+    .slice(1)
+    .map((segment) => {
+      const quoted = /^"([^"]*)"/.exec(segment);
+      // Bare literals may contain a single space (`2026-05-10 14:00:00Z`), so the
+      // run ends at a newline or the two-space gutter between two suggestions.
+      return quoted
+        ? { quoted: true, text: quoted[1] }
+        : { quoted: false, text: segment.split(/\n|\s{2,}/)[0].trim() };
+    });
+}
+
+// Minute precision and the space form are in here deliberately: YAML 1.1 needs
+// SECONDS, so `2026-05-10 14:00` unquoted comes back a string and lands right
+// back on this error, and OFFSET_RE takes only the `T` form, so `"… 14:00Z"`
+// would be refused as well. Both were suggested before `canonical` existed.
+for (const input of [
+  '2026-05-10T14:00:00',
+  '2026-05-10 14:00:00Z',
+  '2026-05-10 14:00',
+  '2026-05-10T14:00',
+  '2026-05-10 14:00Z',
+  '2026-05-10 14:00:00',
+]) {
+  test(`every fix suggested for ${JSON.stringify(input)} is itself accepted`, () => {
+    const result = coercePubDate(input);
+    assert.equal(result.ok, false);
+
+    const suggestions = suggestionsIn(result.message);
+    assert.ok(suggestions.length >= 2, `expected fixes, got ${JSON.stringify(result.message)}`);
+
+    for (const { quoted, text } of suggestions) {
+      // A QUOTED suggestion stays a string, so coercePubDate sees it directly.
+      // An UNQUOTED one is a YAML timestamp first — the same two steps in the
+      // same order as Astro's loader, which is the whole point of the advice.
+      const value = quoted ? text : front(`pubDate: ${text}`).pubDate;
+      assert.equal(
+        coercePubDate(value).ok,
+        true,
+        `suggested ${quoted ? JSON.stringify(text) : text}, which is not accepted`,
+      );
+    }
+  });
+}
 
 test('the field name appears in the message', () => {
   const result = coercePubDate('nonsense', 'updatedDate');

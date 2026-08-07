@@ -47,6 +47,41 @@ const OFFSET_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?
 const NAIVE_TIME_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/;
 
 /**
+ * A trailing zone designator — `Z`, `+05:30`, `-0400`.
+ *
+ * NAIVE_TIME_RE accepts a space as well as a `T`, so it also matches strings
+ * that DO state their zone: the `T` forms carrying one are taken by OFFSET_RE
+ * above, which means anything zoned reaching that branch got there by writing a
+ * space instead of a `T`. That is a different mistake from omitting the zone and
+ * needs a different message — telling an author to "state the zone" on a string
+ * that already states one appended a second one, and suggested
+ * `"2026-05-10 14:00:00ZZ"`, which is not a date in any notation.
+ */
+const HAS_ZONE_RE = /(Z|[+-]\d{2}:?\d{2})$/;
+
+/**
+ * The literal an author should actually type, given one this file refuses.
+ *
+ * Every message below suggests a replacement, and a suggestion that is itself
+ * rejected is worse than no suggestion at all — the author edits the line, hits
+ * the identical error, and has nothing to show for it. Two normalisations, both
+ * learned from getting this wrong:
+ *
+ *   SECONDS, because YAML 1.1 requires them. `2026-05-10 14:00` is NOT a
+ *   timestamp to js-yaml (verified in pubdate.test.js) — it comes back a string
+ *   and lands straight back here, so "remove the quotes" on a minute-precision
+ *   literal sent the author round in a circle.
+ *
+ *   `T` rather than a space, because OFFSET_RE accepts only the `T` form, so
+ *   `"2026-05-10 14:00Z"` would be refused just like the input was. Legal in
+ *   YAML either way, and the `T` form is legal in both — so it is the one to
+ *   put in front of someone who has already been refused once.
+ */
+function canonical(text) {
+  return text.replace(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?![:\d])/, '$1T$2:00').replace(' ', 'T');
+}
+
+/**
  * Turn a frontmatter value into an instant, or explain why it can't be one.
  *
  * Returns a result rather than throwing so both callers can frame the failure in
@@ -84,14 +119,33 @@ export function coercePubDate(value, field = 'pubDate') {
   // The trap. Refused rather than guessed at, because either guess is wrong for
   // somebody: reading it as UTC contradicts `new Date()`, and reading it as local
   // contradicts the unquoted form of the same literal.
+  //
+  // Two shapes land here and they are refused for DIFFERENT reasons, so they get
+  // different messages. The author is looking at a line that reads entirely
+  // correctly and the only thing wrong with it is punctuation — a message naming
+  // the wrong punctuation is worse than none.
   if (NAIVE_TIME_RE.test(text)) {
+    // Zone stated, but a space where a `T` belongs. Nothing is ambiguous about
+    // the instant; `new Date()` on this form is simply implementation-defined.
+    const fixed = canonical(text);
+    if (HAS_ZONE_RE.test(text)) {
+      return {
+        ok: false,
+        message:
+          `${field} ${JSON.stringify(value)} states its zone but separates the date and time ` +
+          'with a space, and `new Date()` on that form is implementation-defined.\n' +
+          '  Write the T — with the zone already stated, either form then works:\n' +
+          `    ${field}: ${fixed}\n` +
+          `    ${field}: ${JSON.stringify(fixed)}`,
+      };
+    }
     return {
       ok: false,
       message:
         `${field} ${JSON.stringify(value)} has a time but no time zone, and quoting it means ` +
         'local time — so it would publish at a different instant on a different machine.\n' +
-        `  Remove the quotes (YAML reads a bare timestamp as UTC): ${field}: ${text}\n` +
-        `  Or state the zone: ${field}: "${text}Z"  /  ${field}: "${text}-04:00"`,
+        `  Remove the quotes (YAML reads a bare timestamp as UTC): ${field}: ${fixed}\n` +
+        `  Or state the zone: ${field}: "${fixed}Z"  /  ${field}: "${fixed}-04:00"`,
     };
   }
 

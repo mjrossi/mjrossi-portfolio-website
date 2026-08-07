@@ -59,7 +59,16 @@ Astro 6 with the `@astrojs/cloudflare` adapter. Plain CSS, **two** scoped pieces
 - `migrations/0001_initial.sql` — the original D1 schema: `preview_links` (who may see a draft, and who may comment) and `galley_notes` (what they said). Frozen — it is applied in production, and a migration is frozen the moment it is applied anywhere real. Apply the directory with `wrangler d1 migrations apply mjrossi-galley --local|--remote`.
 - `migrations/0002_preview_link_ceiling.sql` — adds `preview_links.max_exp`, the signed cap that makes a link extendable. `NOT NULL DEFAULT 0`, so there is no "row without a cap" state to reason about anywhere: the default is required to add a `NOT NULL` column at all, and it is also the fail-closed value — a ceiling already in the past makes `exp <= max_exp` false, so `extendLink` refuses the row rather than moving it past a signature that would never honour the result. **The worker does not need this column**; it enforces the cap from the token and the expiry from `exp`, both of which predate this migration. Minting does need it, so apply it before the next `just preview-link`.
 - `public/.assetsignore` — keeps worker artifacts out of the static asset binding.
-- `scripts/smoke.mjs` — post-build smoke test. Checks static artifacts in `dist/client/` (CSS tokens, assets) and then spins up `wrangler dev` to hit every on-demand route. Run via `npm run smoke`.
+- `scripts/smoke.mjs` — post-build smoke test. Checks static artifacts in `dist/client/` (CSS tokens, assets) and then spins up `wrangler dev` to hit every on-demand route. Run via `npm run smoke`. **The entry file is the run sequence and nothing else** — ~120 lines listing the phases in the order they must happen, with the assertions themselves in `scripts/smoke/`. That ordering is the part worth reading before changing anything: the D1 fixtures are seeded *before* the spawn because `wrangler dev` reads the persisted SQLite once at startup and never flushes back, the static checks run first so their failures survive a runtime that never comes up, and the write-quota flood runs last in its phase because it fills the hour's allowance.
+- `scripts/smoke/*.mjs` — the assertions, split by what they can be run against:
+  - `config.mjs` — paths, port, fixture slugs, reviewer label, quota, signing key. Inert data only: importing it can never change what the run does. `PUBLISHED_SLUG` is *discovered* from the content collection rather than named, so it cannot rot into pointing at a post whose date moved.
+  - `check.mjs` — `check` plus the two shapes almost every call takes (`checkStatus`, `checkHeader`), and the `passes`/`fails` tally. Module-scoped state: ES modules are singletons, so every phase shares one tally without a context object threaded through it.
+  - `static.mjs` — source greps (`checkSourceGuards`) and `dist/client` artifacts (`checkBuildArtifacts`). The greps are *diagnostics, not coverage* — the live matrix dominates them, but it fails 90 seconds later without naming a file.
+  - `wrangler.mjs` — the `WORKER_NAME` ↔ `wrangler.jsonc` pairing and the binding-drift walk against the generated config.
+  - `fixtures.mjs` — the `preview_links` fixture table (id, row and reason on one line each), migrate/clear/seed, and the `extendLink` round-trip. The only place `links-db.mjs`'s SQL executes under test.
+  - `runtime.mjs` — spawning `wrangler dev`, readiness, the mid-run-death diagnostics and exit 75, and the log tail. Owns `wranglerWasReady`, which is both set and read here.
+  - `live-site.mjs` — "does the site work": routes, RSS, newsletter carve-out, CSP, `/api/contact`, `/api/subscribe` sad paths, `/privacy`. Two exported phases because the preview matrices run between them.
+  - `live-preview.mjs` — "can a draft leak": the scheduled-post matrix, the galley matrix, the allowlist, the write-quota flood, anchoring, and both directions of the host unlock.
 - `scripts/make-noise.mjs`, `scripts/make-og.mjs` — one-off regenerators for `public/noise.png` and `public/og.png`.
 - `.github/workflows/` — `build.yml` (build + smoke), `lighthouse.yml` (audits **production only** after a `main` deploy; pass/fail gate, no PR comment).
 
@@ -78,7 +87,7 @@ CSS custom properties at `:root` in `src/styles/global.css` (warm-amber Broadshe
 
 Section labels: `font-variant-caps: all-small-caps` with letter-spacing. Experience and education entries use `.entry` / `.entry-header` / `.entry-meta` / `.company` / `.role` / `.date`. Interior pages use `.page` / `.page-header` / `.page-meta`.
 
-Smoke test asserts a handful of tokens on the built CSS bundle (`--max: 1100px`, `--accent: #8f5520`, no inline SVG data URIs) and then exercises every on-demand route through `wrangler dev`. Update `scripts/smoke.mjs` alongside any change to the tokens or chrome it pins.
+Smoke test asserts a handful of tokens on the built CSS bundle (`--max: 1100px`, `--accent: #8f5520`, no inline SVG data URIs) and then exercises every on-demand route through `wrangler dev`. Update `scripts/smoke/static.mjs` (tokens, assets) or `scripts/smoke/live-site.mjs` (chrome) alongside any change to what they pin.
 
 ## Content
 

@@ -12,14 +12,18 @@ import { check } from './check.mjs';
 import {
   EXTEND_SLUG,
   FAR_FUTURE_EXP,
+  FIXTURE_REVISION,
   FIXTURE_SLUG,
   NOW_SEC,
   OTHER_SLUG,
   PUBLISHED_SLUG,
   SMOKE_REVIEWER,
+  SMOKE_REVIEWER_TWO,
+  STALE_REVISION,
 } from './config.mjs';
-import { d1Exec, d1Migrate } from '../d1.mjs';
+import { d1Migrate } from '../d1.mjs';
 import { clearLinks, extendLink, extendLinks, getLink, recordLinks } from '../links-db.mjs';
+import { clearNotes, closeNotes, listNotes, reopenNote, seedNotes } from '../notes-db.mjs';
 
 const LOCAL = { local: true };
 
@@ -143,7 +147,9 @@ export function migrateLocalDb() {
  * colliding with itself on the second run.
  */
 export function clearFixtures() {
-  d1Exec(`DELETE FROM galley_notes WHERE reviewer = '${SMOKE_REVIEWER}'`, LOCAL);
+  for (const reviewer of [SMOKE_REVIEWER, SMOKE_REVIEWER_TWO]) {
+    clearNotes(FIXTURE_SLUGS, { reviewer }, LOCAL);
+  }
   clearLinks(FIXTURE_SLUGS, LOCAL);
 }
 
@@ -151,12 +157,72 @@ export function seedLinks() {
   recordLinks(Object.values(LINKS), LOCAL);
 }
 
+// The three states a note can be in by the time a second review round starts.
+// Seeded rather than written through the endpoint because two of them are
+// unreachable on demand: /api/galley refuses a note from a stale page (that is
+// the point of the stale_page check), and closing is a CLI act.
+//
+// Anchored on a range no real block carries, so a marker placed for one of these
+// would have to be a bug rather than a coincidence.
+export const NOTES = {
+  /**
+   * Open, and written against the file as it is on disk. The plain positive
+   * path: this is the one the margin may anchor.
+   */
+  current: {
+    id: '11111111-1111-4111-8111-111111111111',
+    slug: FIXTURE_SLUG,
+    revisionHash: FIXTURE_REVISION,
+    reviewer: SMOKE_REVIEWER,
+    srcStart: 11,
+    srcEnd: 12,
+    quote: 'smoke current note quote',
+    body: 'smoke: open note against the current revision',
+  },
+  /**
+   * Open, written against a revision that is gone — and by a DIFFERENT reviewer,
+   * which is what makes the cross-reviewer read assertable at all. Its anchor
+   * must never reach the page: those line numbers now describe other prose.
+   */
+  stale: {
+    id: '22222222-2222-4222-8222-222222222222',
+    slug: FIXTURE_SLUG,
+    revisionHash: STALE_REVISION,
+    reviewer: SMOKE_REVIEWER_TWO,
+    srcStart: 13,
+    srcEnd: 14,
+    quote: 'smoke stale note quote',
+    body: 'smoke: open note against an older revision',
+  },
+  /**
+   * Closed: a round the author finished with. Must not appear among the open
+   * notes, must still be readable under "addressed", and must never be anchored.
+   */
+  closed: {
+    id: '33333333-3333-4333-8333-333333333333',
+    slug: FIXTURE_SLUG,
+    revisionHash: STALE_REVISION,
+    reviewer: SMOKE_REVIEWER,
+    srcStart: 15,
+    srcEnd: 16,
+    quote: 'smoke closed note quote',
+    body: 'smoke: note from a closed round',
+    closedAt: Date.now(),
+  },
+};
+
+/** Its own step, because the close/reopen round-trip below mutates these rows. */
+export function seedNotesFixtures() {
+  seedNotes(Object.values(NOTES), LOCAL);
+}
+
 /**
  * The extendLink round-trip, run before the worker is even up.
  *
- * This is the only place links-db's SQL actually executes under test:
- * src/lib/*.test.js cannot reach it (the module shells out to wrangler at
- * import time), and no HTTP request touches it either. The ceiling clause is
+ * This is the only place links-db's SQL actually executes under test. The
+ * module imports cleanly, but every function in it shells out to `wrangler d1
+ * execute` when CALLED, so running the SQL needs a migrated local database —
+ * which smoke has and `node --test` does not. The ceiling clause is
  * the whole safety property of `just preview-extend` — without it an extendable
  * link becomes a permanent one — and it lives in a WHERE clause, where a typo
  * is silent and reads as "extended successfully".
@@ -235,5 +301,93 @@ export function checkExtendRoundTrip() {
     getLink(OTHER_SLUG, LINKS.crossSlug.id, LOCAL)?.exp === FAR_FUTURE_EXP,
     'a bulk extend reached across slugs — the cross-slug assertions below now ' +
       'depend on an expiry this statement moved',
+  );
+}
+
+/**
+ * The closeNotes / reopenNote round-trip, run before the worker is up.
+ *
+ * The only place notes-db's SQL executes under test. Not because the module is
+ * unimportable — it loads fine under `node --test`, and its scan half is unit
+ * tested in src/lib/galley-manifest.test.js — but because every function below
+ * SHELLS OUT to `wrangler d1 execute` when called, so exercising the SQL needs a
+ * migrated local database, which is exactly what smoke has and a unit test does
+ * not. No HTTP request reaches these statements either: the worker writes notes
+ * through its own binding and has no close.
+ *
+ * The property worth pinning is the SCOPING. `just galley-close` closes the ids
+ * listed in the pulled file — a set chosen precisely so a second reviewer's
+ * unread notes are out of reach — and that scoping lives in a WHERE clause,
+ * where dropping a term is silent and reads as a successful close.
+ *
+ * Leaves the fixtures as it found them, because the live matrices read these
+ * exact rows afterwards.
+ */
+export function checkCloseRoundTrip() {
+  const target = NOTES.current.id;
+
+  const wrongPost = closeNotes(OTHER_SLUG, [target], LOCAL);
+  check(
+    'close: an id belonging to another post closes nothing',
+    wrongPost.length === 0,
+    `got ${JSON.stringify(wrongPost)} — closing is not scoped to the named post`,
+  );
+
+  const closed = closeNotes(FIXTURE_SLUG, [target], LOCAL);
+  check(
+    'close: closes exactly the id it was handed',
+    closed.length === 1 && closed[0] === target,
+    `got ${JSON.stringify(closed)}`,
+  );
+
+  // The concurrent-reviewer guarantee, stated as an assertion rather than as a
+  // comment: closing one reviewer's note must leave the other reviewer's alone.
+  // A close that selected on revision drift instead of on the manifest would
+  // take NOTES.stale with it, and nothing else in the suite would notice.
+  const openAfter = listNotes(FIXTURE_SLUG, {}, LOCAL).map((note) => note.id);
+  check(
+    'close: leaves a second reviewer’s note open',
+    openAfter.includes(NOTES.stale.id),
+    'closing one reviewer’s round retired another reviewer’s unread note',
+  );
+  check(
+    'close: the note it reported closing really closed',
+    !openAfter.includes(target),
+    'the UPDATE reported a change the table does not show',
+  );
+
+  const again = closeNotes(FIXTURE_SLUG, [target], LOCAL);
+  check(
+    'close: closing an already-closed note changes nothing',
+    again.length === 0,
+    `got ${JSON.stringify(again)} — re-running would rewrite the date a round closed`,
+  );
+
+  check(
+    'reopen: puts a closed note back',
+    reopenNote(FIXTURE_SLUG, target, LOCAL) === true,
+    'a mis-close is only recoverable by hand-written SQL',
+  );
+  check(
+    'reopen: an already-open note reports no change',
+    reopenNote(FIXTURE_SLUG, target, LOCAL) === false,
+    'reopen cannot distinguish "put back" from "was never closed"',
+  );
+  // One read for both of the assertions below: nothing mutates the table
+  // between them, and every listNotes is a fresh `npx wrangler` spawn on the
+  // pre-launch path of every smoke run.
+  const openIds = listNotes(FIXTURE_SLUG, {}, LOCAL).map((note) => note.id);
+  check(
+    'reopen: restored the note to the open set',
+    openIds.includes(target),
+    'the live galley assertions below now run against a fixture that is not there',
+  );
+
+  // The closed fixture must survive all of the above untouched — the live
+  // matrix reads it as the "addressed" case.
+  check(
+    'close: the closed fixture is still closed',
+    !openIds.includes(NOTES.closed.id),
+    'the closed-round fixture leaked back into the open set',
   );
 }

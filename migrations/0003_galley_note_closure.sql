@@ -1,0 +1,84 @@
+-- Let a review round END.
+--
+-- Before this, galley_notes was write-once: one INSERT in src/pages/api/galley.ts
+-- and no UPDATE anywhere. Every note ever left on a post came back on every read,
+-- forever. The author pulled round 1, applied it, merged the revision -- and round
+-- 2's pull still contained round 1, now flagged as drifted, alongside the new
+-- notes. The reviewer re-opening their link saw the same thing in the margin.
+--
+-- Nothing recorded that the round had happened, so nothing could leave.
+--
+-- ONE COLUMN, ONE FACT: `closed_at` NULL means open, a timestamp means the note
+-- belongs to a round the author has finished with. Deliberately the same shape as
+-- preview_links.revoked_at, and for the same reason -- rows are never deleted, so
+-- a closed note stays in the record rather than vanishing from it. `just galley
+-- <slug> --all` reads them back and `just galley-reopen` undoes a mistake.
+--
+-- WHY NOT `status`. 0001 shipped `status TEXT NOT NULL DEFAULT 'open'` reserved
+-- for exactly this workflow, and its comment says so. It is dropped rather than
+-- filled because it was only ever a constant -- the sole INSERT hardcodes 'open'
+-- and nothing has ever written anything else -- and because a timestamp answers
+-- "when" as well as "whether", which an enum does not. Keeping both would encode
+-- one fact in two columns that could disagree. The endpoint already argues this
+-- position about `status` itself (api/galley.ts, "a constant shipped to the
+-- client only invites a reader to believe it means something"); this applies it.
+--
+-- DROP COLUMN is safe for this column specifically: SQLite has supported it since
+-- 3.35 (D1 is well past that), and it refuses only for a column that is a PRIMARY
+-- KEY, UNIQUE, indexed, or named in a CHECK, foreign key, generated column, view,
+-- or trigger. `status` is none of those -- the only index on this table is
+-- idx_galley_slug on (slug, created_at), and the only CHECK is on `kind`.
+--
+-- ORDERING. APPLY THIS, THEN DEPLOY IMMEDIATELY -- the two are one operation and
+-- there is a window between them. Neither order is clean, so this is the choice
+-- of which failure to take, not a way to avoid one:
+--
+--   migration first  writes break, reads keep working. The DEPLOYED worker does
+--                    not SELECT `status`, but it does INSERT it (a hardcoded
+--                    'open' in its column list), so every note written between
+--                    the migration and the deploy fails with "no such column:
+--                    status" -> galley_db_error -> "The galley is having trouble
+--                    saving." Reading is untouched: the old SELECT names its
+--                    columns and adding one does not disturb it.
+--
+--   worker first     reads break, writes keep working. The new worker selects
+--                    `closed_at` on every GET and scripts/galley-pull.mjs does
+--                    the same, so both fail until this runs. Its INSERT omits
+--                    `status`, which NOT NULL DEFAULT 'open' still covers.
+--
+-- Writes are the narrower surface and the recoverable one -- a reviewer retries
+-- and the note lands -- while a broken read takes the margin out for everyone
+-- including the author's pull. So: migration, then deploy, and do not leave the
+-- gap open. A round in progress is the time not to do this at all.
+--
+-- The alternative, if that window is ever unacceptable: split expand/contract --
+-- add `closed_at` here, deploy, drop `status` in an 0004. Not taken, because
+-- this is a personal blog with one operator and a review round that can simply
+-- be paused for the length of a deploy.
+
+-- Epoch MS, like galley_notes.created_at directly above it -- and unlike
+-- preview_links.exp, which is in seconds because it mirrors a token. Each column
+-- matches the thing it sits next to; see the note in 0001.
+--
+-- Nullable, and that IS the state: there is no 'open' value to write, so a note
+-- is open by virtue of never having been closed. An INSERT that forgets this
+-- column therefore produces an open note, which is the direction that loses
+-- nothing.
+ALTER TABLE galley_notes ADD COLUMN closed_at INTEGER;
+
+-- Reserved by 0001 for this workflow, filled by nothing, and superseded by the
+-- column above. See the argument in the header.
+ALTER TABLE galley_notes DROP COLUMN status;
+
+-- Every read is now scoped by open-vs-closed as well as by post: the endpoint
+-- fetches open notes for the margin and closed ones for the "addressed"
+-- disclosure, and the pull script does the same split.
+--
+-- `created_at` is the third column and not an afterthought. Both endpoint reads
+-- are `WHERE slug = ? AND closed_at IS [NOT] NULL ORDER BY created_at DESC
+-- LIMIT ?`, so on (slug, closed_at) alone SQLite gets the filter from this index
+-- and then sorts the result -- or takes the order from idx_galley_slug and
+-- filters. Carrying created_at lets one index serve the whole statement.
+-- Irrelevant at this table's volume; free to get right while it is unapplied.
+CREATE INDEX IF NOT EXISTS idx_galley_slug_open
+  ON galley_notes (slug, closed_at, created_at);

@@ -254,14 +254,53 @@ galley-migrate target:
 # alongside the .mdx. Reads D1 through wrangler, which is already authenticated
 # as you — there is no admin endpoint on the deployed worker.
 #
+# Pulls OPEN notes only — a round you have closed stays out of the way. Add
+# --all to include closed ones. Every note is printed with its id, which is what
+# `just galley-close` reads back.
+#
 # --remote or --local is REQUIRED. Pulling the wrong one reports "no notes" for
 # a post that has them, which reads like the editors never wrote any.
 # usage: just galley my-draft --remote
-#        just galley my-draft --local
+#        just galley my-draft --remote --all
 [group('review')]
-[doc('pull galley notes for one post into docs/galley/ (--remote|--local)')]
+[doc('pull open galley notes for one post into docs/galley/ (--remote|--local, --all)')]
 galley slug *flags:
     npm run galley -- {{slug}} {{flags}}
+
+# end a review round: close the notes listed in docs/galley/<slug>.md.
+#
+# RUN IT AFTER THE REVISION MERGES. Closing first retires notes whose fixes are
+# not in the file yet.
+#
+# It closes exactly the ids in that file, and this is the whole point. The
+# obvious rule — "close everything written against an older revision" — is wrong
+# as soon as a second reviewer exists: their notes drift when you merge the
+# first reviewer's round, and a drift-based close would retire feedback nobody
+# has read. The pulled file is what you actually worked through, so anything
+# filed after that pull is out of reach by construction. The command says how
+# many it left open, and who filed them.
+#
+# --remote or --local is REQUIRED. Closing the wrong database reports success
+# while the reviewer's margin goes on showing every note you just applied.
+# usage: just galley-close my-draft --remote
+#        just galley-close my-draft --remote --note 1111...-...
+[group('review')]
+[doc('close the notes listed in docs/galley/<slug>.md — ends a round (--remote|--local)')]
+galley-close slug *flags:
+    npm run galley-close -- {{slug}} {{flags}}
+
+# put one closed note back. The undo for galley-close.
+#
+# One note at a time, never bulk: closing is the routine act, re-opening is the
+# correction, and a correction should make you name what you mean. Ids come from
+# `just galley <slug> --all`, which lists closed notes with theirs.
+#
+# --remote or --local is REQUIRED.
+# usage: just galley-reopen my-draft --note 1111...-... --remote
+[group('review')]
+[doc('re-open one closed galley note (--remote|--local)')]
+galley-reopen slug *flags:
+    npm run galley-reopen -- {{slug}} {{flags}}
 
 # ── ops ──────────────────────────────────────────────
 #

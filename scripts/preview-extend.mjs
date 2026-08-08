@@ -46,15 +46,13 @@
 import { LINK_ID_RE, SLUG_RE } from '../src/lib/preview.js';
 import { clampToPublication, isPublished } from '../src/lib/schedule.js';
 import { readPubDate } from './content.mjs';
-import { chooseDatabase, databaseLabel } from './database-target.mjs';
+import { cli } from './cli.mjs';
+import { databaseLabel } from './database-target.mjs';
 import { extendLink, extendLinks, getLink, listLinks } from './links-db.mjs';
 
 const DEFAULT_HOURS = 48;
 
-function die(message) {
-  console.error(`preview-extend: ${message}`);
-  process.exit(1);
-}
+const { die, resolveDatabase } = cli('preview-extend');
 
 /** Epoch seconds → the ISO form used by preview-link's own output. */
 function iso(sec) {
@@ -118,12 +116,7 @@ if (id && !LINK_ID_RE.test(id)) {
 // Which database, decided explicitly. See scripts/database-target.mjs for why
 // there is no default: extending the wrong one reports success while the link
 // the reviewer holds goes on expiring.
-let useLocal;
-try {
-  useLocal = chooseDatabase({ local, remote });
-} catch (err) {
-  die(err.message);
-}
+const useLocal = resolveDatabase({ local, remote });
 
 const where = databaseLabel(useLocal);
 

@@ -60,3 +60,16 @@ export function chooseDatabase({ local = false, remote = false } = {}) {
 export function databaseLabel(local) {
   return local ? 'local' : 'production';
 }
+
+/**
+ * The same choice spelled as the flag an operator would type. Distinct from
+ * databaseLabel because these strings land in different places: the label is
+ * prose ("2 closed (production)"), this is inside a follow-up command the
+ * person is expected to copy and run.
+ *
+ * @param {boolean} local
+ * @returns {'--local' | '--remote'}
+ */
+export function databaseFlag(local) {
+  return local ? '--local' : '--remote';
+}

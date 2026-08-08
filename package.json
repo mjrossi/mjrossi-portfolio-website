@@ -12,6 +12,8 @@
     "preview-roster": "node scripts/preview-roster.mjs",
     "preview-extend": "node scripts/preview-extend.mjs",
     "galley": "node scripts/galley-pull.mjs",
+    "galley-close": "node scripts/galley-close.mjs",
+    "galley-reopen": "node scripts/galley-reopen.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {

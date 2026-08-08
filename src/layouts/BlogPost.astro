@@ -5,6 +5,7 @@ import PostTags from '../components/PostTags.astro';
 import GalleyMargin from '../components/GalleyMargin.astro';
 import { dateFormatter, isoDate, postReadingTime, type Post } from '../lib/blog.ts';
 import { isPublished } from '../lib/schedule.js';
+import { revisionOf } from '../lib/post-source.ts';
 
 interface Props {
   post: Post;
@@ -36,6 +37,17 @@ const reviewer =
   Astro.locals.previewReviewer && Astro.locals.previewSlug === post.id && scheduled
     ? Astro.locals.previewReviewer
     : null;
+
+// The revision this page is rendering, handed to the margin so a note can be
+// tied to the source it was actually written against. /api/galley refuses a note
+// whose page has since moved, and the client uses it to know when every anchor
+// on screen has gone stale at once.
+//
+// Computed only for a review render — hashing every post's raw MDX on an
+// ordinary request would be work no reader benefits from — and through the same
+// src/lib/post-source.ts the endpoint uses, because a hash that disagreed with
+// the endpoint's would refuse every write.
+const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
 ---
 
 <Base
@@ -82,5 +94,5 @@ const reviewer =
     </footer>
   </article>
 
-  {reviewer && <GalleyMargin slug={post.id} reviewer={reviewer} />}
+  {reviewer && <GalleyMargin slug={post.id} reviewer={reviewer} revision={revision} />}
 </Base>

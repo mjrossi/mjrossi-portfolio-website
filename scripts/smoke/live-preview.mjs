@@ -13,6 +13,7 @@ import { check, checkHeader, checkStatus } from './check.mjs';
 import {
   BASE,
   FAR_FUTURE_EXP,
+  FIXTURE_REVISION,
   FIXTURE_SLUG,
   FIXTURE_TAG,
   GALLEY_WRITE_QUOTA,
@@ -22,8 +23,9 @@ import {
   PREVIEW_KEY,
   PUBLISHED_SLUG,
   SMOKE_REVIEWER,
+  STALE_REVISION,
 } from './config.mjs';
-import { LINKS, UNRECORDED_LINK_ID } from './fixtures.mjs';
+import { LINKS, NOTES, UNRECORDED_LINK_ID } from './fixtures.mjs';
 
 /** Sign a grant with the key the worker will actually hold. */
 const mint = (grant) => signPreviewToken(grant, PREVIEW_KEY);
@@ -48,8 +50,12 @@ async function fetchListings(token) {
   return { index, rss, tag };
 }
 
+// `revision` is required on every write: the endpoint refuses a note whose page
+// has moved under it (409 stale_page), so the happy paths have to carry the real
+// hash of the fixture post. checkRounds asserts the negative direction.
 const NOTE_BODY = {
   slug: FIXTURE_SLUG, kind: 'comment', src: '8-8', quote: 'test fixture', body: 'smoke note',
+  revision: FIXTURE_REVISION,
 };
 
 const postNote = (token, body = NOTE_BODY) =>
@@ -262,9 +268,16 @@ async function checkGalleyMatrix(fixtureExp, viewToken, post) {
     'galley: the note just written is in the list',
     Array.isArray(listedJson.notes) && listedJson.notes.some((n) => n.body === 'smoke note'),
   );
+  // Scoped to the note this token just WROTE, not to every note in the list.
+  // Reviewer comes from the signed token and never from the request body, which
+  // is a property of the write — and the list deliberately carries other
+  // reviewers' notes, because /api/galley shares a post's notes across everyone
+  // reviewing it. Asserting `every` here would make cross-reviewer visibility
+  // fail as though it were an attribution bug.
   check(
     'galley: the note is attributed to the token’s reviewer',
-    Array.isArray(listedJson.notes) && listedJson.notes.every((n) => n.reviewer === SMOKE_REVIEWER),
+    Array.isArray(listedJson.notes) &&
+      listedJson.notes.filter((n) => n.body === 'smoke note').every((n) => n.reviewer === SMOKE_REVIEWER),
     'a note was attributed to someone other than the signed reviewer',
   );
   const viewOnlyRead = await fetch(withToken('/api/galley', viewToken));
@@ -290,6 +303,14 @@ async function checkGalleyMatrix(fixtureExp, viewToken, post) {
 
   await checkPublishedLink();
   await checkValidation(galleyToken, galleyApi);
+  // Before the quota flood by convention rather than by necessity: both writes
+  // this phase makes are stale-page probes refused 409, which happens before the
+  // INSERT and therefore before the quota subquery is evaluated at all. It
+  // consumes none of the hour's allowance and would survive running after the
+  // flood. Kept here because every OTHER write-carrying phase does have to
+  // precede it, and one exception sitting on the far side would read as an
+  // oversight rather than as a fact about where 409 is raised.
+  await checkRounds(galleyToken, galleyApi, galleyHtml);
   await checkAllowlist(fixtureExp);
   await checkWriteQuota(galleyToken);
   checkAnchoring(galleyHtml);
@@ -356,6 +377,7 @@ async function checkValidation(galleyToken, galleyApi) {
   const suggested = await postNote(galleyToken, {
     slug: FIXTURE_SLUG, kind: 'suggestion', src: '8-8',
     quote: 'test fixture', suggestion: 'a proposed rewrite',
+    revision: FIXTURE_REVISION,
   });
   checkStatus('galley: a suggestion note is accepted', suggested, 200);
   const afterSuggestion = await fetch(galleyApi).then((r) => r.json()).catch(() => ({}));
@@ -365,13 +387,101 @@ async function checkValidation(galleyToken, galleyApi) {
       afterSuggestion.notes.some((n) => n.kind === 'suggestion' && n.suggestion === 'a proposed rewrite'),
     'a suggestion round-tripped without the text that is its whole content',
   );
-  // The column is write-once and every row reads 'open', so the endpoint stops
-  // shipping it. Pinned because re-adding it is a one-word change that would
-  // put a meaningless constant back in front of a client author.
+  // `status` no longer exists at all — migrations/0003 dropped it in favour of
+  // closed_at. `revision_hash` does exist, and is deliberately folded into the
+  // `stale` boolean rather than shipped: the client has no use for a hash, and
+  // re-adding either is a one-word change that puts something meaningless back
+  // in front of a client author.
   check(
-    'galley: notes do not carry the unused status column',
-    Array.isArray(afterSuggestion.notes) && afterSuggestion.notes.every((n) => !('status' in n)),
+    'galley: notes carry neither status nor the raw revision hash',
+    Array.isArray(afterSuggestion.notes) &&
+      afterSuggestion.notes.every((n) => !('status' in n) && !('revision_hash' in n)),
   );
+}
+
+/**
+ * 5b. THE REVIEW ROUND. Notes belong to a round, a round ends when the author
+ * closes it, and a note written against a revision the file no longer holds must
+ * never be presented as if it described this page.
+ *
+ * Three fixture notes seeded in fixtures.mjs cover the three states: open and
+ * current, open but stale (under a SECOND reviewer), and closed. Without them
+ * there is nothing for a regression to expose — every note the live matrix
+ * writes is open and current by construction, so dropping the closed_at filter
+ * or the stale flag would leave the suite entirely green.
+ *
+ * @param {string} galleyToken
+ * @param {string} galleyApi
+ * @param {string} galleyHtml the reviewed page, already fetched
+ */
+async function checkRounds(galleyToken, galleyApi, galleyHtml) {
+  const data = await fetch(galleyApi).then((r) => r.json()).catch(() => ({}));
+  const open = Array.isArray(data.notes) ? data.notes : [];
+  const closed = Array.isArray(data.closed) ? data.closed : [];
+  const byId = (list, id) => list.find((n) => n.id === id);
+
+  // A closed round leaves the working set but stays readable.
+  check(
+    'rounds: a closed note is not among the open notes',
+    !byId(open, NOTES.closed.id),
+    'a note from a finished round came back as outstanding',
+  );
+  check(
+    'rounds: a closed note is still readable under "addressed"',
+    Boolean(byId(closed, NOTES.closed.id)),
+    'a closed note vanished — a second reviewer cannot see the point was already raised',
+  );
+
+  // Drift, flagged per note. This is what withholds the in-body marker.
+  check(
+    'rounds: a note against the current revision is not stale',
+    byId(open, NOTES.current.id)?.stale === false,
+    'a current note was flagged stale — its marker will be withheld for no reason',
+  );
+  check(
+    'rounds: a note against an older revision IS stale',
+    byId(open, NOTES.stale.id)?.stale === true,
+    'a stale note was flagged current — the margin will anchor it to whatever now ' +
+      'occupies those lines, which is the wrong-passage bug',
+  );
+
+  // Cross-reviewer visibility: one token, both reviewers' notes. Asserted rather
+  // than assumed, because /api/galley scopes reads by slug and NOT by reviewer,
+  // and a well-meant "scope it to the token" would silently break concurrent
+  // review with every other assertion still passing.
+  check(
+    'rounds: one reviewer’s token reads another reviewer’s note',
+    Boolean(byId(open, NOTES.stale.id)) && NOTES.stale.reviewer !== SMOKE_REVIEWER,
+    'notes stopped being shared across reviewers — editors will re-file each other’s feedback',
+  );
+
+  // The three-way tie the stale_page check rests on: the hash on disk, the hash
+  // the page was stamped with, and the hash the endpoint reports. If these can
+  // drift apart, the client either refuses every write or detects nothing.
+  check(
+    'rounds: the endpoint reports the revision on disk',
+    data.revision === FIXTURE_REVISION,
+    `got ${JSON.stringify(data.revision)}, expected ${FIXTURE_REVISION}`,
+  );
+  check(
+    'rounds: the page is stamped with the same revision',
+    galleyHtml.includes(`data-revision="${FIXTURE_REVISION}"`),
+    'BlogPost.astro and /api/galley disagree about the current revision — every ' +
+      'note would be refused as stale_page',
+  );
+
+  // The negative direction. A reviewer whose page moved under them must be
+  // refused rather than have their old anchors stored against the new revision.
+  const stalePage = await postNote(galleyToken, { ...NOTE_BODY, revision: STALE_REVISION });
+  checkStatus('rounds: a note from a stale page is refused', stalePage, 409);
+  const staleBody = await stalePage.json().catch(() => ({}));
+  check(
+    'rounds: the refusal names stale_page',
+    staleBody.error === 'stale_page',
+    `got ${JSON.stringify(staleBody.error)} — the client keys its reload prompt off this`,
+  );
+  const noRevision = await postNote(galleyToken, { ...NOTE_BODY, revision: undefined });
+  checkStatus('rounds: a note with no revision at all is refused', noRevision, 409);
 }
 
 /**
@@ -434,6 +544,10 @@ async function checkWriteQuota(galleyToken) {
     Array.from({ length: FLOOD_SIZE }, (_, i) =>
       postNote(galleyToken, {
         slug: FIXTURE_SLUG, kind: 'comment', quote: 'test fixture', body: `flood ${i}`,
+        // Must be the real revision, or every request is refused 409 before it
+        // reaches the quota and both checks below go vacuous — which is exactly
+        // what the floor check exists to turn into a visible failure.
+        revision: FIXTURE_REVISION,
       }).then((res) => res.status)),
   );
   const flood = floodResults.filter((r) => r.status === 'fulfilled').map((r) => r.value);

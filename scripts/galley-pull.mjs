@@ -33,8 +33,8 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { CLOSED_HEADING, galleyFile, noteMetaLine } from '../src/lib/galley-manifest.js';
-import { createLocator, pushFenced, pushQuoted } from '../src/lib/galley-relocate.js';
+import { galleyFile } from '../src/lib/galley-manifest.js';
+import { renderReviewFile } from '../src/lib/galley-render.js';
 import { SLUG_RE } from '../src/lib/preview.js';
 import { cli, relativeToCwd } from './cli.mjs';
 import { databaseFlag, databaseLabel } from './database-target.mjs';
@@ -89,40 +89,6 @@ const source = readFileSync(sourcePath, 'utf8');
 const currentHash = createHash('sha256').update(source, 'utf8').digest('hex');
 const sourceLines = source.split('\n');
 
-// ── locating a quote in the current source ───────────
-
-// fold / unmark / locate and the reviewer-text emitters live in
-// src/lib/galley-relocate.js so `node --test` can reach them — this file parses
-// argv and shells out to wrangler at import time, which makes it unimportable,
-// and that logic is the least obvious part of the feature.
-const locate = createLocator(sourceLines);
-
-/** The quote with its stored context, for a human to search by hand. */
-function contextHint(note) {
-  const ctx = `${note.prefix ?? ''}${note.quote ?? ''}${note.suffix ?? ''}`.trim();
-  return ctx || null;
-}
-
-/**
- * The source line to show under a heading, skipping a code fence.
- *
- * `code` nodes are anchored across their whole span, fences included, so a note
- * on a code block resolves to the ``` line rather than to any code. Advance to
- * the first line with content on it so the excerpt shows what the note is
- * actually about. Bounded to a few lines: past that the anchor is pointing
- * somewhere unexpected, and printing nothing beats printing something
- * misleading.
- */
-function excerptAt(index) {
-  for (let i = index; i < Math.min(index + 4, sourceLines.length); i++) {
-    const text = sourceLines[i]?.trim();
-    if (!text) continue;
-    if (/^(`{3,}|~{3,})/.test(text)) continue;
-    return text;
-  }
-  return null;
-}
-
 // ── read the notes ───────────────────────────────────
 
 // scripts/notes-db.mjs owns the SQL; scripts/d1.mjs owns the shell-out, the
@@ -151,216 +117,23 @@ if (allRows.length === 0) {
 }
 
 // ── render ───────────────────────────────────────────
-
-// Counted over OPEN notes only. A closed note is drifted almost by definition --
-// the revision that closed it is the one that changed the file -- so counting
-// those would put a drift warning on every pull forever and train the reader to
-// ignore the one that matters.
-const drifted = rows.filter((r) => r.revision_hash !== currentHash).length;
-
-const lines = [];
-lines.push(`# Review notes — ${slug}`);
-lines.push('');
-lines.push(`Pulled ${new Date().toISOString()} from \`${databaseLabel(useLocal)}\`.`);
-const reviewers = new Set(rows.map((r) => r.reviewer)).size;
-const openLabel = `${rows.length} open note${rows.length === 1 ? '' : 's'}`;
-lines.push(
-  closedRows.length > 0
-    ? `${openLabel}, ${reviewers} reviewer(s) — plus ${closedRows.length} closed, below.`
-    : `${openLabel}, ${reviewers} reviewer(s).`,
-);
-lines.push('');
-// The manifest contract, stated in the artifact itself: `just galley-close`
-// closes the ids printed below and nothing else, so a reader who edits this file
-// by hand needs to know that deleting a note here spares it.
-lines.push(
-  '> Each note carries its id. `just galley-close ' +
-    slug +
-    '` closes exactly the ids in this file — notes filed after this pull are left open.',
-);
-lines.push('');
-if (drifted > 0) {
-  lines.push(
-    `> **${drifted} of these were written against an earlier revision.** Their stored line ` +
-      'numbers are stale. Where the quoted text was still findable, the current line is ' +
-      'given as "now line N" — otherwise search for the quote by hand.',
-  );
-  lines.push('');
-}
-lines.push(`Source: \`${sourcePath.replace(`${process.cwd()}/`, '')}\``);
-lines.push('');
-lines.push('---');
-lines.push('');
-
-/**
- * A note's own content: what the reviewer quoted, wrote, and proposed.
- *
- * Shared by the open-note loop and the closed appendix, which emit exactly this
- * and differ only in their heading and meta line. EVERY reviewer-authored string
- * goes through pushQuoted or pushFenced — prefix/suffix are stored verbatim and
- * newlines survive them, so interpolating any of it raw would let a note forge a
- * `##` heading in a document whose headings are how notes get attributed to
- * passages. Keeping that rule in one function is the point of the function.
- *
- * @param {string[]} lines
- * @param {Record<string, unknown>} note
- * @param {string | null} hint context to print under the quote, already built
- */
-function pushNoteContent(lines, note, hint = null) {
-  if (note.quote) {
-    pushQuoted(lines, note.quote);
-    lines.push('');
-    if (hint) {
-      lines.push('Context when written:');
-      lines.push('');
-      pushQuoted(lines, `…${hint}…`);
-      lines.push('');
-    }
-  }
-  if (note.body) {
-    pushQuoted(lines, note.body);
-    lines.push('');
-  }
-  if (note.suggestion) {
-    lines.push('Suggested replacement:');
-    lines.push('');
-    pushFenced(lines, note.suggestion, 'md');
-    lines.push('');
-  }
-}
-
-// Group by anchor so several notes on the same passage read together, with
-// unanchored whole-draft notes last.
-const groups = new Map();
-for (const row of rows) {
-  const key = row.src_start ? `${row.src_start}-${row.src_end}` : 'general';
-  if (!groups.has(key)) groups.set(key, []);
-  groups.get(key).push(row);
-}
-const ordered = [...groups.entries()].sort((a, b) => {
-  if (a[0] === 'general') return 1;
-  if (b[0] === 'general') return -1;
-  return Number(a[0].split('-')[0]) - Number(b[0].split('-')[0]);
-});
-
-for (const [key, notes] of ordered) {
-  // Declared out here because the per-note loop below needs it: when the group
-  // could NOT agree on a single relocation, each note carries its own.
-  let current = null;
-  if (key === 'general') {
-    lines.push('## Whole-draft notes');
-  } else {
-    const stale = notes.some((n) => n.revision_hash !== currentHash);
-
-    // Resolve EVERY quoted note in the group, not just the first. Notes share
-    // an anchor whenever they were filed against the same block, but they can
-    // quote different sentences within it — so a single "now line N" taken from
-    // whichever note happened to sort first was being presented as the heading
-    // for all of them. Claim a relocation on the heading only when the group
-    // agrees; otherwise each note carries its own below.
-    for (const note of notes) note.currentLine = locate(note.quote, note.prefix, note.suffix);
-    const resolved = notes.filter((n) => n.quote).map((n) => n.currentLine);
-    const agreed = new Set(resolved.filter((line) => line !== null));
-    current = resolved.length > 0 && resolved.every(Boolean) && agreed.size === 1
-      ? [...agreed][0]
-      : null;
-
-    let heading = `## Line ${key}`;
-    if (stale) {
-      if (current) {
-        heading += ` — now line ${current}`;
-      } else if (resolved.some(Boolean)) {
-        // Found, but not all in the same place — these notes share an anchor
-        // while quoting different sentences. Saying "not found" here would be
-        // wrong, and saying "now line N" would pick one of them arbitrarily.
-        heading += ' — ⚠ revision drift, notes relocated individually below';
-      } else {
-        heading += ' — ⚠ revision drift, quote not found';
-      }
-    }
-    lines.push(heading);
-    if (!stale || current) {
-      // When the file has NOT drifted the stored anchor is authoritative by
-      // definition, so it wins over a relocation. Preferring `current`
-      // unconditionally could put a heading reading "## Line 42-47" above an
-      // excerpt taken from somewhere else entirely — the quote resolving
-      // elsewhere in an unchanged file means the anchor is the trustworthy half.
-      const at = (stale ? current : Number(key.split('-')[0])) - 1;
-      const text = excerptAt(at);
-      if (text) {
-        lines.push('');
-        pushFenced(lines, text.length > 300 ? `${text.slice(0, 300)}…` : text, 'md');
-      }
-    }
-  }
-  lines.push('');
-
-  for (const note of notes) {
-    // The id, in backticks and last on the line, is what makes this file a
-    // manifest -- noteMetaLine and the scan that reads it back are both in
-    // src/lib/galley-manifest.js, so the writer cannot drift from the reader.
-    lines.push(
-      noteMetaLine({
-        reviewer: note.reviewer,
-        kind: note.kind,
-        when: new Date(note.created_at).toISOString().slice(0, 10),
-        // Per-note relocation, for the case the heading could not claim one:
-        // the notes in this group resolve to different lines, so each says
-        // where its own passage went.
-        detail:
-          key !== 'general' && !current && note.currentLine
-            ? `now line ${note.currentLine}`
-            : null,
-        id: note.id,
-      }),
-    );
-    lines.push('');
-    // Nothing else in this file can point at the passage, so hand over the
-    // context the note was written against. This is the case prefix/suffix were
-    // recorded for and that locate() could not resolve on its own.
-    const hint = key !== 'general' && !note.currentLine ? contextHint(note) : null;
-    pushNoteContent(lines, note, hint);
-  }
-  lines.push('---');
-  lines.push('');
-}
-
-// ── closed rounds (--all only) ───────────────────────
 //
-// Flat and unanchored on purpose. These notes were written against revisions the
-// file no longer holds, so relocating them would be guesswork on a passage that
-// has already been dealt with; what is wanted here is the record of what was
-// said and when it was retired, not a pointer into the current draft.
-if (closedRows.length > 0) {
-  // The exact string noteIdsInMarkdown stops at, imported rather than retyped:
-  // a rename here alone would let closed ids back into the manifest.
-  lines.push(CLOSED_HEADING);
-  lines.push('');
-  lines.push(
-    `${closedRows.length} note(s) from round(s) already applied or declined. ` +
-      `Re-open one with \`just galley-reopen ${slug} --note <id>\`.`,
-  );
-  lines.push('');
-  for (const note of closedRows) {
-    lines.push(
-      noteMetaLine({
-        reviewer: note.reviewer,
-        kind: note.kind,
-        when: new Date(note.created_at).toISOString().slice(0, 10),
-        detail: `closed ${new Date(note.closed_at).toISOString().slice(0, 10)}`,
-        id: note.id,
-      }),
-    );
-    lines.push('');
-    // No context hint: these notes are not being relocated, so there is nothing
-    // to point the author at.
-    pushNoteContent(lines, note);
-  }
-  lines.push('---');
-  lines.push('');
-}
+// Every decision about what the document SAYS lives in src/lib/galley-render.js,
+// so `node --test` can reach it — the grouping, the relocation-agreement rule
+// that stops a heading claiming one note's line for all of them, and the rule
+// that an unchanged file's stored anchor beats a relocation. Both of those fail
+// silently rather than loudly, which is why they are no longer in a file nothing
+// can import. This script keeps the I/O: argv, the .mdx, D1, and the write.
 
-const markdown = `${lines.join('\n').trimEnd()}\n`;
+const { markdown, drifted } = renderReviewFile({
+  slug,
+  sourcePath: relativeToCwd(sourcePath),
+  sourceLines,
+  currentHash,
+  rows,
+  closedRows,
+  database: databaseLabel(useLocal),
+});
 
 if (out === '-') {
   process.stdout.write(markdown);
@@ -368,7 +141,7 @@ if (out === '-') {
   const target = resolve(out ?? galleyFile(slug));
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, markdown);
-  console.log(target.replace(`${process.cwd()}/`, ''));
+  console.log(relativeToCwd(target));
   console.error(
     `\n  ${rows.length} open note(s)${drifted ? `, ${drifted} against an older revision` : ''}` +
       `${closedRows.length ? `, ${closedRows.length} closed` : ''}`,

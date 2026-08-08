@@ -48,8 +48,9 @@
 
 import { newLinkId, signPreviewToken, SLUG_RE } from '../src/lib/preview.js';
 import { clampToPublication, isPublished, publicationTime } from '../src/lib/schedule.js';
-import { readPubDate, resolvePostSource } from './content.mjs';
-import { chooseDatabase, databaseLabel } from './database-target.mjs';
+import { readPubDate } from './content.mjs';
+import { cli } from './cli.mjs';
+import { databaseLabel } from './database-target.mjs';
 import { readDevVar } from './dev-vars.mjs';
 import { recordLinks } from './links-db.mjs';
 
@@ -66,10 +67,7 @@ const DEFAULT_HOST = 'https://mjrossi.com';
 // deliberately free of anything the worker does not need.
 const CEILING_HOURS = 720;
 
-function die(message) {
-  console.error(`preview-link: ${message}`);
-  process.exit(1);
-}
+const { die, resolveDatabase, requirePost } = cli('preview-link');
 
 // ── args ─────────────────────────────────────────────
 
@@ -134,12 +132,7 @@ if (!slug) {
 
 // Which database, decided explicitly. See scripts/database-target.mjs for why
 // there is no default: minting against the wrong one is silent either way.
-let useLocal;
-try {
-  useLocal = chooseDatabase({ local, remote });
-} catch (err) {
-  die(err.message);
-}
+const useLocal = resolveDatabase({ local, remote });
 
 // ── validate the slug against real content ───────────
 //
@@ -162,9 +155,7 @@ if (!SLUG_RE.test(slug)) {
   );
 }
 
-if (!resolvePostSource(slug)) {
-  die(`no post found for slug ${JSON.stringify(slug)} (looked for ${slug}.mdx and ${slug}/index.mdx)`);
-}
+requirePost(slug);
 
 // When the post goes live, which is also when this link stops being worth
 // anything. Read from the same frontmatter the build reads — see readPubDate.

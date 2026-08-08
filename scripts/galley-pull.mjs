@@ -36,14 +36,11 @@ import { dirname, resolve } from 'node:path';
 import { CLOSED_HEADING, galleyFile, noteMetaLine } from '../src/lib/galley-manifest.js';
 import { createLocator, pushFenced, pushQuoted } from '../src/lib/galley-relocate.js';
 import { SLUG_RE } from '../src/lib/preview.js';
-import { resolvePostSource } from './content.mjs';
-import { chooseDatabase, databaseFlag, databaseLabel } from './database-target.mjs';
+import { cli, relativeToCwd } from './cli.mjs';
+import { databaseFlag, databaseLabel } from './database-target.mjs';
 import { listNotes } from './notes-db.mjs';
 
-function die(message) {
-  console.error(`galley-pull: ${message}`);
-  process.exit(1);
-}
+const { die, resolveDatabase, requirePost } = cli('galley-pull');
 
 // ── args ─────────────────────────────────────────────
 
@@ -80,17 +77,11 @@ if (!slug) die('usage: npm run galley -- <slug> (--remote | --local) [--all] [--
 if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 
 // Which database, decided explicitly. See scripts/database-target.mjs.
-let useLocal;
-try {
-  useLocal = chooseDatabase({ local, remote });
-} catch (err) {
-  die(err.message);
-}
+const useLocal = resolveDatabase({ local, remote });
 
 // ── the post on disk ─────────────────────────────────
 
-const sourcePath = resolvePostSource(slug);
-if (!sourcePath) die(`no post found for slug ${JSON.stringify(slug)}`);
+const sourcePath = requirePost(slug);
 
 const source = readFileSync(sourcePath, 'utf8');
 // Must match src/lib/galley.js sha256Hex exactly: same bytes, same encoding,

@@ -15,14 +15,11 @@
 // only by hand-written SQL against a table nothing else in this repo updates.
 
 import { SLUG_RE } from '../src/lib/preview.js';
-import { resolvePostSource } from './content.mjs';
-import { chooseDatabase, databaseFlag, databaseLabel } from './database-target.mjs';
+import { cli } from './cli.mjs';
+import { databaseFlag, databaseLabel } from './database-target.mjs';
 import { NOTE_ID_RE, listNotes, reopenNote } from './notes-db.mjs';
 
-function die(message) {
-  console.error(`galley-reopen: ${message}`);
-  process.exit(1);
-}
+const { die, resolveDatabase, requirePost } = cli('galley-reopen');
 
 // ── args ─────────────────────────────────────────────
 
@@ -55,14 +52,9 @@ if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 if (noteId === null) die('--note <id> is required — ids are printed by `just galley <slug> --all`');
 if (!NOTE_ID_RE.test(noteId)) die(`invalid note id ${JSON.stringify(noteId)}`);
 
-let useLocal;
-try {
-  useLocal = chooseDatabase({ local, remote });
-} catch (err) {
-  die(err.message);
-}
+const useLocal = resolveDatabase({ local, remote });
 
-if (!resolvePostSource(slug)) die(`no post found for slug ${JSON.stringify(slug)}`);
+requirePost(slug);
 
 // ── reopen ───────────────────────────────────────────
 

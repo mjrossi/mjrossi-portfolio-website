@@ -30,14 +30,11 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { galleyFile } from '../src/lib/galley-manifest.js';
 import { SLUG_RE } from '../src/lib/preview.js';
-import { resolvePostSource } from './content.mjs';
-import { chooseDatabase, databaseFlag, databaseLabel } from './database-target.mjs';
+import { cli, relativeToCwd } from './cli.mjs';
+import { databaseFlag, databaseLabel } from './database-target.mjs';
 import { NOTE_ID_RE, closeNotes, listNotes, noteIdsInFile } from './notes-db.mjs';
 
-function die(message) {
-  console.error(`galley-close: ${message}`);
-  process.exit(1);
-}
+const { die, resolveDatabase, requirePost } = cli('galley-close');
 
 // ── args ─────────────────────────────────────────────
 
@@ -78,17 +75,12 @@ if (noteId !== null && !NOTE_ID_RE.test(noteId)) {
 }
 if (noteId !== null && from !== null) die('--note and --from are alternatives; pass one');
 
-let useLocal;
-try {
-  useLocal = chooseDatabase({ local, remote });
-} catch (err) {
-  die(err.message);
-}
+const useLocal = resolveDatabase({ local, remote });
 
 // Validated against real content for the same reason preview-link.mjs does it: a
 // typo would otherwise report "no notes to close" for a post that has plenty,
 // which reads exactly like the round already being closed.
-if (!resolvePostSource(slug)) die(`no post found for slug ${JSON.stringify(slug)}`);
+requirePost(slug);
 
 const where = databaseLabel(useLocal);
 const flag = databaseFlag(useLocal);
@@ -107,7 +99,7 @@ if (noteId !== null) {
   manifest = resolve(from ?? galleyFile(slug));
   // What the operator would type, rather than the absolute path resolve() gave
   // us — every message below names the file.
-  shown = manifest.replace(`${process.cwd()}/`, '');
+  shown = relativeToCwd(manifest);
   if (!existsSync(manifest)) {
     die(
       `no ${shown} — pull the round first:\n` +

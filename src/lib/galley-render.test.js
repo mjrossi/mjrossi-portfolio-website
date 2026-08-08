@@ -14,12 +14,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { NOTE_ID_RE, noteIdsInMarkdown } from './galley-manifest.js';
 import {
+  collapseDuplicates,
   contextHint,
   excerptAt,
   groupByAnchor,
   isoDay,
   renderReviewFile,
   resolveGroup,
+  sectionMap,
 } from './galley-render.js';
 
 const HASH = 'a'.repeat(64);
@@ -200,6 +202,150 @@ test('excerptAt gives up rather than ranging far from the anchor', () => {
   assert.equal(excerptAt(['', '', '', '', 'too far'], 0), null);
 });
 
+// ── section labels ───────────────────────────────────
+//
+// What the file could not say before: that seven notes on three different line
+// ranges were all one section of the post. A cluster is the thing you want to
+// see before reading any single note, and finding it by reading all 51 and
+// noticing is not a method.
+
+// 1-based lines: 6 intro, 10 under the h2, 14 under the h3.
+const SECTIONED = [
+  '---',
+  'title: x',
+  '# a yaml comment, not a heading',
+  '---',
+  '',
+  'Intro paragraph.',
+  '',
+  '## Where AI fell short',
+  '',
+  'First body line.',
+  '',
+  '### Know what only you can decide',
+  '',
+  'Second body line.',
+];
+
+test('sectionMap resolves each line to the heading above it', () => {
+  const map = sectionMap(SECTIONED);
+  assert.equal(map.get(5), null, 'the intro is before any heading');
+  assert.equal(map.get(9), 'Where AI fell short');
+  assert.equal(map.get(13), 'Know what only you can decide');
+});
+
+test('the nearest heading wins, whatever its level', () => {
+  // The h3 is inside the h2. The specific one is the useful one.
+  const { markdown } = render({
+    sourceLines: SECTIONED,
+    rows: [note({ src_start: 14, src_end: 14 })],
+  });
+  assert.match(markdown, /^## Line 14-14 · Know what only you can decide$/m);
+});
+
+test('a heading label lands on the group heading', () => {
+  const { markdown } = render({
+    sourceLines: SECTIONED,
+    rows: [note({ src_start: 10, src_end: 10 })],
+  });
+  assert.match(markdown, /^## Line 10-10 · Where AI fell short$/m);
+});
+
+test('frontmatter is not scanned for headings', () => {
+  // `# a yaml comment` is a comment in the frontmatter block, and labelling the
+  // intro with it would be worse than labelling nothing.
+  const { markdown } = render({
+    sourceLines: SECTIONED,
+    rows: [note({ src_start: 6, src_end: 6 })],
+  });
+  assert.match(markdown, /^## Line 6-6$/m, 'no section, because there is none yet');
+});
+
+test('a heading inside a fenced block is not a heading', () => {
+  const sourceLines = [
+    '## Real heading',
+    '',
+    '```md',
+    '## Fake heading in a fence',
+    '```',
+    '',
+    'Body line.',
+  ];
+  assert.equal(sectionMap(sourceLines).get(6), 'Real heading');
+});
+
+test('a fence closes only on its own character at its own length', () => {
+  // Same CommonMark rule the manifest scan follows. A toggle would flip on the
+  // inner fence and hand every later line the wrong section.
+  const sourceLines = ['## Real heading', '````md', '```', '## Fake', '````', 'Body line.'];
+  assert.equal(sectionMap(sourceLines).get(5), 'Real heading');
+});
+
+test('a stale group that cannot be relocated gets NO section label', () => {
+  // Its stored line number means nothing in the file as it stands, so a heading
+  // looked up at that index would name a section the note was never in.
+  const { markdown } = render({
+    sourceLines: SECTIONED,
+    rows: [note({ src_start: 10, src_end: 10, quote: 'gone from the file', revision_hash: OLD_HASH })],
+  });
+  assert.match(markdown, /^## Line 10-10 — ⚠ revision drift, quote not found$/m);
+});
+
+test('a stale group that relocates is labelled from where it moved TO', () => {
+  const { markdown } = render({
+    sourceLines: SECTIONED,
+    rows: [note({ src_start: 4, src_end: 4, quote: 'Second body line.', revision_hash: OLD_HASH })],
+  });
+  assert.match(markdown, /^## Line 4-4 · Know what only you can decide — now line 14$/m);
+});
+
+// ── the section summary ──────────────────────────────
+
+test('the header counts notes by section, in source order', () => {
+  const { markdown } = render({
+    sourceLines: SECTIONED,
+    rows: [
+      note({ id: ID(1), src_start: 14, src_end: 14 }),
+      note({ id: ID(2), src_start: 10, src_end: 10 }),
+      note({ id: ID(3), src_start: 14, src_end: 14 }),
+      note({ id: ID(4), src_start: 6, src_end: 6 }),
+    ],
+  });
+  const summary = markdown.split('Notes by section:')[1].split('```')[1];
+  assert.deepEqual(
+    summary
+      .trim()
+      .split('\n')
+      .map((line) => line.trim().replace(/\s{2,}/, ' · ')),
+    [
+      '(before the first heading) · 1',
+      'Where AI fell short · 1',
+      'Know what only you can decide · 2',
+    ],
+  );
+});
+
+test('the summary is omitted when there is nothing to group by', () => {
+  const oneSection = render({
+    sourceLines: SECTIONED,
+    rows: [note({ src_start: 10, src_end: 10 })],
+  });
+  assert.doesNotMatch(oneSection.markdown, /Notes by section/, 'one section is not a grouping');
+  assert.doesNotMatch(render().markdown, /Notes by section/, 'and neither is an empty pull');
+});
+
+test('an unanchored note is counted in the summary, not silently dropped', () => {
+  // The counts have to add up to the number in the line above them.
+  const { markdown } = render({
+    sourceLines: SECTIONED,
+    rows: [
+      note({ id: ID(1), src_start: 10, src_end: 10 }),
+      note({ id: ID(2), src_start: null, src_end: null }),
+    ],
+  });
+  assert.match(markdown, /Whole-draft\s+1/);
+});
+
 // ── context hint ─────────────────────────────────────
 
 test('contextHint joins the stored context, or gives back null', () => {
@@ -266,6 +412,120 @@ test('every rendered note id is readable back out of the file', () => {
   });
   assert.deepEqual(noteIdsInMarkdown(markdown), [ID(1), ID(3), ID(2)]);
   for (const id of noteIdsInMarkdown(markdown)) assert.match(id, NOTE_ID_RE);
+});
+
+// ── duplicates ───────────────────────────────────────
+//
+// A double-submit puts two ids on byte-identical content, and the file reads as
+// two independent pieces of feedback. Collapsing is safe only because
+// noteIdsInMarkdown scans line by line: two meta lines over one body still close
+// both ids. A collapsed id that stopped closing would be a note left open
+// forever, so that round-trip is the assertion that matters here.
+
+const DUPE = {
+  src_start: 5,
+  src_end: 5,
+  quote: 'The first paragraph.',
+  kind: 'suggestion',
+  body: null,
+  suggestion: 'yourself',
+};
+
+test('collapseDuplicates keys on every content field, and keeps first-seen order', () => {
+  const rows = [
+    note({ id: ID(1), ...DUPE }),
+    note({ id: ID(2), body: 'different' }),
+    note({ id: ID(3), ...DUPE }),
+  ];
+  assert.deepEqual(
+    collapseDuplicates(rows).map((entry) => entry.ids),
+    [[ID(1), ID(3)], [ID(2)]],
+  );
+});
+
+test('a different prefix is a different note — same words, other occurrence', () => {
+  const rows = [note({ id: ID(1), ...DUPE, prefix: 'one ' }), note({ id: ID(2), ...DUPE, prefix: 'two ' })];
+  assert.equal(collapseDuplicates(rows).length, 2);
+});
+
+test('an exact duplicate prints once and still closes both ids', () => {
+  const { markdown } = render({ rows: [note({ id: ID(1), ...DUPE }), note({ id: ID(2), ...DUPE })] });
+  assert.deepEqual(noteIdsInMarkdown(markdown), [ID(1), ID(2)], 'both ids stay closable');
+  assert.equal(markdown.match(/^yourself$/gm).length, 1, 'but the content appears once');
+  assert.match(markdown, /`00000001-[\d-]+`\n\*\*jd\*\*/, 'the two meta lines are adjacent');
+});
+
+test('duplicates are collapsed in the closed appendix too', () => {
+  const closed = { ...DUPE, closed_at: Date.UTC(2026, 4, 9) };
+  const { markdown } = render({
+    closedRows: [note({ id: ID(1), ...closed }), note({ id: ID(2), ...closed })],
+  });
+  assert.equal(markdown.match(/^yourself$/gm).length, 1);
+});
+
+// ── a second note on the same passage ────────────────
+//
+// The case this exists for: a reviewer filed "up front -> upfront", then filed
+// "actually nvm" on the same words. Applying the withdrawn one was avoided only
+// because listNotes orders by created_at and the pair happened to land adjacent.
+// The marker is deliberately neutral — same-reviewer-same-quote catches a
+// retraction and an afterthought alike, and only the adjacency is certain.
+
+test('a second note on the same words by the same reviewer is marked', () => {
+  const { markdown } = render({
+    rows: [
+      note({ id: ID(1), quote: 'up front', kind: 'suggestion', suggestion: 'upfront', body: null }),
+      note({ id: ID(2), quote: 'up front', body: 'actually nvm' }),
+    ],
+  });
+  assert.doesNotMatch(markdown, /↳ same passage as above · `00000001/, 'never the first');
+  assert.match(markdown, /↳ same passage as above · `00000002/);
+});
+
+test('two reviewers on the same words are not a follow-up', () => {
+  const { markdown } = render({
+    rows: [
+      note({ id: ID(1), reviewer: 'jd', quote: 'up front' }),
+      note({ id: ID(2), reviewer: 're', quote: 'up front' }),
+    ],
+  });
+  assert.doesNotMatch(markdown, /same passage as above/);
+});
+
+test('notes without a quote are never marked', () => {
+  const { markdown } = render({
+    rows: [note({ id: ID(1), quote: null }), note({ id: ID(2), quote: null })],
+  });
+  assert.doesNotMatch(markdown, /same passage as above/);
+});
+
+test('a collapsed duplicate does not mark itself', () => {
+  // Collapse runs first, so the pair is one entry by the time this pass sees it.
+  const { markdown } = render({ rows: [note({ id: ID(1), ...DUPE }), note({ id: ID(2), ...DUPE })] });
+  assert.doesNotMatch(markdown, /same passage as above/);
+});
+
+test('the marker composes with a per-note relocation', () => {
+  const sourceLines = ['alpha here', 'padding', 'beta here'];
+  const { markdown } = render({
+    sourceLines,
+    rows: [
+      note({ id: ID(1), src_start: 9, src_end: 9, quote: 'alpha here', revision_hash: OLD_HASH }),
+      note({ id: ID(2), src_start: 9, src_end: 9, quote: 'beta here', revision_hash: OLD_HASH }),
+      note({ id: ID(3), src_start: 9, src_end: 9, quote: 'beta here', body: 'and another thing', revision_hash: OLD_HASH }),
+    ],
+  });
+  assert.match(markdown, /now line 3 · ↳ same passage as above · `00000003/);
+});
+
+test('the marker is scoped to one group', () => {
+  const { markdown } = render({
+    rows: [
+      note({ id: ID(1), src_start: 5, src_end: 5, quote: 'up front' }),
+      note({ id: ID(2), src_start: 40, src_end: 40, quote: 'up front' }),
+    ],
+  });
+  assert.doesNotMatch(markdown, /same passage as above/);
 });
 
 test('closed notes are below the cut and are NOT part of the manifest', () => {

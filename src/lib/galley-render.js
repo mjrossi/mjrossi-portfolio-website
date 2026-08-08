@@ -31,6 +31,46 @@ const EXCERPT_SCAN = 4;
 /** Longest excerpt printed under a heading before it is elided. */
 const EXCERPT_MAX = 300;
 
+/** Longest section label printed, on a heading or in the summary. */
+const SECTION_MAX = 56;
+
+/** The label for notes anchored above the post's first heading. */
+const NO_SECTION = '(before the first heading)';
+
+/**
+ * The summary bucket for a group whose passage could not be located at all —
+ * stale, and its quote no longer in the file. Distinct from NO_SECTION, which
+ * is a positive claim about where the note is.
+ */
+const UNKNOWN_SECTION = '(section unknown)';
+
+/** The summary row for unanchored notes, matching the `## Whole-draft notes` heading. */
+const WHOLE_DRAFT = 'Whole-draft';
+
+/**
+ * Appended to a note filed on a passage an earlier note in the same group
+ * already covered. DELIBERATELY NEUTRAL: same-reviewer-same-quote catches a
+ * retraction ("actually nvm" on the words just suggested) and a plain
+ * afterthought alike, and only the adjacency is certain. Calling it a follow-up
+ * would assert the second note revises the first, which is exactly the half this
+ * cannot know.
+ */
+const SAME_PASSAGE = '↳ same passage as above';
+
+// An opening or closing fence, captured so the close can be matched against it.
+//
+// galley-manifest.js holds the same CommonMark rule for the PULLED FILE, where
+// it keeps reviewer prose from being read as note ids. This one is for the
+// .mdx, and the two are separate because they scan different documents and may
+// legitimately diverge; excerptAt already owned a fence literal here before
+// either of the readers below needed one.
+const FENCE_RE = /^\s*(`{3,}|~{3,})/;
+
+// An ATX heading: up to three leading spaces, one to six #s, then a space.
+// Setext headings (=== / --- underlines) are NOT detected — every post here is
+// ATX, and an undetected heading yields no label rather than a wrong one.
+const ATX_RE = /^ {0,3}(#{1,6})\s+(.*)$/;
+
 /**
  * A timestamp as the day it fell on, which is the only precision this file ever
  * shows. One definition because the meta line has three date fields between its
@@ -78,10 +118,117 @@ export function excerptAt(sourceLines, index) {
   for (let i = index; i < Math.min(index + EXCERPT_SCAN, sourceLines.length); i++) {
     const text = sourceLines[i]?.trim();
     if (!text) continue;
-    if (/^(`{3,}|~{3,})/.test(text)) continue;
+    if (FENCE_RE.test(text)) continue;
     return text;
   }
   return null;
+}
+
+/**
+ * Every line of the .mdx mapped to the heading it sits under, or null where
+ * there isn't one yet.
+ *
+ * Built by ONE FORWARD PASS rather than a backward scan per lookup, because the
+ * fence state is what makes it correct: a `## ` inside a fenced code block is
+ * not a heading, and you cannot tell whether a line is fenced by looking only
+ * at the lines above it in reverse.
+ *
+ * Nearest heading of ANY level wins. A note in "Know what only you can decide"
+ * wants that, not the `## Five lessons` two screens up — the specific one is the
+ * one that tells you where you are.
+ *
+ * @param {string[]} sourceLines
+ * @returns {Map<number, string | null>} 0-based line index → heading text
+ */
+export function sectionMap(sourceLines) {
+  const map = new Map();
+
+  // Skip the frontmatter block. `# tags are public` in there is a YAML comment,
+  // and labelling the post's opening paragraph with it would be worse than
+  // labelling nothing. Only the LEADING block — a later `---` is a thematic
+  // break and has no bearing on this.
+  let start = 0;
+  if (sourceLines[0]?.trim() === '---') {
+    const end = sourceLines.findIndex((line, i) => i > 0 && line.trim() === '---');
+    if (end > 0) {
+      for (let i = 0; i <= end; i++) map.set(i, null);
+      start = end + 1;
+    }
+  }
+
+  let fence = null;
+  let current = null;
+  for (let i = start; i < sourceLines.length; i++) {
+    const line = sourceLines[i];
+    const found = FENCE_RE.exec(line);
+    if (fence !== null) {
+      // Close only on the same character at at least the same length —
+      // CommonMark's rule, and the one galley-manifest.js follows. A boolean
+      // toggle flips on a shorter inner fence and hands every line after it the
+      // wrong section.
+      if (found && found[1][0] === fence[0] && found[1].length >= fence.length) fence = null;
+    } else if (found) {
+      fence = found[1];
+    } else {
+      const heading = ATX_RE.exec(line);
+      // Trailing #s are an optional closing sequence, not part of the text.
+      if (heading) current = heading[2].trim().replace(/\s+#+$/, '') || null;
+    }
+    map.set(i, current);
+  }
+  return map;
+}
+
+/**
+ * Notes grouped so byte-identical ones print once, in first-seen order.
+ *
+ * A double-submit lands two ids on the same reviewer, quote, body and
+ * suggestion, and the file then reads as two independent pieces of feedback.
+ *
+ * SAFE ONLY BECAUSE THE MANIFEST IS LINE-BASED: the caller emits one meta line
+ * per id above a single copy of the content, and noteIdsInMarkdown reads each of
+ * them, so every id stays closable. An entry whose extra ids stopped being
+ * printed would leave those notes open forever with nothing saying so.
+ *
+ * The key is every content field, prefix and suffix included: the same words
+ * selected at a different occurrence in the same block are different notes, and
+ * that is the only place they differ.
+ *
+ * @param {Record<string, unknown>[]} notes
+ * @returns {{ ids: string[], notes: Record<string, unknown>[] }[]}
+ */
+export function collapseDuplicates(notes) {
+  const byContent = new Map();
+  for (const note of notes) {
+    const key = JSON.stringify([
+      note.reviewer,
+      note.kind,
+      note.quote,
+      note.prefix,
+      note.suffix,
+      note.body,
+      note.suggestion,
+    ]);
+    const entry = byContent.get(key);
+    if (entry) {
+      entry.ids.push(note.id);
+      entry.notes.push(note);
+    } else {
+      byContent.set(key, { ids: [note.id], notes: [note] });
+    }
+  }
+  return [...byContent.values()];
+}
+
+/**
+ * A section label at printable length.
+ *
+ * @param {string | null} text
+ * @returns {string | null}
+ */
+function sectionLabel(text) {
+  if (!text) return null;
+  return text.length > SECTION_MAX ? `${text.slice(0, SECTION_MAX - 1)}…` : text;
 }
 
 /**
@@ -220,6 +367,42 @@ export function renderReviewFile({
   // ignore the one that matters.
   const drifted = rows.filter((r) => r.revision_hash !== currentHash).length;
 
+  // Everything about a group that both the summary and the body below need,
+  // resolved ONCE. The section label and the excerpt must be read at the SAME
+  // index — two independently computed ones is how a heading ends up naming a
+  // different passage than the excerpt printed under it, which is the
+  // resolveGroup failure mode one level up.
+  const sections = sectionMap(sourceLines);
+  const groups = groupByAnchor(rows).map(([key, notes]) => {
+    const entries = collapseDuplicates(notes);
+    if (key === 'general') {
+      return { key, notes, entries, label: WHOLE_DRAFT, section: null, stale: false, current: null };
+    }
+    const stale = notes.some((n) => n.revision_hash !== currentHash);
+    const { line: current, anyFound, lineOf } = resolveGroup(notes, locate);
+    // Where this group's passage is in the file as it stands. Null when the
+    // group is stale and its quote could not be found: the stored line number
+    // means nothing in the current file, so there is no honest place to read a
+    // heading from and the label is withheld rather than guessed.
+    const anchorIndex = !stale ? Number(key.split('-')[0]) - 1 : current ? current - 1 : null;
+    const section =
+      anchorIndex !== null && sections.has(anchorIndex)
+        ? sectionLabel(sections.get(anchorIndex))
+        : null;
+    return {
+      key,
+      notes,
+      entries,
+      stale,
+      current,
+      anyFound,
+      lineOf,
+      anchorIndex,
+      section,
+      label: section ?? (anchorIndex === null ? UNKNOWN_SECTION : NO_SECTION),
+    };
+  });
+
   const lines = [];
   lines.push(`# Review notes — ${slug}`);
   lines.push('');
@@ -232,6 +415,30 @@ export function renderReviewFile({
       : `${openLabel}, ${reviewers} reviewer(s).`,
   );
   lines.push('');
+
+  // Where the notes fell, before you have read any of them. A round's shape is
+  // its clusters — seven notes on one section is a rewrite and seven notes
+  // spread over seven is an afternoon of small edits — and nothing in a file
+  // ordered by line number shows that.
+  //
+  // Counts NOTES, not entries, so they add up to the number on the line above
+  // even where duplicates collapsed. Skipped below two buckets: one bucket is
+  // not a grouping, it is the same fact restated.
+  const byLabel = new Map();
+  for (const group of groups) {
+    byLabel.set(group.label, (byLabel.get(group.label) ?? 0) + group.notes.length);
+  }
+  if (byLabel.size > 1) {
+    lines.push('Notes by section:');
+    lines.push('');
+    const width = Math.max(...[...byLabel.keys()].map((label) => label.length));
+    pushFenced(
+      lines,
+      [...byLabel].map(([label, count]) => `${label.padEnd(width)}  ${count}`).join('\n'),
+    );
+    lines.push('');
+  }
+
   // The manifest contract, stated in the artifact itself: `just galley-close`
   // closes the ids printed below and nothing else, so a reader who edits this file
   // by hand needs to know that deleting a note here spares it.
@@ -254,24 +461,18 @@ export function renderReviewFile({
   lines.push('---');
   lines.push('');
 
-  for (const [key, notes] of groupByAnchor(rows)) {
-    // Declared out here because the per-note loop below needs it: when the group
-    // could NOT agree on a single relocation, each note carries its own.
-    let current = null;
-    let lineOf = new Map();
+  for (const { key, entries, stale, current, anyFound, lineOf, anchorIndex, section } of groups) {
     if (key === 'general') {
       lines.push('## Whole-draft notes');
     } else {
-      const stale = notes.some((n) => n.revision_hash !== currentHash);
-      const group = resolveGroup(notes, locate);
-      current = group.line;
-      lineOf = group.lineOf;
-
+      // Section first, drift second: which passage this is, then what has
+      // happened to it.
       let heading = `## Line ${key}`;
+      if (section) heading += ` · ${section}`;
       if (stale) {
         if (current) {
           heading += ` — now line ${current}`;
-        } else if (group.anyFound) {
+        } else if (anyFound) {
           // Found, but not all in the same place — these notes share an anchor
           // while quoting different sentences. Saying "not found" here would be
           // wrong, and saying "now line N" would pick one of them arbitrarily.
@@ -281,14 +482,12 @@ export function renderReviewFile({
         }
       }
       lines.push(heading);
-      if (!stale || current) {
-        // When the file has NOT drifted the stored anchor is authoritative by
-        // definition, so it wins over a relocation. Preferring `current`
-        // unconditionally could put a heading reading "## Line 42-47" above an
-        // excerpt taken from somewhere else entirely — the quote resolving
-        // elsewhere in an unchanged file means the anchor is the trustworthy half.
-        const at = (stale ? current : Number(key.split('-')[0])) - 1;
-        const text = excerptAt(sourceLines, at);
+      // anchorIndex is the same index the section label was read at. When the
+      // file has NOT drifted the stored anchor is authoritative by definition,
+      // so it wins over a relocation: the quote resolving elsewhere in an
+      // unchanged file means the anchor is the trustworthy half.
+      if (anchorIndex !== null) {
+        const text = excerptAt(sourceLines, anchorIndex);
         if (text) {
           lines.push('');
           pushFenced(lines, text.length > EXCERPT_MAX ? `${text.slice(0, EXCERPT_MAX)}…` : text, 'md');
@@ -297,20 +496,38 @@ export function renderReviewFile({
     }
     lines.push('');
 
-    for (const note of notes) {
-      const noteLine = lineOf.get(note);
-      lines.push(
-        noteMetaLine({
-          reviewer: note.reviewer,
-          kind: note.kind,
-          when: isoDay(note.created_at),
-          // Per-note relocation, for the case the heading could not claim one:
-          // the notes in this group resolve to different lines, so each says
-          // where its own passage went.
-          detail: key !== 'general' && !current && noteLine ? `now line ${noteLine}` : null,
-          id: note.id,
-        }),
-      );
+    // A passage this group has already spoken about. Keyed by reviewer as well
+    // as quote: two editors landing on the same sentence is the ordinary case
+    // and is not one of them revisiting it.
+    const spokenFor = new Set();
+
+    for (const { notes: same } of entries) {
+      const note = same[0];
+      const noteLine = lineOf?.get(note);
+      const passage = note.quote ? `${note.reviewer} ${note.quote}` : null;
+
+      const detail = [];
+      // Per-note relocation, for the case the heading could not claim one: the
+      // notes in this group resolve to different lines, so each says where its
+      // own passage went.
+      if (key !== 'general' && !current && noteLine) detail.push(`now line ${noteLine}`);
+      if (passage !== null && spokenFor.has(passage)) detail.push(SAME_PASSAGE);
+      if (passage !== null) spokenFor.add(passage);
+
+      // ONE META LINE PER ID over a single copy of the content. Every id stays
+      // in the manifest — noteIdsInMarkdown reads line by line — so a collapsed
+      // duplicate is still closed by `just galley-close`.
+      for (const dupe of same) {
+        lines.push(
+          noteMetaLine({
+            reviewer: dupe.reviewer,
+            kind: dupe.kind,
+            when: isoDay(dupe.created_at),
+            detail: detail.length > 0 ? detail.join(' · ') : null,
+            id: dupe.id,
+          }),
+        );
+      }
       lines.push('');
       // Nothing else in this file can point at the passage, so hand over the
       // context the note was written against. This is the case prefix/suffix were
@@ -338,20 +555,25 @@ export function renderReviewFile({
         `Re-open one with \`just galley-reopen ${slug} --note <id>\`.`,
     );
     lines.push('');
-    for (const note of closedRows) {
-      lines.push(
-        noteMetaLine({
-          reviewer: note.reviewer,
-          kind: note.kind,
-          when: isoDay(note.created_at),
-          detail: `closed ${isoDay(note.closed_at)}`,
-          id: note.id,
-        }),
-      );
+    // Collapsed here too — printing identical content twice is noise wherever it
+    // happens. No section label and no same-passage marker: this appendix is
+    // flat and unanchored by design, so neither has anything to attach to.
+    for (const { notes: same } of collapseDuplicates(closedRows)) {
+      for (const note of same) {
+        lines.push(
+          noteMetaLine({
+            reviewer: note.reviewer,
+            kind: note.kind,
+            when: isoDay(note.created_at),
+            detail: `closed ${isoDay(note.closed_at)}`,
+            id: note.id,
+          }),
+        );
+      }
       lines.push('');
       // No context hint: these notes are not being relocated, so there is nothing
       // to point the author at.
-      pushNoteContent(lines, note);
+      pushNoteContent(lines, same[0]);
     }
     lines.push('---');
     lines.push('');

@@ -347,19 +347,51 @@ const { slug, reviewer, revision } = Astro.props;
     color: #a33;
   }
 
-  /* Applied by the client to blocks in the slotted post body. Marks passages
-     that already carry a note, which is the point of everyone seeing the same
-     margin: it stops three editors filing the same sentence. */
-  .post-body .galley-marked {
-    background: linear-gradient(transparent 60%, var(--accent-band, #f3e5d5) 60%);
-    position: relative;
+  /* The passage a note is about. Painted by the client onto a Range via the
+     CSS Custom Highlight API — no element, no DOM mutation, which is what lets
+     it mark words inside prose without disturbing the anchors measured from
+     that same tree. Deeper than the block wash below because it covers a few
+     words rather than a paragraph; small areas need the saturation to read.
+
+     ::highlight() accepts only colour, text-decoration and text-shadow, so
+     there is no border or padding to be had here — the colour is the marker. */
+  ::highlight(galley-note) {
+    background-color: var(--accent-band-border, #e6c9a8);
+    color: var(--text);
   }
 
+  /* Applied by the client to a block holding a note it could NOT place more
+     precisely than "somewhere in here" — no quote recorded, a quote that no
+     longer matches, a quote occurring twice in the block, or a browser without
+     the Highlight API. `data-galley-count` counts those notes only.
+
+     A FLAT WASH ACROSS THE WHOLE ELEMENT, deliberately. This rule used to be
+     `linear-gradient(transparent 60%, var(--accent-band) 60%)` — the inline
+     highlighter-pen idiom, which resolves against a LINE box on an inline
+     element but against the whole PARAGRAPH box here, because the client marks
+     blocks. The result was a solid band over the last 40% of every marked
+     paragraph: a confident pointer at whichever prose happened to fall there,
+     never the prose the note was about. Anything with an edge inside the block
+     re-creates that bug. If it is going to say "somewhere in this block", it
+     has to cover the block. */
+  .post-body .galley-marked {
+    background-color: var(--accent-band, #f3e5d5);
+    border-radius: 2px;
+    /* Lets the wash breathe past the text box without shifting a single line —
+       padding would reflow the paragraph the moment notes finished loading. */
+    box-shadow: 0 0 0 0.2rem var(--accent-band, #f3e5d5);
+  }
+
+  /* Trails the block's text like a footnote mark. Kept in flow rather than
+     absolutely positioned: the previous version set `top` but no `left`, so it
+     took its static inline position — the end of the last line — while `top`
+     hauled it up to the first, leaving the count floating mid-paragraph
+     attached to nothing. In flow it also survives the elements that can carry
+     an anchor but have no free margin to hang off, `li` and `blockquote`. */
   .post-body .galley-marked::after {
     content: attr(data-galley-count);
-    position: absolute;
-    top: -0.4em;
-    margin-left: 0.25em;
+    margin-left: 0.3em;
+    vertical-align: super;
     font-family: var(--font-ui);
     font-size: 0.6rem;
     color: var(--accent);

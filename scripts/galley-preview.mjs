@@ -1,6 +1,7 @@
 // The galley margin, rendered against fixtures, with no worker and no database.
 //
 //   just galley-preview            → serves it, prints the URL
+//   just galley-preview --stale    → the same page, one revision behind the server
 //   just galley-preview --shot out.png
 //
 // WHY THIS EXISTS. The galley's markers are the one part of this repo whose
@@ -57,6 +58,7 @@ const TYPES = {
 
 let port = DEFAULT_PORT;
 let shot = null;
+let stale = false;
 
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i += 1) {
@@ -67,8 +69,13 @@ for (let i = 0; i < argv.length; i += 1) {
   } else if (arg === '--shot') {
     shot = argv[++i];
     if (!shot) die('--shot needs a file to write');
+  } else if (arg === '--stale') {
+    stale = true;
   } else {
-    die(`unknown argument: ${arg}\n  usage: just galley-preview [--port N] [--shot FILE]`);
+    die(
+      `unknown argument: ${arg}\n` +
+        '  usage: just galley-preview [--port N] [--shot FILE] [--stale]',
+    );
   }
 }
 
@@ -149,16 +156,29 @@ function note(src, quote, body) {
     body,
     suggestion: null,
     created_at: Date.now() - seq * 60000,
-    revision_hash: 'preview',
+    // No `revision_hash`: the endpoint selects it and then strips it, folding it
+    // into `stale` (see the `shape()` helper in api/galley.ts). Carrying it here
+    // would put a field in the fixture that no real response has.
     stale: false,
   };
 }
+
+// The revision the SERVER is serving. Under `--stale` it differs from the
+// `data-revision` on the page below, which is the whole point: that is the state
+// a reviewer lands in when the draft is revised while their tab is open. Every
+// marker must disappear — INCLUDING those for notes the server still considers
+// current, since they were written against a source this document does not have
+// — and the bar must raise the reload prompt. Without the flag the two agree,
+// `pageStale` is permanently false, and deleting the gate from `markAnchors`
+// changes nothing on screen.
+const PAGE_REVISION = 'preview';
+const SERVER_REVISION = stale ? 'preview-next' : PAGE_REVISION;
 
 /** Canned `GET /api/galley` payload. Shapes mirror src/pages/api/galley.ts exactly. */
 const PAYLOAD = {
   slug: 'galley-preview',
   reviewer: 'jd',
-  revision: 'preview',
+  revision: SERVER_REVISION,
   notes: [
     note('10-14', 'congestion', 'Is this the term we want, or is it jargon here?'),
     note('16-19', 'we shipped the Atlas last spring', 'Date this — "last spring" ages badly.'),
@@ -204,6 +224,12 @@ async function page() {
     Fixtures — no worker, no database. Styles come from <code>GalleyMargin.astro</code> and
     <code>global.css</code>; the client is the real <code>/scripts/galley.js</code>. Select any
     passage to exercise the composer.
+    ${
+      stale
+        ? '<strong>--stale:</strong> the server is a revision ahead of this page. Expect no markers ' +
+          'anywhere, no highlights, the reload prompt in the bar, and a refused save.'
+        : ''
+    }
   </div>
   <article class="page post">
     <div class="post-body">${BLOCKS}</div>
@@ -222,6 +248,17 @@ async function page() {
         // the composer behaves the way it does against the real endpoint.
         if (init && init.method === 'POST') {
           const sent = JSON.parse(init.body);
+          // The endpoint refuses a note echoing a revision it no longer holds,
+          // so under --stale the composer must show its stale_page message and
+          // KEEP the typed text. That path is otherwise unreachable by hand.
+          if (sent.revision !== payload.revision) {
+            return Promise.resolve(
+              new Response('{"error":"stale_page"}', {
+                status: 409,
+                headers: { 'Content-Type': 'application/json' },
+              }),
+            );
+          }
           const [start, end] = String(sent.src || '0-0').split('-').map(Number);
           payload.notes.push({
             id: 'preview-' + (payload.notes.length + 1),
@@ -233,7 +270,6 @@ async function page() {
             body: sent.body,
             suggestion: sent.suggestion || null,
             created_at: Date.now(),
-            revision_hash: payload.revision,
             stale: false,
           });
           return Promise.resolve(new Response('{"ok":true}', { status: 200 }));
@@ -248,7 +284,7 @@ async function page() {
     })();
   </script>
 
-  <div id="galley" data-slug="galley-preview" data-reviewer="jd" data-revision="preview"></div>
+  <div id="galley" data-slug="galley-preview" data-reviewer="jd" data-revision="${PAGE_REVISION}"></div>
   <script type="module" src="/scripts/galley.js"></script>
 </body>
 </html>`;
@@ -288,7 +324,7 @@ server.listen(port, '127.0.0.1', async () => {
   // to be PRESENT, because galley.js reads it from the query string and returns
   // early without one. Same for data-slug on the mount.
   const url = `http://127.0.0.1:${port}/?preview=preview`;
-  process.stderr.write(`galley-preview: ${url}\n`);
+  process.stderr.write(`galley-preview: ${url}${stale ? '  (--stale: page one revision behind)' : ''}\n`);
 
   if (!shot) {
     process.stderr.write('  ctrl-c to stop\n');

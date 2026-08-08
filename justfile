@@ -96,6 +96,11 @@ smoke: build
 # the component and loads the real /scripts/galley.js, so nothing here can
 # render something production doesn't. `--shot FILE` writes a PNG if a headless
 # Chrome happens to be installed.
+#
+# `--stale` puts the page a revision behind the server, which is the other state
+# markAnchors has to get right: every marker withheld, the reload prompt raised,
+# and a save refused. Without the flag the two revisions always agree and that
+# whole gate is unrenderable.
 [group('dev')]
 [doc('render the galley margin against fixtures on 127.0.0.1:8790 — no worker, no D1')]
 galley-preview *flags:

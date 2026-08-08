@@ -321,6 +321,64 @@ test('anchorSelection and findQuote are inverses', () => {
   }
 });
 
+test('an ambiguous quote degrades to NO marker rather than to the wrong words', () => {
+  // The headline claim of the marker work, composed end to end. Each half is
+  // tested alone above — anchorSelection anchors the second sentence to itself,
+  // findQuote refuses a quote that occurs twice — but the property that matters
+  // only exists when they are joined: a note filed on the SECOND of two
+  // identical sentences must light neither, rather than confidently lighting
+  // the first. `null` is the only alternative to a hit, so this pins it.
+  const texts = ['It matters. It matters. And then more.'];
+
+  const anchor = anchorSelection(texts, 12, 'It matters.', 32);
+  assert.equal(anchor.at, 12, 'the write side placed the anchor on the wrong occurrence');
+  assert.equal(anchor.quote, 'It matters.');
+
+  // The stored prefix/suffix DO disambiguate — galley-pull.mjs relocates with
+  // them — but GET /api/galley does not return them, so the client has only the
+  // quote and must give up rather than guess. That asymmetry is deliberate.
+  assert.equal(anchor.prefix, 'It matters. ');
+  assert.equal(findQuote(texts, anchor.quote), null);
+});
+
+test('the paths that place an anchor WITHOUT a measured offset still round-trip', () => {
+  // The inverses test above drives every case through the measured path. These
+  // two reach `at` another way, and each one is a place a marker could land on
+  // different words than the note recorded.
+  const cases = [
+    // indexOf fallback: the measurement did not fit, the quote is still placed.
+    {
+      texts: ['we shipped ', 'the Atlas', ' last spring'],
+      rawStart: 999,
+      selected: 'the Atlas',
+      quote: 'the Atlas',
+    },
+    // Clamp: the selection was dragged past the end of the block and cut back.
+    {
+      texts: ['A first block sentence.'],
+      rawStart: 2,
+      selected: 'first block sentence. And the next block too.',
+      quote: 'first block sentence.',
+    },
+  ];
+
+  for (const { texts, rawStart, selected, quote } of cases) {
+    const label = JSON.stringify(selected);
+    const anchor = anchorSelection(texts, rawStart, selected, 32);
+    assert.ok(anchor, `anchorSelection placed nothing for ${label}`);
+    assert.equal(anchor.quote, quote, `wrong quote stored for ${label}`);
+
+    const hit = findQuote(texts, anchor.quote);
+    assert.ok(hit, `findQuote lost ${JSON.stringify(anchor.quote)}`);
+
+    const start = rawOffsetOf(texts, hit.startIndex, hit.startOffset);
+    assert.equal(collapsedOffsetOf(texts, start), anchor.at, `round trip moved ${label}`);
+
+    const marked = texts.join('').slice(start, rawOffsetOf(texts, hit.endIndex, hit.endOffset));
+    assert.equal(collapse(marked), anchor.quote, `marked text differs for ${label}`);
+  }
+});
+
 // ── the invariant the two halves rest on ───────────────
 
 test('the incremental collapse inside findQuote agrees with collapse()', () => {

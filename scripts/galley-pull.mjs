@@ -3,7 +3,19 @@
 //
 //   npm run galley -- my-draft --remote            # production notes
 //   npm run galley -- my-draft --local             # the local dev database
+//   npm run galley -- my-draft --remote --all      # closed rounds too
 //   npm run galley -- my-draft --remote --out -    # stdout instead of docs/galley/
+//
+// OPEN NOTES ONLY, unless --all. A note stays in the table once the round it
+// belonged to is closed (`just galley-close`), so without that filter this file
+// would accumulate every note ever left on the post and re-present work already
+// merged as though it still needed doing.
+//
+// THIS FILE IS ALSO A MANIFEST. Every note is printed with its id, and
+// `just galley-close` closes exactly the ids it finds here — which is what keeps
+// a close scoped to the notes the author actually read, rather than to "whatever
+// looks old", a set that silently includes a second reviewer's unread feedback.
+// Commit it alongside the revision that answers it.
 //
 // --remote or --local is REQUIRED; see scripts/database-target.mjs. Pulling
 // from the wrong database reports "no notes" for a post that has them.
@@ -21,16 +33,14 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { createLocator, pushFenced, pushQuoted } from '../src/lib/galley-relocate.js';
+import { galleyFile } from '../src/lib/galley-manifest.js';
+import { renderReviewFile } from '../src/lib/galley-render.js';
 import { SLUG_RE } from '../src/lib/preview.js';
-import { resolvePostSource } from './content.mjs';
-import { chooseDatabase, databaseLabel } from './database-target.mjs';
-import { d1Query } from './d1.mjs';
+import { cli, relativeToCwd } from './cli.mjs';
+import { databaseFlag, databaseLabel } from './database-target.mjs';
+import { listNotes } from './notes-db.mjs';
 
-function die(message) {
-  console.error(`galley-pull: ${message}`);
-  process.exit(1);
-}
+const { die, resolveDatabase, requirePost } = cli('galley-pull');
 
 // ── args ─────────────────────────────────────────────
 
@@ -39,6 +49,7 @@ let slug = null;
 let local = false;
 let remote = false;
 let out = null;
+let includeClosed = false;
 
 for (let i = 0; i < argv.length; i++) {
   const arg = argv[i];
@@ -46,6 +57,8 @@ for (let i = 0; i < argv.length; i++) {
     local = true;
   } else if (arg === '--remote') {
     remote = true;
+  } else if (arg === '--all') {
+    includeClosed = true;
   } else if (arg === '--out') {
     out = argv[++i];
     if (!out) die('--out requires a value');
@@ -58,23 +71,17 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 
-if (!slug) die('usage: npm run galley -- <slug> (--remote | --local) [--out PATH]');
+if (!slug) die('usage: npm run galley -- <slug> (--remote | --local) [--all] [--out PATH]');
 // Shape-checked before it reaches the SQL below. SLUG_RE admits no quotes or
 // spaces, which is what makes the interpolation safe.
 if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 
 // Which database, decided explicitly. See scripts/database-target.mjs.
-let useLocal;
-try {
-  useLocal = chooseDatabase({ local, remote });
-} catch (err) {
-  die(err.message);
-}
+const useLocal = resolveDatabase({ local, remote });
 
 // ── the post on disk ─────────────────────────────────
 
-const sourcePath = resolvePostSource(slug);
-if (!sourcePath) die(`no post found for slug ${JSON.stringify(slug)}`);
+const sourcePath = requirePost(slug);
 
 const source = readFileSync(sourcePath, 'utf8');
 // Must match src/lib/galley.js sha256Hex exactly: same bytes, same encoding,
@@ -82,206 +89,69 @@ const source = readFileSync(sourcePath, 'utf8');
 const currentHash = createHash('sha256').update(source, 'utf8').digest('hex');
 const sourceLines = source.split('\n');
 
-// ── locating a quote in the current source ───────────
-
-// fold / unmark / locate and the reviewer-text emitters live in
-// src/lib/galley-relocate.js so `node --test` can reach them — this file parses
-// argv and shells out to wrangler at import time, which makes it unimportable,
-// and that logic is the least obvious part of the feature.
-const locate = createLocator(sourceLines);
-
-/** The quote with its stored context, for a human to search by hand. */
-function contextHint(note) {
-  const ctx = `${note.prefix ?? ''}${note.quote ?? ''}${note.suffix ?? ''}`.trim();
-  return ctx || null;
-}
-
-/**
- * The source line to show under a heading, skipping a code fence.
- *
- * `code` nodes are anchored across their whole span, fences included, so a note
- * on a code block resolves to the ``` line rather than to any code. Advance to
- * the first line with content on it so the excerpt shows what the note is
- * actually about. Bounded to a few lines: past that the anchor is pointing
- * somewhere unexpected, and printing nothing beats printing something
- * misleading.
- */
-function excerptAt(index) {
-  for (let i = index; i < Math.min(index + 4, sourceLines.length); i++) {
-    const text = sourceLines[i]?.trim();
-    if (!text) continue;
-    if (/^(`{3,}|~{3,})/.test(text)) continue;
-    return text;
-  }
-  return null;
-}
-
 // ── read the notes ───────────────────────────────────
 
-const sql = `SELECT id, revision_hash, reviewer, kind, src_start, src_end,
-                    quote, prefix, suffix, body, suggestion, status, created_at
-               FROM galley_notes
-              WHERE slug = '${slug}'
-              ORDER BY created_at ASC`;
-
-// scripts/d1.mjs owns the shell-out, the banner-anchored JSON parse, and the
-// two distinct failure messages (unreachable database vs unparseable output).
-let rows;
+// scripts/notes-db.mjs owns the SQL; scripts/d1.mjs owns the shell-out, the
+// banner-anchored JSON parse, and the two distinct failure messages (unreachable
+// database vs unparseable output).
+let allRows;
 try {
-  rows = d1Query(sql, { local: useLocal });
+  allRows = listNotes(slug, { includeClosed }, { local: useLocal });
 } catch (err) {
   die(err.message);
 }
 
-if (rows.length === 0) {
+// Open notes are the document; closed ones are an appendix under --all. Splitting
+// here rather than in two queries keeps the "N open, M closed" header honest
+// about the same set the body renders.
+const rows = allRows.filter((r) => r.closed_at === null);
+const closedRows = allRows.filter((r) => r.closed_at !== null);
+
+if (allRows.length === 0) {
   // Names the database, because "no notes" and "notes, but in the other one"
   // are indistinguishable otherwise -- and the second is the likelier mistake.
-  console.error(`galley-pull: no notes for ${slug} (${databaseLabel(useLocal)})`);
+  // Says "open" when it is only the filter hiding them, so a post whose whole
+  // round has been closed does not read as a post nobody reviewed.
+  const what = includeClosed ? 'no notes' : 'no open notes';
+  console.error(`galley-pull: ${what} for ${slug} (${databaseLabel(useLocal)})`);
 }
 
 // ── render ───────────────────────────────────────────
+//
+// Every decision about what the document SAYS lives in src/lib/galley-render.js,
+// so `node --test` can reach it — the grouping, the relocation-agreement rule
+// that stops a heading claiming one note's line for all of them, and the rule
+// that an unchanged file's stored anchor beats a relocation. Both of those fail
+// silently rather than loudly, which is why they are no longer in a file nothing
+// can import. This script keeps the I/O: argv, the .mdx, D1, and the write.
 
-const drifted = rows.filter((r) => r.revision_hash !== currentHash).length;
-
-const lines = [];
-lines.push(`# Review notes — ${slug}`);
-lines.push('');
-lines.push(`Pulled ${new Date().toISOString()} from \`${databaseLabel(useLocal)}\`.`);
-lines.push(`${rows.length} note${rows.length === 1 ? '' : 's'}, ${new Set(rows.map((r) => r.reviewer)).size} reviewer(s).`);
-lines.push('');
-if (drifted > 0) {
-  lines.push(
-    `> **${drifted} of these were written against an earlier revision.** Their stored line ` +
-      'numbers are stale. Where the quoted text was still findable, the current line is ' +
-      'given as "now line N" — otherwise search for the quote by hand.',
-  );
-  lines.push('');
-}
-lines.push(`Source: \`${sourcePath.replace(`${process.cwd()}/`, '')}\``);
-lines.push('');
-lines.push('---');
-lines.push('');
-
-// Group by anchor so several notes on the same passage read together, with
-// unanchored whole-draft notes last.
-const groups = new Map();
-for (const row of rows) {
-  const key = row.src_start ? `${row.src_start}-${row.src_end}` : 'general';
-  if (!groups.has(key)) groups.set(key, []);
-  groups.get(key).push(row);
-}
-const ordered = [...groups.entries()].sort((a, b) => {
-  if (a[0] === 'general') return 1;
-  if (b[0] === 'general') return -1;
-  return Number(a[0].split('-')[0]) - Number(b[0].split('-')[0]);
+const { markdown, drifted } = renderReviewFile({
+  slug,
+  sourcePath: relativeToCwd(sourcePath),
+  sourceLines,
+  currentHash,
+  rows,
+  closedRows,
+  database: databaseLabel(useLocal),
 });
-
-for (const [key, notes] of ordered) {
-  // Declared out here because the per-note loop below needs it: when the group
-  // could NOT agree on a single relocation, each note carries its own.
-  let current = null;
-  if (key === 'general') {
-    lines.push('## Whole-draft notes');
-  } else {
-    const stale = notes.some((n) => n.revision_hash !== currentHash);
-
-    // Resolve EVERY quoted note in the group, not just the first. Notes share
-    // an anchor whenever they were filed against the same block, but they can
-    // quote different sentences within it — so a single "now line N" taken from
-    // whichever note happened to sort first was being presented as the heading
-    // for all of them. Claim a relocation on the heading only when the group
-    // agrees; otherwise each note carries its own below.
-    for (const note of notes) note.currentLine = locate(note.quote, note.prefix, note.suffix);
-    const resolved = notes.filter((n) => n.quote).map((n) => n.currentLine);
-    const agreed = new Set(resolved.filter((line) => line !== null));
-    current = resolved.length > 0 && resolved.every(Boolean) && agreed.size === 1
-      ? [...agreed][0]
-      : null;
-
-    let heading = `## Line ${key}`;
-    if (stale) {
-      if (current) {
-        heading += ` — now line ${current}`;
-      } else if (resolved.some(Boolean)) {
-        // Found, but not all in the same place — these notes share an anchor
-        // while quoting different sentences. Saying "not found" here would be
-        // wrong, and saying "now line N" would pick one of them arbitrarily.
-        heading += ' — ⚠ revision drift, notes relocated individually below';
-      } else {
-        heading += ' — ⚠ revision drift, quote not found';
-      }
-    }
-    lines.push(heading);
-    if (!stale || current) {
-      // When the file has NOT drifted the stored anchor is authoritative by
-      // definition, so it wins over a relocation. Preferring `current`
-      // unconditionally could put a heading reading "## Line 42-47" above an
-      // excerpt taken from somewhere else entirely — the quote resolving
-      // elsewhere in an unchanged file means the anchor is the trustworthy half.
-      const at = (stale ? current : Number(key.split('-')[0])) - 1;
-      const text = excerptAt(at);
-      if (text) {
-        lines.push('');
-        pushFenced(lines, text.length > 300 ? `${text.slice(0, 300)}…` : text, 'md');
-      }
-    }
-  }
-  lines.push('');
-
-  for (const note of notes) {
-    const when = new Date(note.created_at).toISOString().slice(0, 10);
-    let meta = `**${note.reviewer}** · ${note.kind} · ${when}`;
-    // Per-note relocation, for the case the heading could not claim one: the
-    // notes in this group resolve to different lines, so each says where its
-    // own passage went.
-    if (key !== 'general' && !current && note.currentLine) meta += ` · now line ${note.currentLine}`;
-    lines.push(meta);
-    lines.push('');
-    if (note.quote) {
-      pushQuoted(lines, note.quote);
-      lines.push('');
-      // Nothing else in this file can point at the passage, so hand over the
-      // context the note was written against. This is the case prefix/suffix
-      // were recorded for and that locate() could not resolve on its own.
-      if (key !== 'general' && !note.currentLine) {
-        const hint = contextHint(note);
-        if (hint) {
-          // Blockquoted like every other reviewer-authored string in this file.
-          // prefix/suffix are stored verbatim and `clean()` only trims the ends,
-          // so newlines survive — interpolating this raw would let a note forge
-          // a `##` heading in a document whose headings are how notes get
-          // attributed to passages.
-          lines.push('Context when written:');
-          lines.push('');
-          pushQuoted(lines, `…${hint}…`);
-          lines.push('');
-        }
-      }
-    }
-    if (note.body) {
-      pushQuoted(lines, note.body);
-      lines.push('');
-    }
-    if (note.suggestion) {
-      lines.push('Suggested replacement:');
-      lines.push('');
-      pushFenced(lines, note.suggestion, 'md');
-      lines.push('');
-    }
-  }
-  lines.push('---');
-  lines.push('');
-}
-
-const markdown = `${lines.join('\n').trimEnd()}\n`;
 
 if (out === '-') {
   process.stdout.write(markdown);
 } else {
-  const target = resolve(out ?? `docs/galley/${slug}.md`);
+  const target = resolve(out ?? galleyFile(slug));
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, markdown);
-  console.log(target.replace(`${process.cwd()}/`, ''));
-  console.error(`\n  ${rows.length} note(s)${drifted ? `, ${drifted} against an older revision` : ''}`);
-  console.error('  Review, then apply with Claude alongside the .mdx.\n');
+  console.log(relativeToCwd(target));
+  console.error(
+    `\n  ${rows.length} open note(s)${drifted ? `, ${drifted} against an older revision` : ''}` +
+      `${closedRows.length ? `, ${closedRows.length} closed` : ''}`,
+  );
+  console.error('  Review, then apply with Claude alongside the .mdx.');
+  // Named here because this is where the author is standing when they finish a
+  // round, and because the close has to happen AFTER the revision merges -- a
+  // close run now would retire notes whose fixes are not in the file yet.
+  console.error(
+    `\n  Applied them? Merge the revision first, then:\n` +
+      `    just galley-close ${slug} ${databaseFlag(useLocal)}\n`,
+  );
 }

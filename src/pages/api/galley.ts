@@ -1,7 +1,8 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { getEnv, jsonError, jsonOk, methodNotAllowed, parseJson, refuse } from '../../lib/server.ts';
-import { sha256Hex, validateNote } from '../../lib/galley.js';
+import { validateNote } from '../../lib/galley.js';
+import { revisionOf } from '../../lib/post-source.ts';
 import { isPublished } from '../../lib/schedule.js';
 
 // Galley notes — inline editorial review on scheduled posts. See CLAUDE.md.
@@ -21,38 +22,12 @@ import { isPublished } from '../../lib/schedule.js';
 
 export const prerender = false;
 
-// Raw post sources, inlined at build time by Vite.
-//
-// Two jobs. It confirms a slug names a real post, and it lets the revision
-// hash be computed HERE rather than trusted from the client — a browser has no
-// way to know the file's bytes, and a note that misreports which revision it
-// was written against would defeat the drift warning it exists to raise.
-//
-// The whole file is hashed, frontmatter included, because anchors are absolute
-// line numbers: adding one tag shifts every one of them. See src/lib/galley.js.
-//
-// COST, known and accepted: this inlines every post's raw MDX into the worker
-// bundle — ~84KB across 7 posts, growing linearly — when all the endpoint
-// actually needs is a slug→hash map. Precomputing that at build time would take
-// a Vite plugin or a generator step, plus a guarantee that it hashes byte-for-byte
-// what `sha256Hex` would, which is a new way for the drift warning to go
-// silently wrong. Not worth it at this size. Revisit past a few dozen posts, or
-// sooner if the worker bundle starts mattering for cold starts.
-const RAW_POSTS = import.meta.glob('/src/content/blog/**/*.mdx', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
-
-// '/src/content/blog/why-im-pivoting.mdx'       → 'why-im-pivoting'
-// '/src/content/blog/some-post/index.mdx'       → 'some-post'
-// Mirrors how Astro's content collection derives an entry id from its path.
-const SOURCE_BY_SLUG = new Map<string, string>(
-  Object.entries(RAW_POSTS).map(([path, raw]) => {
-    const rel = path.replace('/src/content/blog/', '').replace(/\.mdx$/, '');
-    return [rel.endsWith('/index') ? rel.slice(0, -'/index'.length) : rel, raw];
-  }),
-);
+// The raw post sources, and the revision hash over them, live in
+// src/lib/post-source.ts, because src/layouts/BlogPost.astro needs the identical
+// hash: it stamps the rendered page with the revision, and POST below refuses a
+// note whose page has since moved. Two definitions of that hash would refuse
+// every write. `revisionOf` also answers "is this a real post?", which is why
+// nothing here imports the source map directly any more.
 
 // Bounds a leaked link. Far above any real review round — the longest editorial
 // pass on this blog produced well under a dozen notes — and low enough that a
@@ -60,9 +35,22 @@ const SOURCE_BY_SLUG = new Map<string, string>(
 const MAX_NOTES_PER_REVIEWER = 60;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
-// Ceiling on a single read. Far above any real review round — see above — and
-// low enough that a flooded table can't turn every GET into a huge response.
+// Ceiling on a single read, applied to open and closed notes SEPARATELY — a
+// round that closed cannot crowd out the round in progress, which is the one the
+// margin is for. Far above any real review round — see above — and low enough
+// that a flooded table can't turn every GET into a huge response.
 const MAX_NOTES_RETURNED = 500;
+
+// Closed notes get a tighter ceiling than open ones, because they are read on
+// different terms. The open set is the working list and every item is on screen;
+// the closed set sits behind a collapsed <details> that most reads never open,
+// and it grows monotonically for the life of the post while the open set is
+// emptied every round. Since the margin now refreshes on tab focus, that
+// appendix would otherwise be re-fetched all day to be hidden. Still far above
+// any real post's accumulated rounds, and the count in the summary is this
+// array's length either way — a truncated one under-reports rather than lying
+// about a number nothing else can corroborate.
+const MAX_CLOSED_RETURNED = 100;
 
 // When each post goes live, from the collection rather than from RAW_POSTS above.
 // The raw strings would need their frontmatter parsed here, in the worker, by
@@ -148,6 +136,10 @@ export const GET: APIRoute = async ({ locals }) => {
   // Scoped to the granted slug rather than to anything in the query string —
   // there is no way to ask this endpoint about a post you weren't given.
   //
+  // NOT scoped to the reviewer, and that is deliberate: an editor sees their
+  // colleagues' notes so they don't re-file feedback someone has already left.
+  // The write quota is per-reviewer, so sharing the read costs nothing.
+  //
   // Bounded, because MAX_NOTES_PER_REVIEWER caps the write RATE and not the
   // total: a leaked link that is topped up every hour for its full window can
   // still accumulate thousands of rows, and every subsequent read serialises
@@ -155,28 +147,67 @@ export const GET: APIRoute = async ({ locals }) => {
   // The newest are taken and re-sorted ascending, so a flood pushes out the
   // oldest notes rather than burying the ones being written now.
   //
-  // `status` is deliberately not selected. It is written once as 'open' and
-  // there is nothing that can change it — resolving a note would need an admin
-  // surface, which this feature deliberately does not have. Shipping a constant
-  // to the client only invites a reader to believe it means something.
-  let results;
-  try {
-    ({ results } = await DB.prepare(
+  // `revision_hash` is selected but never returned — it is folded into `stale`
+  // below. The client has no use for the hash itself, and shipping it would only
+  // invite a reader to believe it meant something they could act on. `closed_at`
+  // is not selected at all, for the same reason migrations/0003 dropped
+  // `status`: which array a note arrives in already says whether it is closed,
+  // so the column could only ever be a constant per query — NULL for every open
+  // note — and a constant in a response is an invitation to read meaning into it.
+  const notesFor = (closed: boolean) =>
+    DB.prepare(
       `SELECT * FROM (
-         SELECT id, reviewer, kind, src_start, src_end, quote, body, suggestion, created_at
+         SELECT id, reviewer, kind, src_start, src_end, quote, body, suggestion,
+                created_at, revision_hash
            FROM galley_notes
-          WHERE slug = ?
+          WHERE slug = ? AND closed_at IS ${closed ? 'NOT NULL' : 'NULL'}
           ORDER BY created_at DESC
           LIMIT ?
        ) ORDER BY created_at ASC`,
     )
-      .bind(grant.slug, MAX_NOTES_RETURNED)
-      .all());
+      .bind(grant.slug, closed ? MAX_CLOSED_RETURNED : MAX_NOTES_RETURNED)
+      .all();
+
+  // The revision the SERVER is currently serving. Both a per-note comparison
+  // (has this note's anchor drifted?) and a page-level one for the client (is
+  // the document it rendered still the one being described?) — see the
+  // `revision` field returned below.
+  const currentRevision = await revisionOf(grant.slug);
+
+  let open;
+  let closed;
+  try {
+    // Two statements rather than one with a repeated-per-row subquery. This path
+    // only runs on a request that already carried a valid signed preview token,
+    // which is rare by construction, so the second round-trip costs nothing that
+    // matters and the queries stay readable.
+    [open, closed] = await Promise.all([notesFor(false), notesFor(true)]);
   } catch (err) {
     return dbError(err);
   }
 
-  return jsonOk({ slug: grant.slug, reviewer: grant.reviewer, notes: results ?? [] });
+  // A note whose recorded revision is not the current one has an anchor that no
+  // longer means anything: `src_start` is an absolute line number in a file that
+  // has since changed. The client uses this to withhold the in-body marker
+  // rather than pointing at whatever now occupies those lines.
+  const shape = (row: Record<string, unknown>) => {
+    const { revision_hash: recorded, ...rest } = row;
+    return { ...rest, stale: recorded !== currentRevision };
+  };
+
+  return jsonOk({
+    slug: grant.slug,
+    reviewer: grant.reviewer,
+    // Not a new disclosure: the same hash is already on the page as
+    // `data-revision`. It is here so the client can tell that the document it
+    // rendered is older than the one this response describes, which is the only
+    // way it can know its own anchors are all suspect.
+    revision: currentRevision ?? null,
+    notes: (open.results ?? []).map(shape),
+    // No separate count field: it would be a second encoding of this array's
+    // length, and the two would disagree the moment either hit MAX_NOTES_RETURNED.
+    closed: (closed.results ?? []).map(shape),
+  });
 };
 
 // Both early returns below go through `refuse`, which releases the request body
@@ -213,8 +244,32 @@ export const POST: APIRoute = async ({ locals, request }) => {
   // case a signature check alone cannot catch.
   if (note.slug !== grant.slug) return jsonError(403, 'slug_mismatch');
 
-  const source = SOURCE_BY_SLUG.get(note.slug);
-  if (source === undefined) return jsonError(404, 'unknown_post');
+  // THE PAGE THE NOTE CAME FROM MUST STILL BE THE POST WE HAVE.
+  //
+  // `src` is a line range the client read from `data-src` in the HTML it has
+  // loaded — which is whatever build that browser fetched, not necessarily this
+  // one. A reviewer holding the post open across a revision therefore submits
+  // the OLD revision's anchors, and without this check they would be stored
+  // against the CURRENT revision's hash: a note that looks perfectly fresh, that
+  // the drift machinery has no reason to question, and whose line numbers point
+  // at prose it was never about. That is the one way a note can be silently
+  // wrong rather than visibly stale.
+  //
+  // So the page carries its revision (BlogPost.astro → GalleyMargin's
+  // data-revision), the client echoes it, and a mismatch is refused. The client
+  // is never trusted to say what revision a note was written against — only to
+  // prove it is looking at the current one. Same stance as galley-relocate.js
+  // resolving an ambiguous quote to nothing: refuse rather than store something
+  // that will be confidently wrong.
+  //
+  // Plain jsonError, not `refuse` — parseJson above has already drained the
+  // body, so unlike every other early return in this handler there is nothing
+  // left holding a stream open. See src/lib/server.ts.
+  // Doubles as the "is this a real post?" check the SOURCE_BY_SLUG lookup used
+  // to do on its own — revisionOf returns undefined for a slug with no file.
+  const currentRevision = await revisionOf(note.slug);
+  if (currentRevision === undefined) return jsonError(404, 'unknown_post');
+  if (parsed.data.revision !== currentRevision) return jsonError(409, 'stale_page');
 
   // The quota and the write are ONE statement, and that is the whole point.
   //
@@ -230,17 +285,20 @@ export const POST: APIRoute = async ({ locals, request }) => {
   let inserted;
   try {
     inserted = await DB.prepare(
+      // No `status` column: migrations/0003 dropped it. A note is open by
+      // virtue of `closed_at` being NULL, which is also the default, so nothing
+      // here has to say so.
       `INSERT INTO galley_notes
          (id, slug, revision_hash, reviewer, kind, src_start, src_end,
-          quote, prefix, suffix, body, suggestion, status, created_at)
-       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?
+          quote, prefix, suffix, body, suggestion, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         WHERE (SELECT COUNT(*) FROM galley_notes
                 WHERE slug = ? AND reviewer = ? AND created_at > ?) < ?`,
     )
       .bind(
         crypto.randomUUID(),
         note.slug,
-        await sha256Hex(source),
+        currentRevision,
         // Reviewer comes from the signed token, never from the request body, so
         // a note cannot be attributed to an editor who did not write it.
         grant.reviewer,

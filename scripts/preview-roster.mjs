@@ -39,13 +39,11 @@
 import { LINK_ID_RE, SLUG_RE } from '../src/lib/preview.js';
 import { clampToPublication, isPublished } from '../src/lib/schedule.js';
 import { readPubDate } from './content.mjs';
-import { chooseDatabase, databaseLabel } from './database-target.mjs';
+import { cli } from './cli.mjs';
+import { databaseLabel } from './database-target.mjs';
 import { listAllLinks, listLinks, revokeLinks } from './links-db.mjs';
 
-function die(message) {
-  console.error(`preview-roster: ${message}`);
-  process.exit(1);
-}
+const { die, resolveDatabase } = cli('preview-roster');
 
 // ── args ─────────────────────────────────────────────
 
@@ -109,12 +107,7 @@ if (all && (revokeId || revokeAll)) {
 }
 
 // Which database, decided explicitly. See scripts/database-target.mjs.
-let useLocal;
-try {
-  useLocal = chooseDatabase({ local, remote });
-} catch (err) {
-  die(err.message);
-}
+const useLocal = resolveDatabase({ local, remote });
 
 // ── revoke, then list ────────────────────────────────
 //

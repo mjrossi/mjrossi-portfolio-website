@@ -13,10 +13,12 @@ import { printFailures, results } from './smoke/check.mjs';
 import { checkBuildArtifacts, checkSourceGuards, distExists } from './smoke/static.mjs';
 import { checkWranglerConfig } from './smoke/wrangler.mjs';
 import {
+  checkCloseRoundTrip,
   checkExtendRoundTrip,
   clearFixtures,
   migrateLocalDb,
   seedLinks,
+  seedNotesFixtures,
 } from './smoke/fixtures.mjs';
 import {
   RUNTIME_DIED_EXIT,
@@ -62,9 +64,12 @@ checkBuildArtifacts();
 setup('could not migrate the local database', migrateLocalDb);
 setup('could not clear previous fixture rows', clearFixtures);
 setup('could not seed preview_links fixtures', seedLinks);
-// Needs the rows above, and runs before the spawn because it writes to the same
-// database the worker is about to open.
+setup('could not seed galley_notes fixtures', seedNotesFixtures);
+// Both need the rows above, and both run before the spawn because they write to
+// the same database the worker is about to open. checkCloseRoundTrip restores
+// what it changes, because the live matrices read those exact rows.
 setup('extendLink round-trip failed', checkExtendRoundTrip);
+setup('closeNotes round-trip failed', checkCloseRoundTrip);
 
 // ── the runtime ────────────────────────────────────
 

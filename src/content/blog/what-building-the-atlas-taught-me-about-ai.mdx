@@ -5,7 +5,7 @@ pubDate: 2026-08-11T09:00:00+01:00
 tags: ["urban-mobility", "urbanist-atlas", "artificial-intelligence", "software-engineering", "open-source"]
 ---
 
-This is the last of three posts about building [the Urbanist Atlas](https://urbanistatlas.com) with Claude Code. The first two covered [the code](/blog/i-used-ai-to-build-the-urbanist-atlas/) — the Go API and the React frontend — and then [the data](/blog/the-atlas-data-was-the-hard-part/), where modeling cities and verifying organizations turned out to be the harder half. If you're starting here, the first post is the place to begin.
+This is the last of three posts about building [the Urbanist Atlas](https://urbanistatlas.com) with Claude Code. The first two covered [the code](/blog/i-used-ai-to-build-the-urbanist-atlas/) — the Go API and the React frontend — and then [the data](/blog/the-atlas-data-was-the-hard-part/), where modeling cities and verifying organizations turned out to be the harder half.
 
 This one steps away from the technical and gets to what I actually learned.
 
@@ -13,7 +13,7 @@ This one steps away from the technical and gets to what I actually learned.
 
 More than once I stopped and asked whether this was actually saving me time. The loops are long, a lot of the day goes to waiting, and reviewing the same output for the fourth time is genuinely mind-numbing.
 
-Some of that was the models and some of it was the workflow they create. There's an art and a craft to writing software, and that becoes harder to access when your day goes to reading generated code instead of writing your own. The code that comes back is functional and rarely better than that: something trained on a vast corpus of existing code tends toward the familiar, which isn't the same as the right answer for your particular problem.
+Some of that was the models and some of it was the workflow they create. There's an art and a craft to writing software, and that becomes harder to access when your day goes to reading generated code instead of writing your own. The code that comes back is functional and rarely better than that: something trained on a vast corpus of existing code tends toward the familiar, which isn't the same as the right answer for your particular problem.
 
 Despite all the human review I built into the process, not writing the code myself made it hard to fully and accurately know what I was working with. When I write code, the act of writing it forces me to construct a mental model in real time. When AI writes it, I have to construct that mental model through review. It feels analogous to handwriting vs. typing — handwriting is going to do a better job of committing something to memory.
 
@@ -31,7 +31,7 @@ I had this in the back of my mind when writing the Atlas, and I admit it's a har
 
 ## Five lessons from building with AI
 
-That's the code, the data, and where it fell short. Here are the five takeaways I keep coming back to for using AI effectively. They all boil down to the same thing: you have to know enough about the problem to disagree with the answer.
+That's the code, the data, and where it fell short. Here are the five takeaways I keep coming back to for using AI effectively. They all boil down to the same thing: you have to know enough about the problem to challenge the answer.
 
 ### Be *very* explicit with your input
 
@@ -65,25 +65,25 @@ There are open-source extensions for Claude Code that formalize this kind of loo
 
 ### Know where the model is weakest
 
-These models are trained on an enormous body of existing human work — the whole reason they're any good. That tells you *where* to aim your reviews.
+These models are trained on an enormous body of existing human work — it's the whole reason they're any good. That tells you *where* to aim your reviews.
 
 A system like that is strongest where your problem is ordinary, because ordinary is what it learned from. It's weakest where your problem is strange. Every hard thing in this project sat at the strange end: a ZIP code whose neighborhood has no border you can look up anywhere, two federal datasets that disagree about what year it is, a polygon with a hole in it. Claude handled the ordinary parts of the Atlas faster and more thoroughly than I would have alone. The parts that were specific to *this* project are where I had to slow down.
 
-So the practical version is: delegate the ordinary parts hard, and before you start reviewing, ask which parts of what you're building are unusual. That's your to-do list, and that's where AI will be confidently, plausibly wrong.
+So the practical version is: hand off the ordinary parts freely, and make a list of the parts that are unusual. That list is where AI will be confidently, plausibly wrong, and it's where your review time should go.
 
 ### Know what only you can decide
 
-The six inclusion criteria from the second post were the easy half. No training corpus was going to tell me that housing and YIMBY work — a neighboring movement, and a friendly one — sits outside the Atlas's scope, and Open New York is a group I like and left out anyway. That's a decision about what the directory is for and who it owes something to, and I'd make it again.
+The six inclusion criteria from [the second post](/blog/the-atlas-data-was-the-hard-part/) were the easy half. No training corpus was going to tell me that housing and YIMBY work — a neighboring movement, and a friendly one — sits outside the Atlas's scope, and Open New York is a group I like and left out anyway. That's a decision about what the directory is for and who it owes something to, and I'd make it again.
 
-The harder half is that the six rules don't cover their own edges. PedSafe Vegas clears every one of them and I excluded it regardless, because a program housed inside a university is the same call I'd already made about a chapter that doesn't incorporate separately from its state organization. Nothing in the published criteria says that. The rules that actually govern the Atlas are the ones I've never written down, and each of them arrived as a single hard case I couldn't punt on.
+The harder half is that the six rules don't cover their own edges. PedSafe Vegas clears every one of them and I excluded it regardless, because a program housed inside a university is the same call I'd already made about a chapter that doesn't incorporate separately from its state organization. Nothing in the published criteria says that. The rules that actually govern the Atlas are the ones I've never written down — and couldn't have, because I didn't know them when I wrote the six. Each one arrived as a single hard case I couldn't punt on.
 
-A model can apply criteria like that very well once they exist. Someone has to have chosen them, keep choosing at the edges nobody wrote down, and be willing to defend the result.
+A model can apply criteria like that very well once they exist. Someone has to have chosen them, keep choosing at the edges nobody wrote down, and be willing to defend the result. That set of edges is still growing — every one of them is a call that has to be made before there is a rule to apply.
 
 I keep coming back to Data, the character from Star Trek: The Next Generation. Data is an extremely capable artificial life-form — he can execute nearly anything asked of him — but the character is compelling because of what he can't originate: wanting things, valuing things, choosing what matters. That's most of this project, in the end. The Atlas is a search box sitting on top of a few hundred judgment calls, and the judgment is the part that had to be mine.
 
 ## If you want to try something like this
 
-Getting from an idea to a working prototype has never been easier, and I do hope that means ideas come to life that otherwise wouldn't. But I'd be wary of anyone handing you a process to copy, mine included. The specific shape of this project came out of what I already had — thirteen years of backend work, almost no frontend, and a subject I care about enough to argue with a model about. Yours will come out of something different. Where you know the domain, _hand off aggressively_ and _review fast_. Where you don't, slow down — or the AI's plausible answer will get expensive to untangle.
+Getting from an idea to a working prototype has never been easier, and I do hope that means more good ideas come to life that otherwise wouldn't. But I'd be wary of anyone handing you a process to copy, mine included. The specific shape of this project came out of what I already had — thirteen years of backend work, almost no frontend, and a subject I care about enough to argue with a model about. Yours will come out of something different. Where you know the domain, _hand off aggressively_ and _review fast_. Where you don't, slow down — or the AI's plausible answer will get expensive to untangle.
 
 Beyond the model choices I mentioned earlier, the tooling is all there to borrow. Since the code is open source, I'd encourage you to look at my `just` file if you want to take any of it — like the containerized link validation that checks every organization's website through a VPN and flags the dead ones.
 

@@ -67,7 +67,7 @@ dev:
 # matches `just smoke` and the --host examples below are actually correct;
 # they used to name 8788 while this served 8787.
 [group('dev')]
-[doc('full build + wrangler dev on 127.0.0.1:8788 — the only way to exercise the form or the galley')]
+[doc('full build + wrangler dev on 127.0.0.1:8788 — the only way to exercise the form, or the galley end to end')]
 preview:
     MISE_ENV=development mise exec -- npm run preview
 
@@ -85,6 +85,21 @@ build:
 [doc('build + run smoke assertions against a fresh build')]
 smoke: build
     npm run smoke
+
+# the galley margin against fixtures — no build, no worker, no database.
+#
+# The markers are the one part of this repo whose correctness is a RENDERING
+# question, and neither `just test` nor `just smoke` can see a pixel. This is
+# what you look at before believing a change to GalleyMargin.astro or to
+# markAnchors; the alternative was a build, a migration, wrangler dev, a minted
+# link and a filed note before a single marker appeared. Reads its CSS out of
+# the component and loads the real /scripts/galley.js, so nothing here can
+# render something production doesn't. `--shot FILE` writes a PNG if a headless
+# Chrome happens to be installed.
+[group('dev')]
+[doc('render the galley margin against fixtures on 127.0.0.1:8790 — no worker, no D1')]
+galley-preview *flags:
+    node scripts/galley-preview.mjs {{flags}}
 
 # ── review ───────────────────────────────────────────
 #

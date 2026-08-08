@@ -15,6 +15,8 @@
 // textContent. That is also what makes reviewer-supplied note text safe to
 // display without escaping it by hand.
 
+import { anchorSelection, findQuote } from './galley-quote.js';
+
 (() => {
   const body = document.querySelector('.post-body');
   const mount = document.getElementById('galley');
@@ -53,21 +55,34 @@
     return node;
   }
 
+  /** The block's text nodes in document order — their concatenation is textContent. */
+  function textNodesIn(block) {
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node);
+    return nodes;
+  }
+
   // ── selection → anchor ─────────────────────────────
 
   // Turns the current selection into the three things a note records: the MDX
   // line range of the block it started in, the exact quoted text, and a little
   // context either side. See src/lib/remark-source-anchors.js for why all
   // three are needed rather than just the line range.
+  //
+  // EVERYTHING THAT DECIDES WHAT GETS STORED LIVES IN anchorSelection, which is
+  // pure and unit-tested. What stays here is only what needs a document: which
+  // block the selection is in, what text it covers, and where in that block it
+  // begins. That split is not tidiness — a wrong anchor is written to D1
+  // permanently and galley-pull.mjs relocates notes by it months later, so it
+  // is the code in this file most worth having under test, and it could not be
+  // while it lived inside a closure over `window.getSelection()`.
   function resolveSelection() {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
 
     const range = sel.getRangeAt(0);
     if (!body.contains(range.commonAncestorContainer)) return null;
-
-    let quote = sel.toString().replace(/\s+/g, ' ').trim();
-    if (!quote) return null;
 
     let node = range.startContainer;
     if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
@@ -77,66 +92,38 @@
     // the button simply doesn't appear.
     if (!block || !body.contains(block)) return null;
 
-    // Context is taken from the rendered text, which has collapsed whitespace.
-    // The pull script normalises the .mdx the same way before searching, so a
-    // quote spanning a source line break still matches.
-    const blockText = block.textContent.replace(/\s+/g, ' ').trim();
-
-    // Where the selection STARTED, not where its text first happens to appear.
-    // Measured by collapsing everything in the block up to the selection start
-    // the same way blockText was collapsed, so the two indices agree.
+    // Where the selection starts, as an offset into the block's raw text. A
+    // Range is the only thing that can answer that, and its `toString()` is the
+    // same concatenation `textNodesIn` produces — which is what lets the pure
+    // side work in offsets over an array of strings.
     //
-    // `indexOf` alone would capture the context around the FIRST occurrence: an
-    // editor selecting the second of two identical sentences in a block would
-    // get prefix/suffix describing the first, and the pull script would then
-    // "disambiguate" the note onto the wrong passage. That is precisely the
-    // mis-anchoring prefix/suffix exist to prevent, so it must not be
-    // reintroduced here.
-    function offsetOfSelectionStart() {
-      const head = document.createRange();
-      head.setStart(block, 0);
-      try {
-        head.setEnd(range.startContainer, range.startOffset);
-      } catch {
-        // startContainer outside the block (a selection anchored above it).
-        return -1;
-      }
-      return head.toString().replace(/\s+/g, ' ').replace(/^ /, '').length;
+    // -1 means unmeasurable, and anchorSelection is careful to treat that as
+    // "unknown" rather than as position zero.
+    let rawStart = -1;
+    const head = document.createRange();
+    head.setStart(block, 0);
+    try {
+      head.setEnd(range.startContainer, range.startOffset);
+      rawStart = head.toString().length;
+    } catch {
+      // startContainer outside the block (a selection anchored above it).
     }
 
-    // Verified against the quote rather than trusted: whitespace collapsing at
-    // the boundary can shift the offset by one, and a nested element's text may
-    // not appear verbatim. `indexOf` remains the fallback — it is right in
-    // every case except the repeated-text one measured above.
-    let at = offsetOfSelectionStart();
-    if (blockText.slice(at, at + quote.length) !== quote) at = blockText.indexOf(quote);
+    const anchor = anchorSelection(
+      textNodesIn(block).map((textNode) => textNode.data),
+      rawStart,
+      sel.toString(),
+      CONTEXT,
+    );
+    if (!anchor) return null;
 
-    // A selection dragged across a block boundary yields text that appears in
-    // no single block, so the quote would be unfindable and the context empty —
-    // and the note would still save, looking correct to the editor and landing
-    // in the review file as permanently unlocatable. Clamp to the part inside
-    // the block the selection STARTED in, which is the block the anchor names.
-    if (at === -1) {
-      const clamped = range.cloneRange();
-      clamped.setEnd(block, block.childNodes.length);
-      const inBlock = clamped.toString().replace(/\s+/g, ' ').trim();
-      if (inBlock) {
-        quote = inBlock;
-        // Clamping moved the END of the selection, never its start, so the
-        // measured offset still holds — same preference and same fallback.
-        at = offsetOfSelectionStart();
-        if (blockText.slice(at, at + quote.length) !== quote) at = blockText.indexOf(quote);
-      }
-    }
-    // Still not found (a selection starting inside a nested element whose text
-    // does not appear verbatim in the block). Better no button than a note that
-    // can never be pointed at a passage.
-    if (at === -1) return null;
-
-    const prefix = blockText.slice(Math.max(0, at - CONTEXT), at);
-    const suffix = blockText.slice(at + quote.length, at + quote.length + CONTEXT);
-
-    return { src: block.dataset.src, quote, prefix, suffix, rect: range.getBoundingClientRect() };
+    return {
+      src: block.dataset.src,
+      quote: anchor.quote,
+      prefix: anchor.prefix,
+      suffix: anchor.suffix,
+      rect: range.getBoundingClientRect(),
+    };
   }
 
   // ── chrome ─────────────────────────────────────────
@@ -265,17 +252,52 @@
     markAnchors();
   }
 
-  // Give every block that carries a note a marker, so an editor can see at a
-  // glance which passages have already been discussed and doesn't re-file
-  // feedback a colleague has left. This is the whole reason notes are shared.
+  // Custom highlights paint a Range without touching the DOM, which is the only
+  // reason word-level marking is safe here. Wrapping the quoted words in a
+  // <mark> would mutate the very tree resolveSelection measures offsets against
+  // and markAnchors re-reads on every refresh — so each render cycle would have
+  // to unpick its own previous one, and any slip would corrupt an anchor rather
+  // than just a colour.
+  //
+  // Null on browsers without the API (Firefox below 140). Every note then takes
+  // the block marker instead, which is exactly the behaviour this file had
+  // before word-level marking existed — a narrower marker, never a wrong one.
+  const HIGHLIGHT = 'galley-note';
+  const highlights =
+    typeof Highlight === 'function' && typeof CSS !== 'undefined' && CSS.highlights
+      ? new Highlight()
+      : null;
+  if (highlights) CSS.highlights.set(HIGHLIGHT, highlights);
+
+  // Mark every passage that carries a note, so an editor can see at a glance
+  // what has already been discussed and doesn't re-file a colleague's feedback.
+  // This is the whole reason notes are shared.
+  //
+  // EVERY CURRENT NOTE GETS EXACTLY ONE MARKER, and which one depends on how
+  // precisely it can be placed:
+  //
+  //   the quoted words — when findQuote can locate the note's quote in the
+  //                      block, unambiguously. The common case, and the one an
+  //                      editor reads as "this is the bit under discussion".
+  //   the whole block  — when it cannot: no quote stored, quote not found, the
+  //                      quote appears twice in that block, or no Highlight API.
+  //                      `data-galley-count` counts these and only these, so the
+  //                      number describes what the block marker actually stands
+  //                      for rather than notes already marked precisely.
+  //
+  // The block marker is a flat wash across the whole element on purpose (see
+  // GalleyMargin.astro). It has to be unmistakably block-scoped: the rule this
+  // replaced was the inline highlighter-pen gradient, which on a block resolves
+  // against the paragraph box instead of a line box and banded the last two
+  // lines — pointing, with total confidence, at prose no note was about.
   //
   // A MARKER IS ONLY EVER PLACED FOR A NOTE WRITTEN AGAINST THIS EXACT REVISION.
-  // The lookup below is a literal `[data-src="42-47"]` match, with no fallback to
+  // The block lookup is a literal `[data-src="42-47"]` match, with no fallback to
   // the quote — so once the source has changed, those line numbers either match
   // nothing or, worse, match whichever block has since moved into that range.
   // The second case is the one that matters: it badges a paragraph with a note
   // about prose it never contained, and nothing on screen says so. Skipping
-  // stale notes gives up a highlight; keeping them gives a wrong one.
+  // stale notes gives up a marker; keeping them gives a wrong one.
   //
   // Two independent gates, because they fail at different granularities:
   //   pageStale   — the server has a newer revision than this document, so EVERY
@@ -289,26 +311,60 @@
       marked.classList.remove('galley-marked');
       marked.removeAttribute('data-galley-count');
     }
+    // Cleared before the pageStale gate, not after it: a document that has gone
+    // stale since the last render must lose its highlights along with its block
+    // markers, or the words stay lit under a bar telling the reviewer not to
+    // trust anything on the page.
+    highlights?.clear();
     if (pageStale) return;
-    const counts = new Map();
+
+    const groups = new Map();
     for (const note of notes) {
       if (!note.src_start || note.stale) continue;
       const key = `${note.src_start}-${note.src_end}`;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+      const group = groups.get(key);
+      if (group) group.push(note);
+      else groups.set(key, [note]);
     }
-    for (const [src, count] of counts) {
+
+    for (const [src, group] of groups) {
       // Nested blocks can carry the SAME range — a list item whose only child
       // paragraph spans the same lines — and querySelector returns the outer
-      // one, which highlights the whole list item instead of the sentence.
-      // Take the innermost match: the one containing no further match. That is
-      // also what resolveSelection anchored to, since closest() walks up from
-      // the selection and stops at the nearest ancestor.
+      // one, which marks the whole list item instead of the sentence. Take the
+      // innermost match: the one containing no further match. That is also what
+      // resolveSelection anchored to, since closest() walks up from the
+      // selection and stops at the nearest ancestor.
       const candidates = [...body.querySelectorAll(`[data-src="${src}"]`)];
       const block =
         candidates.find((node) => !node.querySelector(`[data-src="${src}"]`)) ?? candidates[0];
       if (!block) continue;
+
+      const nodes = highlights ? textNodesIn(block) : [];
+      const texts = nodes.map((node) => node.data);
+      let unplaced = 0;
+
+      for (const note of group) {
+        const hit = highlights && note.quote ? findQuote(texts, note.quote) : null;
+        if (!hit) {
+          unplaced += 1;
+          continue;
+        }
+        try {
+          const range = document.createRange();
+          range.setStart(nodes[hit.startIndex], hit.startOffset);
+          range.setEnd(nodes[hit.endIndex], hit.endOffset);
+          highlights.add(range);
+        } catch {
+          // Coordinates the DOM refused. findQuote derives them from these very
+          // nodes so this should not happen, but a marker on the whole block is
+          // the right way to be wrong about it.
+          unplaced += 1;
+        }
+      }
+
+      if (unplaced === 0) continue;
       block.classList.add('galley-marked');
-      block.dataset.galleyCount = String(count);
+      block.dataset.galleyCount = String(unplaced);
     }
   }
 

@@ -146,15 +146,15 @@ export function migrateLocalDb() {
  * (clearLinks refuses --remote), and the alternative is a fixed fixture id
  * colliding with itself on the second run.
  */
-export function clearFixtures() {
+export async function clearFixtures() {
   for (const reviewer of [SMOKE_REVIEWER, SMOKE_REVIEWER_TWO]) {
-    clearNotes(FIXTURE_SLUGS, { reviewer }, LOCAL);
+    await clearNotes(FIXTURE_SLUGS, { reviewer }, LOCAL);
   }
-  clearLinks(FIXTURE_SLUGS, LOCAL);
+  await clearLinks(FIXTURE_SLUGS, LOCAL);
 }
 
 export function seedLinks() {
-  recordLinks(Object.values(LINKS), LOCAL);
+  return recordLinks(Object.values(LINKS), LOCAL);
 }
 
 // The three states a note can be in by the time a second review round starts.
@@ -213,32 +213,36 @@ export const NOTES = {
 
 /** Its own step, because the close/reopen round-trip below mutates these rows. */
 export function seedNotesFixtures() {
-  seedNotes(Object.values(NOTES), LOCAL);
+  return seedNotes(Object.values(NOTES), LOCAL);
 }
 
 /**
  * The extendLink round-trip, run before the worker is even up.
  *
- * This is the only place links-db's SQL actually executes under test. The
- * module imports cleanly, but every function in it shells out to `wrangler d1
- * execute` when CALLED, so running the SQL needs a migrated local database —
- * which smoke has and `node --test` does not. The ceiling clause is
- * the whole safety property of `just preview-extend` — without it an extendable
- * link becomes a permanent one — and it lives in a WHERE clause, where a typo
- * is silent and reads as "extended successfully".
+ * This is the only place src/lib/links-store.js's SQL actually executes under
+ * test. The module imports cleanly on both sides, but the CLI path underneath it
+ * shells out to `wrangler d1 execute` when CALLED, so running the SQL needs a
+ * migrated local database — which smoke has and `node --test` does not. The
+ * ceiling clause is the whole safety property of `just preview-extend` — without
+ * it an extendable link becomes a permanent one — and it lives in a WHERE
+ * clause, where a typo is silent and reads as "extended successfully".
+ *
+ * The worker now runs these same statements (the Desk at /admin reads through
+ * them), which makes this the coverage for both paths rather than for the CLI
+ * alone.
  */
-export function checkExtendRoundTrip() {
+export async function checkExtendRoundTrip() {
   const ceiling = NOW_SEC + 7200;
   const probe = LINKS.extendProbe.id;
 
-  const extended = extendLink(EXTEND_SLUG, probe, ceiling, LOCAL);
+  const extended = await extendLink(EXTEND_SLUG, probe, ceiling, LOCAL);
   check(
     'extend: moves the expiry up to the ceiling',
     extended.length === 1 && extended[0].exp === ceiling,
     `got ${JSON.stringify(extended)}`,
   );
 
-  const tooFar = extendLink(EXTEND_SLUG, probe, ceiling + 1, LOCAL);
+  const tooFar = await extendLink(EXTEND_SLUG, probe, ceiling + 1, LOCAL);
   check(
     'extend: one second past the ceiling changes nothing',
     tooFar.length === 0,
@@ -246,18 +250,18 @@ export function checkExtendRoundTrip() {
   );
   check(
     'extend: a refused extension leaves the old expiry in place',
-    getLink(EXTEND_SLUG, probe, LOCAL)?.exp === ceiling,
+    (await getLink(EXTEND_SLUG, probe, LOCAL))?.exp === ceiling,
     'the row moved despite the UPDATE reporting no change',
   );
 
-  const wrongPost = extendLink(FIXTURE_SLUG, probe, ceiling, LOCAL);
+  const wrongPost = await extendLink(FIXTURE_SLUG, probe, ceiling, LOCAL);
   check(
     'extend: an id belonging to another post changes nothing',
     wrongPost.length === 0,
     `got ${JSON.stringify(wrongPost)} — extending is not scoped to the named post`,
   );
 
-  const revoked = extendLink(EXTEND_SLUG, LINKS.extendRevoked.id, ceiling, LOCAL);
+  const revoked = await extendLink(EXTEND_SLUG, LINKS.extendRevoked.id, ceiling, LOCAL);
   check(
     'extend: a revoked link cannot be extended back to life',
     revoked.length === 0,
@@ -269,7 +273,7 @@ export function checkExtendRoundTrip() {
   // a partial result is the expected outcome, not an error, so it has to be
   // visible in what comes back or the caller cannot name the links it missed.
   const target = NOW_SEC + 50_000;
-  const movedIds = extendLinks(EXTEND_SLUG, target, LOCAL).map((row) => row.id);
+  const movedIds = (await extendLinks(EXTEND_SLUG, target, LOCAL)).map((row) => row.id);
   check(
     'extend --all: moves every live link whose ceiling reaches the new date',
     movedIds.includes(LINKS.extendAllRoom.id),
@@ -287,7 +291,7 @@ export function checkExtendRoundTrip() {
   );
   check(
     'extend --all: the row it reported moving really moved',
-    getLink(EXTEND_SLUG, LINKS.extendAllRoom.id, LOCAL)?.exp === target,
+    (await getLink(EXTEND_SLUG, LINKS.extendAllRoom.id, LOCAL))?.exp === target,
     'the UPDATE reported a change the table does not show',
   );
   // Bulk scoping, asserted rather than argued. `--all` is the one statement here
@@ -298,7 +302,7 @@ export function checkExtendRoundTrip() {
   // --all above rewrote that very row, harmlessly but silently.
   check(
     'extend --all: leaves another post’s links alone',
-    getLink(OTHER_SLUG, LINKS.crossSlug.id, LOCAL)?.exp === FAR_FUTURE_EXP,
+    (await getLink(OTHER_SLUG, LINKS.crossSlug.id, LOCAL))?.exp === FAR_FUTURE_EXP,
     'a bulk extend reached across slugs — the cross-slug assertions below now ' +
       'depend on an expiry this statement moved',
   );
@@ -307,13 +311,13 @@ export function checkExtendRoundTrip() {
 /**
  * The closeNotes / reopenNote round-trip, run before the worker is up.
  *
- * The only place notes-db's SQL executes under test. Not because the module is
- * unimportable — it loads fine under `node --test`, and its scan half is unit
- * tested in src/lib/galley-manifest.test.js — but because every function below
- * SHELLS OUT to `wrangler d1 execute` when called, so exercising the SQL needs a
- * migrated local database, which is exactly what smoke has and a unit test does
- * not. No HTTP request reaches these statements either: the worker writes notes
- * through its own binding and has no close.
+ * The only place src/lib/notes-store.js's SQL executes under test. Not because
+ * the module is unimportable — it loads fine under `node --test`, and its scan
+ * half is unit tested in src/lib/galley-manifest.test.js — but because the CLI
+ * path underneath SHELLS OUT to `wrangler d1 execute` when called, so exercising
+ * the SQL needs a migrated local database, which is exactly what smoke has and a
+ * unit test does not. No HTTP request reaches these statements either: the
+ * worker writes notes through /api/galley's own statement and has no close.
  *
  * The property worth pinning is the SCOPING. `just galley-close` closes the ids
  * listed in the pulled file — a set chosen precisely so a second reviewer's
@@ -323,17 +327,17 @@ export function checkExtendRoundTrip() {
  * Leaves the fixtures as it found them, because the live matrices read these
  * exact rows afterwards.
  */
-export function checkCloseRoundTrip() {
+export async function checkCloseRoundTrip() {
   const target = NOTES.current.id;
 
-  const wrongPost = closeNotes(OTHER_SLUG, [target], LOCAL);
+  const wrongPost = await closeNotes(OTHER_SLUG, [target], LOCAL);
   check(
     'close: an id belonging to another post closes nothing',
     wrongPost.length === 0,
     `got ${JSON.stringify(wrongPost)} — closing is not scoped to the named post`,
   );
 
-  const closed = closeNotes(FIXTURE_SLUG, [target], LOCAL);
+  const closed = await closeNotes(FIXTURE_SLUG, [target], LOCAL);
   check(
     'close: closes exactly the id it was handed',
     closed.length === 1 && closed[0] === target,
@@ -344,7 +348,7 @@ export function checkCloseRoundTrip() {
   // comment: closing one reviewer's note must leave the other reviewer's alone.
   // A close that selected on revision drift instead of on the manifest would
   // take NOTES.stale with it, and nothing else in the suite would notice.
-  const openAfter = listNotes(FIXTURE_SLUG, {}, LOCAL).map((note) => note.id);
+  const openAfter = (await listNotes(FIXTURE_SLUG, {}, LOCAL)).map((note) => note.id);
   check(
     'close: leaves a second reviewer’s note open',
     openAfter.includes(NOTES.stale.id),
@@ -356,7 +360,7 @@ export function checkCloseRoundTrip() {
     'the UPDATE reported a change the table does not show',
   );
 
-  const again = closeNotes(FIXTURE_SLUG, [target], LOCAL);
+  const again = await closeNotes(FIXTURE_SLUG, [target], LOCAL);
   check(
     'close: closing an already-closed note changes nothing',
     again.length === 0,
@@ -365,18 +369,18 @@ export function checkCloseRoundTrip() {
 
   check(
     'reopen: puts a closed note back',
-    reopenNote(FIXTURE_SLUG, target, LOCAL) === true,
+    (await reopenNote(FIXTURE_SLUG, target, LOCAL)) === true,
     'a mis-close is only recoverable by hand-written SQL',
   );
   check(
     'reopen: an already-open note reports no change',
-    reopenNote(FIXTURE_SLUG, target, LOCAL) === false,
+    (await reopenNote(FIXTURE_SLUG, target, LOCAL)) === false,
     'reopen cannot distinguish "put back" from "was never closed"',
   );
   // One read for both of the assertions below: nothing mutates the table
   // between them, and every listNotes is a fresh `npx wrangler` spawn on the
   // pre-launch path of every smoke run.
-  const openIds = listNotes(FIXTURE_SLUG, {}, LOCAL).map((note) => note.id);
+  const openIds = (await listNotes(FIXTURE_SLUG, {}, LOCAL)).map((note) => note.id);
   check(
     'reopen: restored the note to the open set',
     openIds.includes(target),

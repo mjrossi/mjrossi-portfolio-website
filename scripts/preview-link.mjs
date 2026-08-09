@@ -225,7 +225,7 @@ url.searchParams.set('preview', token);
 // signature and is then refused by middleware, which looks exactly like the
 // feature being broken — so if this fails, no URL is handed out at all.
 try {
-  recordLinks([{ id: linkId, slug, reviewer, exp, maxExp }], { local: useLocal });
+  await recordLinks([{ id: linkId, slug, reviewer, exp, maxExp }], { local: useLocal });
 } catch (err) {
   die(
     `minted a token but could not record it in the ${databaseLabel(useLocal)} ` +

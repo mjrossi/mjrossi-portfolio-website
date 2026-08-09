@@ -91,12 +91,12 @@ const sourceLines = source.split('\n');
 
 // ── read the notes ───────────────────────────────────
 
-// scripts/notes-db.mjs owns the SQL; scripts/d1.mjs owns the shell-out, the
+// src/lib/notes-store.js owns the SQL; scripts/d1.mjs owns the shell-out, the
 // banner-anchored JSON parse, and the two distinct failure messages (unreachable
 // database vs unparseable output).
 let allRows;
 try {
-  allRows = listNotes(slug, { includeClosed }, { local: useLocal });
+  allRows = await listNotes(slug, { includeClosed }, { local: useLocal });
 } catch (err) {
   die(err.message);
 }

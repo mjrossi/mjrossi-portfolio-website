@@ -36,10 +36,17 @@ function die(message) {
   process.exit(1);
 }
 
-/** Run a fatal setup step, naming what failed rather than dumping a stack. */
-function setup(what, fn) {
+/**
+ * Run a fatal setup step, naming what failed rather than dumping a stack.
+ *
+ * `await fn()` INSIDE the try, not `fn()`. The store functions these wrap are
+ * async, and a bare call would hand the try block a promise it cannot catch —
+ * turning every setup failure into an unhandled rejection with no name on it,
+ * which is the opposite of what this wrapper is for.
+ */
+async function setup(what, fn) {
   try {
-    fn();
+    await fn();
   } catch (err) {
     die(`${what}\n${err.message}`);
   }
@@ -61,15 +68,15 @@ checkBuildArtifacts();
 // D1 fixtures, all before the spawn: wrangler dev reads the persisted SQLite
 // once at startup and never flushes back, so a row written after this point is
 // invisible to the running worker.
-setup('could not migrate the local database', migrateLocalDb);
-setup('could not clear previous fixture rows', clearFixtures);
-setup('could not seed preview_links fixtures', seedLinks);
-setup('could not seed galley_notes fixtures', seedNotesFixtures);
+await setup('could not migrate the local database', migrateLocalDb);
+await setup('could not clear previous fixture rows', clearFixtures);
+await setup('could not seed preview_links fixtures', seedLinks);
+await setup('could not seed galley_notes fixtures', seedNotesFixtures);
 // Both need the rows above, and both run before the spawn because they write to
 // the same database the worker is about to open. checkCloseRoundTrip restores
 // what it changes, because the live matrices read those exact rows.
-setup('extendLink round-trip failed', checkExtendRoundTrip);
-setup('closeNotes round-trip failed', checkCloseRoundTrip);
+await setup('extendLink round-trip failed', checkExtendRoundTrip);
+await setup('closeNotes round-trip failed', checkCloseRoundTrip);
 
 // ── the runtime ────────────────────────────────────
 
@@ -89,7 +96,7 @@ try {
   //
   // Here rather than at the end because nothing after this point touches D1.
   try {
-    clearFixtures();
+    await clearFixtures();
   } catch {
     // ignored, deliberately
   }

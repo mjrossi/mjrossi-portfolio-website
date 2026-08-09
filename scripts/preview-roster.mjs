@@ -66,7 +66,7 @@ for (let i = 0; i < argv.length; i++) {
   } else if (arg === '--revoke') {
     revokeId = argv[++i];
     if (!revokeId) die('--revoke requires a link id');
-    // Checked here as well as in links-db so the message names the constraint
+    // Checked here as well as in links-store so the message names the constraint
     // rather than surfacing a validation error from two modules down.
     if (!LINK_ID_RE.test(revokeId)) {
       die(
@@ -118,7 +118,7 @@ const where = databaseLabel(useLocal);
 
 try {
   if (revokeId || revokeAll) {
-    const revoked = revokeLinks(slug, { id: revokeId }, { local: useLocal });
+    const revoked = await revokeLinks(slug, { id: revokeId }, { local: useLocal });
     // Said out loud, because both no-op cases are otherwise indistinguishable
     // from success: an id that belongs to a different post is scoped away by
     // revokeLinks, and --revoke-all against a slug whose links are already
@@ -136,7 +136,9 @@ try {
     }
   }
 
-  const rows = all ? listAllLinks({ local: useLocal }) : listLinks(slug, { local: useLocal });
+  const rows = all
+    ? await listAllLinks({ local: useLocal })
+    : await listLinks(slug, { local: useLocal });
 
   if (rows.length === 0) {
     // Names the database. An operator who minted with --local and listed without

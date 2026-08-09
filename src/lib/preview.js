@@ -47,7 +47,7 @@ const EXP_RE = /^\d+$/;
  * shift a field boundary in the token), and short enough to paste into a
  * `just preview-revoke` command by hand.
  *
- * Exported so scripts/links-db.mjs can shape-check an id before interpolating
+ * Exported so src/lib/links-store.js can shape-check an id before binding
  * it into SQL, and so scripts/preview-roster.mjs can reject a mistyped one with
  * a useful message.
  */

@@ -4,13 +4,24 @@ import mdx from '@astrojs/mdx';
 
 import cloudflare from "@astrojs/cloudflare";
 import remarkSourceAnchors from './src/lib/remark-source-anchors.js';
+import { isAdminPath } from './src/lib/admin-path.js';
 
 export default defineConfig({
   site: 'https://mjrossi.com',
   output: 'server',
   integrations: [
     mdx(),
-    sitemap(),
+    // /admin is the Desk: an Access-gated operator surface listing every
+    // scheduled draft, every outstanding preview link and every galley note.
+    // Middleware 404s it without a valid Access JWT, but a sitemap entry would
+    // still publish the fact that those paths exist and hand a crawler the slug
+    // of every unpublished post — which is the one thing scheduled publishing
+    // is for.
+    //
+    // The predicate is shared with middleware (src/lib/admin-path.js) rather
+    // than spelled again here, because a filter that disagreed with the gate is
+    // exactly the drift that puts a draft inventory in a public file.
+    sitemap({ filter: (page) => !isAdminPath(new URL(page).pathname) }),
   ],
   // Applies to .md and .mdx alike: @astrojs/mdx extends the markdown config by
   // default (extendMarkdownConfig), so the anchors the galley depends on are

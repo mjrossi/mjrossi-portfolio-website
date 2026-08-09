@@ -22,6 +22,23 @@ interface Env {
   // verifyPreviewToken() rejects every token and only the *.workers.dev host
   // unlock remains. See src/lib/preview.js.
   PREVIEW_SIGNING_KEY?: string;
+  // The Cloudflare Access application guarding /admin, the Desk. Both come from
+  // `vars` in wrangler.jsonc rather than from secrets: they are account-scoped
+  // identifiers that confer nothing without a Cloudflare-signed JWT, on the same
+  // argument that file already makes for the KV `id` and `database_id`.
+  //
+  // Optional, and unset means the Desk is UNREACHABLE rather than open — see
+  // src/lib/access.js, which denies when either is missing.
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
+  // Local-development and smoke escape hatch: a JWKS document that replaces the
+  // fetch to Cloudflare. Needed because `global_fetch_strictly_public` stops the
+  // worker fetching a loopback address, so there is no local certs server this
+  // could point at instead.
+  //
+  // THIS REPLACES THE TRUST ROOT. It lives in .dev.vars only — gitignored, never
+  // deployed — and production must never set it. Nothing in CI can prove that.
+  ACCESS_JWKS_OVERRIDE?: string;
 }
 
 declare namespace App {
@@ -54,6 +71,18 @@ declare namespace App {
      * RSS drives Buttondown's mailing. smoke.mjs greps for exactly that.
      */
     previewReviewer?: string | null;
+    /**
+     * Who Cloudflare Access says is at the Desk, else null. Set only for
+     * /admin routes, and only after src/lib/access.js has verified the JWT —
+     * including its `aud`, without which any Access app on the account would
+     * do. See src/middleware.ts.
+     *
+     * Same default rule as the three above: `undefined` must mean denied. The
+     * /admin routes never read this to decide whether to render — middleware
+     * has already 404ed an unauthorised request before they run — so this is
+     * for showing who is signed in, not for gating.
+     */
+    admin?: { email: string | null; sub: string | null } | null;
   }
 }
 

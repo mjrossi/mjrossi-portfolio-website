@@ -21,9 +21,12 @@ const WRANGLER_CONFIG = resolve('wrangler.jsonc');
 // without this check the next adapter release can quietly add another one and
 // nothing fails until someone audits the account by hand.
 //
-// Compares binding NAMES only. Secrets never appear in the generated config
-// (`vars` is `{}` and there is no secret list), so this cannot leak one or trip
-// over a missing .dev.vars.
+// Compares binding NAMES only, and never values. `vars` is no longer empty —
+// it carries the Cloudflare Access team domain and AUD tag that gate /admin —
+// but those are account-scoped identifiers rather than credentials, and the walk
+// below reads only the `binding` property of objects, so a var's value is never
+// touched. Real secrets still never appear in the generated config, so this
+// cannot leak one or trip over a missing .dev.vars.
 //
 // The walk is structural rather than a list of known binding categories, and
 // that is the whole point: the case this check exists for is an adapter release

@@ -17,8 +17,8 @@
 // for this run and handed to the worker as ACCESS_JWKS_OVERRIDE.
 import { check, checkHeader, checkStatus } from './check.mjs';
 import { accessHeader, mintAccessJwt, OTHER_AUD } from './access.mjs';
-import { BASE, FIXTURE_SLUG, PUBLISHED_SLUG } from './config.mjs';
-import { LINKS } from './fixtures.mjs';
+import { BASE, FIXTURE_SLUG, PUBLISHED_SLUG, SMOKE_REVIEWER_TWO } from './config.mjs';
+import { LINKS, NOTES } from './fixtures.mjs';
 
 const DESK = `${BASE}/admin/`;
 
@@ -120,6 +120,33 @@ export async function checkDesk() {
     'desk: the expired fixture link reads expired, not live',
     postHtml.includes(LINKS.expiredRow.id) && postHtml.includes('desk-state-expired'),
     'the row-expiry half of linkState is not reaching the page',
+  );
+
+  // ── the notes ──────────────────────────────────────
+  //
+  // Rendered from the same reviewModel `just galley` writes its markdown from,
+  // so these assertions are about the WIRING rather than the model — the model's
+  // own decisions are unit-tested in galley-render.test.js.
+
+  check(
+    'desk: shows an open note with its id',
+    postHtml.includes(NOTES.current.id),
+    'the manifest id is missing, so the page cannot be reconciled with a pull',
+  );
+  check(
+    'desk: shows a second reviewer’s note',
+    postHtml.includes(NOTES.stale.id) && postHtml.includes(SMOKE_REVIEWER_TWO),
+    'the Desk is scoping notes to one reviewer — a pull covers everyone',
+  );
+  check(
+    'desk: flags the note written against an older revision',
+    postHtml.includes('revision drift'),
+    'a stale note is being shown as though its line numbers still meant something',
+  );
+  check(
+    'desk: a closed note is not among the open ones',
+    postHtml.indexOf(NOTES.closed.id) > postHtml.indexOf('closed in earlier rounds'),
+    'a note from a finished round is back in the working set',
   );
 
   // A published post: its links must read `spent`, which is the state that

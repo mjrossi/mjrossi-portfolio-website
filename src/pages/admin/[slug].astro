@@ -18,6 +18,8 @@ import { tryGetEnv } from '../../lib/server.ts';
 import { isPublished } from '../../lib/schedule.js';
 import { dateFormatter, isoDate } from '../../lib/blog.ts';
 import { SLUG_RE } from '../../lib/preview.js';
+import { reviewModel, isoDay } from '../../lib/galley-render.js';
+import { revisionOf, sourceOf } from '../../lib/post-source.ts';
 
 export const prerender = false;
 
@@ -58,6 +60,26 @@ const published = pubDate !== null && isPublished(pubDate, now);
 const states = links.map((link) => ({ link, state: linkState(link, { pubDate, now }) }));
 const liveCount = states.filter((entry) => entry.state.live).length;
 const openNotes = notes.filter((note) => note.closed_at === null);
+
+// The same model `just galley` renders its markdown from — the grouping, the
+// relocation of a drifted note, the section labels, the excerpts and the
+// duplicate collapsing. One implementation, two presentations: a second one
+// here would be a second chance at failures that are all silent (a heading
+// claiming a line the note was never about, an excerpt read from elsewhere).
+//
+// Needs the raw source, not a hash, because relocating a note means searching
+// the current lines for its quote. sourceOf is reachable only from behind the
+// Access gate — see src/lib/post-source.ts.
+const source = sourceOf(slug);
+const review =
+  source === undefined
+    ? null
+    : reviewModel({
+        sourceLines: source.split('\n'),
+        currentHash: await revisionOf(slug),
+        rows: openNotes,
+        closedRows: notes.filter((note) => note.closed_at !== null),
+      });
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const day = (date) => date.toISOString().slice(0, 10);
@@ -137,4 +159,228 @@ const subtitle = post
       </ul>
     )}
   </section>
+
+  <section class="desk-section" aria-labelledby="notes">
+    <h2 id="notes">Galley notes</h2>
+
+    {review === null ? (
+      <p class="desk-empty">
+        No source file for this slug, so notes cannot be placed against a passage.
+      </p>
+    ) : review.open === 0 ? (
+      <p class="desk-empty">
+        No open notes.
+        {review.closed > 0 && ` ${plural(review.closed, 'note')} closed in earlier rounds.`}
+      </p>
+    ) : (
+      <>
+        <p class="desk-note">
+          {plural(review.open, 'open note')} from {plural(review.reviewers, 'reviewer')}
+          {review.drifted > 0 && (
+            <>
+              {' · '}
+              <strong>{review.drifted} against an earlier revision</strong> — their stored
+              line numbers are stale, so where the quoted text was still findable the
+              current line is given instead.
+            </>
+          )}
+        </p>
+
+        {/* A round's shape before you read any of it: seven notes on one section
+            is a rewrite, seven spread over seven is an afternoon of small edits.
+            Skipped below two buckets, where it would restate the count above. */}
+        {review.sections.length > 1 && (
+          <ul class="desk-links desk-sections">
+            {review.sections.map((bucket) => (
+              <li class="desk-link">
+                <span>{bucket.label}</span>
+                <span class="desk-count-live">{bucket.count}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {review.groups.map((group) => (
+          <article class="desk-group">
+            <h3 class="desk-group-heading">
+              {group.key === 'general' ? (
+                'Whole-draft notes'
+              ) : (
+                <>
+                  Line {group.key}
+                  {group.section && <span class="desk-link-who"> · {group.section}</span>}
+                  {group.stale && (
+                    <span class="desk-group-drift">
+                      {group.current
+                        ? ` — now line ${group.current}`
+                        : group.anyFound
+                          ? ' — revision drift, notes relocated individually'
+                          : ' — revision drift, quote not found'}
+                    </span>
+                  )}
+                </>
+              )}
+            </h3>
+
+            {group.excerpt && <pre class="desk-excerpt">{group.excerpt}</pre>}
+
+            {group.entries.map(({ notes: same }) => (
+              <div class="desk-entry">
+                {/* One meta line per id over a single copy of the content, so a
+                    collapsed duplicate still shows every id `just galley-close`
+                    will retire. */}
+                {same.map((note) => (
+                  <p class="desk-entry-meta">
+                    <span class="desk-link-who">{note.reviewer}</span>
+                    {' · '}
+                    <span class="desk-link-who">{note.kind}</span>
+                    {' · '}
+                    <span class="desk-link-who">{isoDay(note.created_at)}</span>
+                    {' · '}
+                    <span class="desk-link-id">{note.id}</span>
+                  </p>
+                ))}
+                {same[0].quote && <blockquote class="desk-quote">{same[0].quote}</blockquote>}
+                {same[0].body && <p class="desk-entry-body">{same[0].body}</p>}
+                {same[0].suggestion && (
+                  <pre class="desk-suggestion">{same[0].suggestion}</pre>
+                )}
+              </div>
+            ))}
+          </article>
+        ))}
+
+        <p class="desk-note">
+          Applying them is still a laptop job — <span class="desk-cmd">just galley {slug} --remote</span>
+          writes the manifest this reads from, and <span class="desk-cmd">just galley-close {slug} --remote</span>
+          retires exactly the ids in it, after the revision merges.
+        </p>
+      </>
+    )}
+
+    {/* Behind a disclosure, like the galley margin's own "addressed" list, and
+        flat rather than anchored for the same reason galley-pull's appendix is:
+        these notes were written against revisions the file no longer holds, so
+        relocating them would be guesswork about a passage already dealt with.
+        What is wanted is the record of what was said, not a pointer into the
+        current draft. */}
+    {review !== null && review.closed > 0 && (
+      <details class="desk-closed">
+        <summary>{plural(review.closed, 'note')} closed in earlier rounds</summary>
+        {review.closedEntries.map(({ notes: same }) => (
+          <div class="desk-entry">
+            {same.map((note) => (
+              <p class="desk-entry-meta">
+                <span class="desk-link-who">{note.reviewer}</span>
+                {' · '}
+                <span class="desk-link-who">{isoDay(note.created_at)}</span>
+                {' · closed '}
+                <span class="desk-link-who">{isoDay(note.closed_at)}</span>
+                {' · '}
+                <span class="desk-link-id">{note.id}</span>
+              </p>
+            ))}
+            {same[0].quote && <blockquote class="desk-quote">{same[0].quote}</blockquote>}
+            {same[0].body && <p class="desk-entry-body">{same[0].body}</p>}
+          </div>
+        ))}
+        <p class="desk-note">
+          Put one back with <span class="desk-cmd">just galley-reopen {slug} --note &lt;id&gt; --remote</span>.
+        </p>
+      </details>
+    )}
+  </section>
 </Desk>
+
+<style is:global>
+  /* Lives with the Desk layout's rules rather than global.css, and stays off
+     every public page for the same reason — see src/layouts/Desk.astro. */
+  .desk-sections {
+    margin-bottom: 1.25rem;
+  }
+
+  .desk-group {
+    margin: 0 0 1.5rem;
+    padding: 0 0 0 0.9rem;
+    border-left: 3px solid var(--border);
+  }
+
+  .desk-group-heading {
+    margin: 0 0 0.5rem;
+    font-family: var(--font-ui);
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .desk-group-drift {
+    color: var(--accent);
+    font-weight: 400;
+  }
+
+  /* The excerpt and the suggestion scroll inside their own box rather than
+     shrinking. Below a readable width the text stops being checkable against
+     the source, which is the only thing it is for — same trade as
+     .post-diagram. */
+  .desk-excerpt,
+  .desk-suggestion {
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.65rem;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .desk-suggestion {
+    border-left: 3px solid var(--accent);
+  }
+
+  .desk-entry {
+    margin: 0 0 1rem;
+  }
+
+  .desk-entry-meta {
+    margin: 0 0 0.25rem;
+    font-family: var(--font-ui);
+    font-size: 0.72rem;
+  }
+
+  .desk-quote {
+    margin: 0 0 0.4rem;
+    padding-left: 0.7rem;
+    border-left: 2px solid var(--accent-rule, var(--border));
+    color: var(--muted);
+    font-style: italic;
+    font-size: 0.9rem;
+  }
+
+  .desk-entry-body {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .desk-closed {
+    margin-top: 1.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+  }
+
+  .desk-closed > summary {
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 0.78rem;
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+
+  .desk-closed[open] > summary {
+    margin-bottom: 0.85rem;
+  }
+</style>

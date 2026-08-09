@@ -230,8 +230,10 @@ const SECTIONED = [
 test('sectionMap resolves each line to the heading above it', () => {
   const map = sectionMap(SECTIONED);
   assert.equal(map.get(5), null, 'the intro is before any heading');
-  assert.equal(map.get(9), 'Where AI fell short');
-  assert.equal(map.get(13), 'Know what only you can decide');
+  // The heading's own line rides along: it is what says whether two groups are
+  // in the same section, which the text alone cannot answer.
+  assert.deepEqual(map.get(9), { line: 7, text: 'Where AI fell short' });
+  assert.deepEqual(map.get(13), { line: 11, text: 'Know what only you can decide' });
 });
 
 test('the nearest heading wins, whatever its level', () => {
@@ -271,14 +273,14 @@ test('a heading inside a fenced block is not a heading', () => {
     '',
     'Body line.',
   ];
-  assert.equal(sectionMap(sourceLines).get(6), 'Real heading');
+  assert.deepEqual(sectionMap(sourceLines).get(6), { line: 0, text: 'Real heading' });
 });
 
 test('a fence closes only on its own character at its own length', () => {
   // Same CommonMark rule the manifest scan follows. A toggle would flip on the
   // inner fence and hand every later line the wrong section.
   const sourceLines = ['## Real heading', '````md', '```', '## Fake', '````', 'Body line.'];
-  assert.equal(sectionMap(sourceLines).get(5), 'Real heading');
+  assert.deepEqual(sectionMap(sourceLines).get(5), { line: 0, text: 'Real heading' });
 });
 
 test('a stale group that cannot be relocated gets NO section label', () => {
@@ -322,6 +324,63 @@ test('the header counts notes by section, in source order', () => {
       'Where AI fell short · 1',
       'Know what only you can decide · 2',
     ],
+  );
+});
+
+test('two sections with the same words are two buckets, not one', () => {
+  // The summary's entire claim is cluster size, so merging these misreports the
+  // round: one bucket of two says "rewrite" where two buckets of one say "two
+  // small edits". Bucketed on the heading's line for exactly this — nothing in
+  // the text tells the two apart, and SECTION_MAX can truncate two long ones to
+  // the same string besides.
+  const sourceLines = [
+    '## Part two',
+    '',
+    '### What worked',
+    '',
+    'body A',
+    '',
+    '## Part three',
+    '',
+    '### What worked',
+    '',
+    'body B',
+  ];
+  const { markdown } = render({
+    sourceLines,
+    rows: [
+      note({ id: ID(1), src_start: 5, src_end: 5 }),
+      note({ id: ID(2), src_start: 11, src_end: 11 }),
+    ],
+  });
+  const summary = markdown.split('Notes by section:')[1].split('```')[1];
+  assert.deepEqual(
+    summary
+      .trim()
+      .split('\n')
+      .map((line) => line.trim().replace(/\s{2,}/, ' · ')),
+    ['What worked · 1', 'What worked · 1'],
+  );
+});
+
+test('two groups under one heading are one bucket', () => {
+  // The other direction of the same key. These are different line ranges — two
+  // groups, two headings in the body — and they are one section.
+  const { markdown } = render({
+    sourceLines: SECTIONED,
+    rows: [
+      note({ id: ID(1), src_start: 8, src_end: 8 }),
+      note({ id: ID(2), src_start: 10, src_end: 10 }),
+      note({ id: ID(3), src_start: 14, src_end: 14 }),
+    ],
+  });
+  const summary = markdown.split('Notes by section:')[1].split('```')[1];
+  assert.deepEqual(
+    summary
+      .trim()
+      .split('\n')
+      .map((line) => line.trim().replace(/\s{2,}/, ' · ')),
+    ['Where AI fell short · 2', 'Know what only you can decide · 1'],
   );
 });
 

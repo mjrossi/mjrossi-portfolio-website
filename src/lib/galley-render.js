@@ -137,8 +137,15 @@ export function excerptAt(sourceLines, index) {
  * wants that, not the `## Five lessons` two screens up — the specific one is the
  * one that tells you where you are.
  *
+ * THE VALUE CARRIES THE HEADING'S OWN LINE as well as its text, because the two
+ * answer different questions: the text is what gets printed, and the line is
+ * what says whether two groups are in the SAME section. A post can hold the same
+ * words twice — `### What worked` under Part two and again under Part three — and
+ * nothing in the text alone tells them apart.
+ *
  * @param {string[]} sourceLines
- * @returns {Map<number, string | null>} 0-based line index → heading text
+ * @returns {Map<number, { line: number, text: string } | null>} 0-based line
+ *   index → the heading it sits under
  */
 export function sectionMap(sourceLines) {
   const map = new Map();
@@ -172,7 +179,10 @@ export function sectionMap(sourceLines) {
     } else {
       const heading = ATX_RE.exec(line);
       // Trailing #s are an optional closing sequence, not part of the text.
-      if (heading) current = heading[2].trim().replace(/\s+#+$/, '') || null;
+      if (heading) {
+        const text = heading[2].trim().replace(/\s+#+$/, '');
+        current = text ? { line: i, text } : null;
+      }
     }
     map.set(i, current);
   }
@@ -376,7 +386,16 @@ export function renderReviewFile({
   const groups = groupByAnchor(rows).map(([key, notes]) => {
     const entries = collapseDuplicates(notes);
     if (key === 'general') {
-      return { key, notes, entries, label: WHOLE_DRAFT, section: null, stale: false, current: null };
+      return {
+        key,
+        notes,
+        entries,
+        label: WHOLE_DRAFT,
+        sectionKey: WHOLE_DRAFT,
+        section: null,
+        stale: false,
+        current: null,
+      };
     }
     const stale = notes.some((n) => n.revision_hash !== currentHash);
     const { line: current, anyFound, lineOf } = resolveGroup(notes, locate);
@@ -385,10 +404,9 @@ export function renderReviewFile({
     // means nothing in the current file, so there is no honest place to read a
     // heading from and the label is withheld rather than guessed.
     const anchorIndex = !stale ? Number(key.split('-')[0]) - 1 : current ? current - 1 : null;
-    const section =
-      anchorIndex !== null && sections.has(anchorIndex)
-        ? sectionLabel(sections.get(anchorIndex))
-        : null;
+    const heading = anchorIndex === null ? null : (sections.get(anchorIndex) ?? null);
+    const section = sectionLabel(heading?.text ?? null);
+    const label = section ?? (anchorIndex === null ? UNKNOWN_SECTION : NO_SECTION);
     return {
       key,
       notes,
@@ -399,7 +417,11 @@ export function renderReviewFile({
       lineOf,
       anchorIndex,
       section,
-      label: section ?? (anchorIndex === null ? UNKNOWN_SECTION : NO_SECTION),
+      label,
+      // Which section this IS, as opposed to what it is called. The three
+      // label-only buckets have no heading to point at and key on the label
+      // itself; a string and a number never collide as Map keys.
+      sectionKey: heading ? heading.line : label,
     };
   });
 
@@ -424,17 +446,28 @@ export function renderReviewFile({
   // Counts NOTES, not entries, so they add up to the number on the line above
   // even where duplicates collapsed. Skipped below two buckets: one bucket is
   // not a grouping, it is the same fact restated.
-  const byLabel = new Map();
+  //
+  // BUCKETED BY THE HEADING'S LINE, NOT ITS TEXT. Two sections can carry the
+  // same words — `### What worked` under Part two and again under Part three —
+  // and SECTION_MAX can truncate two long ones to the same string besides.
+  // Merging either pair reports one cluster of seven where the truth is four and
+  // three, which is the exact inference this block exists to support. Same words
+  // therefore print on two rows; they are in source order, and the line ranges
+  // on the headings below say which is which.
+  const bySection = new Map();
   for (const group of groups) {
-    byLabel.set(group.label, (byLabel.get(group.label) ?? 0) + group.notes.length);
+    const bucket = bySection.get(group.sectionKey);
+    if (bucket) bucket.count += group.notes.length;
+    else bySection.set(group.sectionKey, { label: group.label, count: group.notes.length });
   }
-  if (byLabel.size > 1) {
+  if (bySection.size > 1) {
     lines.push('Notes by section:');
     lines.push('');
-    const width = Math.max(...[...byLabel.keys()].map((label) => label.length));
+    const buckets = [...bySection.values()];
+    const width = Math.max(...buckets.map(({ label }) => label.length));
     pushFenced(
       lines,
-      [...byLabel].map(([label, count]) => `${label.padEnd(width)}  ${count}`).join('\n'),
+      buckets.map(({ label, count }) => `${label.padEnd(width)}  ${count}`).join('\n'),
     );
     lines.push('');
   }
@@ -499,12 +532,19 @@ export function renderReviewFile({
     // A passage this group has already spoken about. Keyed by reviewer as well
     // as quote: two editors landing on the same sentence is the ordinary case
     // and is not one of them revisiting it.
+    //
+    // Joined on NUL because it is the one character neither field can hold, so
+    // no reviewer label and quote can pair up to look like a different pair. It
+    // is written as the ESCAPE `\0` and must stay that way: as a raw byte in the
+    // source it makes this file binary to `file`, `grep` and `rg`, all of which
+    // then skip it silently — and a diff renders it as a space, which is how it
+    // reads as one in review.
     const spokenFor = new Set();
 
     for (const { notes: same } of entries) {
       const note = same[0];
       const noteLine = lineOf?.get(note);
-      const passage = note.quote ? `${note.reviewer} ${note.quote}` : null;
+      const passage = note.quote ? `${note.reviewer}\0${note.quote}` : null;
 
       const detail = [];
       // Per-note relocation, for the case the heading could not claim one: the

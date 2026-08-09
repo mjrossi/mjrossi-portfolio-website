@@ -29,6 +29,8 @@ import {
 } from './smoke/runtime.mjs';
 import { checkEndpoints, checkRoutes } from './smoke/live-site.mjs';
 import { checkHostUnlock, checkPreviewAndGalley } from './smoke/live-preview.mjs';
+import { checkDesk, checkDeskIsNotPublic } from './smoke/live-desk.mjs';
+import { conflictingDevVars } from './smoke/access.mjs';
 
 /** Bail before anything is spawned, for the conditions no assertion can survive. */
 function die(message) {
@@ -54,6 +56,21 @@ async function setup(what, fn) {
 
 if (!PUBLISHED_SLUG) die('no published post found — the published-link assertions cannot run');
 if (!distExists()) die('dist/client not found — run `npm run build` first');
+
+// `.dev.vars` beats `--var` in wrangler dev, so a value set there would shadow
+// the Access key set this run mints — and every Desk assertion would fail
+// locally while CI, which has no .dev.vars, passed. Unlike PREVIEW_SIGNING_KEY,
+// smoke cannot adopt the developer's value: the matching private key is not in
+// the file. Refused up front rather than left to be diagnosed from a wall of
+// 404s. See scripts/smoke/access.mjs.
+const shadowed = conflictingDevVars();
+if (shadowed.length > 0) {
+  die(
+    `.dev.vars sets ${shadowed.join(', ')}, which wrangler dev prefers over the\n` +
+      '  key set smoke mints for itself — every /admin assertion would fail here and\n' +
+      '  pass in CI. Comment those lines out for the run.',
+  );
+}
 
 // ── before the runtime ─────────────────────────────
 //
@@ -87,6 +104,11 @@ try {
 
   const routes = await checkRoutes();
   await checkPreviewAndGalley(routes);
+  // Before the fixture cleanup below, because the Desk reads those exact rows —
+  // the revoked, expired and spent links it asserts on are seeded, not written
+  // by the live matrix.
+  await checkDesk();
+  checkDeskIsNotPublic(routes);
 
   // Leave the local database as we found it, so a rerun asserts against a clean
   // table rather than accumulating rows from every previous run. Links included

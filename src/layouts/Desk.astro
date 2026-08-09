@@ -1,0 +1,247 @@
+---
+// The Desk — chrome for the Access-gated operator pages under /admin.
+//
+// Wraps Base so the Desk inherits one shell, one masthead and one set of design
+// tokens rather than growing a second look. What it adds is density: this is a
+// page read on a phone, standing somewhere, answering "what is outstanding?".
+//
+// WHY THE STYLES LIVE HERE AND NOT IN global.css. global.css is imported by
+// Base.astro and therefore ships on every public page; Desk rules there would be
+// weight on every reader's first paint for markup none of them will ever see.
+// Astro hoists a component's styles into the stylesheet of the routes that
+// import it, and the only importers of this file are the /admin routes, so
+// keeping them here keeps them off the public bundle. smoke asserts that.
+//
+// `is:global` rather than scoped, and the reason is the opposite of
+// GalleyMargin.astro's. That component needed `is:inline` because its elements
+// are created at runtime by galley.js and never carry the scoping attribute, and
+// because a plain <style> there would have shipped galley CSS on every published
+// post. Here the markup is ordinary server-rendered HTML — but it is rendered by
+// the PAGE, in the page's own scope, so scoped rules written in this file would
+// not match it. `is:global` is safe precisely because the module graph already
+// confines this file to /admin.
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  /** Shown under the heading. */
+  subtitle?: string;
+  /** Rendered as a back link when the page is not the Desk index. */
+  back?: { href: string; label: string };
+}
+
+const { title, subtitle, back } = Astro.props;
+const { admin } = Astro.locals;
+---
+
+{/* noindex as well as the X-Robots-Tag header middleware sets. Belt and braces,
+    and free: the header is the one that matters, but a meta tag survives a
+    response someone has saved to disk. */}
+<Base title={title} description="Operator desk" noindex={true}>
+  <div class="page desk">
+    <header class="desk-header">
+      {back && (
+        <p class="desk-back"><a href={back.href}>&larr; {back.label}</a></p>
+      )}
+      <h1>{title}</h1>
+      {subtitle && <p class="desk-subtitle">{subtitle}</p>}
+      <p class="desk-who">
+        {/* Who Access says is here. Not a gate — middleware has already refused
+            anyone without a verified JWT — but a signed-in identity you can see
+            is how you notice you are on the wrong account. */}
+        {admin?.email ?? 'signed in'} · <span class="desk-warning">not cached, not indexed</span>
+      </p>
+    </header>
+
+    <slot />
+  </div>
+</Base>
+
+<style is:global>
+  .desk {
+    --desk-gap: 0.65rem;
+  }
+
+  .desk-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 3px double var(--accent-band-border, var(--border));
+  }
+
+  .desk-back {
+    margin: 0 0 0.5rem;
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+  }
+
+  .desk-header h1 {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: clamp(1.8rem, 5vw, 2.6rem);
+    line-height: 1.1;
+  }
+
+  .desk-subtitle {
+    margin: 0.4rem 0 0;
+    color: var(--muted);
+  }
+
+  .desk-who {
+    margin: 0.75rem 0 0;
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.06em;
+  }
+
+  .desk-warning {
+    color: var(--accent);
+  }
+
+  .desk-section {
+    margin-bottom: 2.5rem;
+  }
+
+  .desk-section > h2 {
+    margin: 0 0 0.35rem;
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  .desk-section > .desk-note {
+    margin: 0 0 1rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  /* One card per post. A table would be the obvious shape and is the wrong one:
+     this is read on a phone, where five columns either scroll sideways or
+     shrink past legibility. */
+  .desk-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--desk-gap);
+  }
+
+  .desk-card {
+    display: block;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    text-decoration: none;
+    color: inherit;
+  }
+
+  a.desk-card:hover {
+    border-color: var(--accent);
+  }
+
+  .desk-card-title {
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    line-height: 1.25;
+    margin: 0 0 0.3rem;
+  }
+
+  .desk-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.9rem;
+    font-family: var(--font-ui);
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  /* Counts that matter get the accent; a zero stays quiet. The point of the
+     index is that a glance separates "nothing to do" from "seven notes on one
+     section", so the two must not look alike. */
+  .desk-count-live {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .desk-badge {
+    font-family: var(--font-ui);
+    font-size: 0.7rem;
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.08em;
+    padding: 0.05rem 0.45rem;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .desk-badge-scheduled {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* The link roster. Monospace because ids are compared by eye against what
+     `just preview-roster` printed, and a proportional font makes two hex
+     strings that differ in one character look identical. */
+  .desk-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .desk-link {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.3rem 0.8rem;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--border);
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+  }
+
+  .desk-link-id {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem;
+    -webkit-user-select: all;
+    user-select: all;
+  }
+
+  .desk-link-who {
+    color: var(--muted);
+  }
+
+  .desk-state {
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.06em;
+  }
+
+  .desk-state-live { color: var(--accent); font-weight: 600; }
+  .desk-state-expired,
+  .desk-state-revoked,
+  .desk-state-spent { color: var(--muted); }
+
+  .desk-empty {
+    margin: 0;
+    padding: 0.85rem 1rem;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  /* Commands are meant to be copied into a terminal, so they wrap rather than
+     scroll — a half-visible command is worse than a wrapped one. */
+  .desk-cmd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 0.15rem 0.35rem;
+    overflow-wrap: anywhere;
+    -webkit-user-select: all;
+    user-select: all;
+  }
+</style>

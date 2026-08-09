@@ -1,0 +1,156 @@
+---
+// The Desk index — "what is outstanding?", answerable from a phone.
+//
+// Access-gated in src/middleware.ts, which 404s anything without a verified JWT
+// before this file runs. Nothing here re-checks that: one gate, one place to get
+// wrong. Middleware also forces no-store + noindex on the response, which
+// matters more here than anywhere else in the site — this page is the whole
+// draft inventory in one document.
+//
+// READ-ONLY, and that is what makes it cheap. No forms and no fetch, so the
+// site-wide CSP (`script-src 'self'`, `form-action 'none'`) needs no carve-out
+// and this page ships not one byte of client JavaScript. Minting, extending and
+// revoking stay on the laptop — see CLAUDE.md, "The Desk".
+import { getCollection } from 'astro:content';
+import Desk from '../../layouts/Desk.astro';
+import { deskIndex } from '../../lib/desk.js';
+import { linkState } from '../../lib/link-state.js';
+import { listAllLinks } from '../../lib/links-store.js';
+import { countOpenNotesBySlug } from '../../lib/notes-store.js';
+import { tryGetEnv } from '../../lib/server.ts';
+import { dateFormatter, isoDate } from '../../lib/blog.ts';
+
+export const prerender = false;
+
+// getCollection directly, NOT getPublishedPosts — that helper exists to hide
+// exactly the posts this page is for, and threading a "show me the drafts" flag
+// through it would put a draft-revealing argument in the module that backs the
+// public index, the tag pages and the RSS feed. The feed is what triggers
+// Buttondown's irreversible send; it must stay incapable of showing a draft.
+const posts = (await getCollection('blog')).map((post) => ({
+  slug: post.id,
+  title: post.data.title,
+  pubDate: post.data.pubDate,
+}));
+
+const DB = tryGetEnv()?.DB ?? null;
+
+// A missing binding is reported rather than thrown. The scheduled-post half of
+// this page needs no database at all, and losing the whole Desk because D1 is
+// unreachable would be the wrong trade on the page you open when something is
+// already wrong.
+let links = [];
+let openNotes = new Map();
+let dbError = DB ? null : 'no DB binding on this worker';
+if (DB) {
+  try {
+    [links, openNotes] = await Promise.all([listAllLinks(DB), countOpenNotesBySlug(DB)]);
+  } catch (err) {
+    console.error('desk: D1 query failed', err);
+    dbError = 'the galley database did not answer — links and notes are missing below';
+  }
+}
+
+const now = Date.now();
+const { posts: rows, orphans, totals } = deskIndex({ posts, links, openNotes, now });
+
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** Days until publication, as the deadline rather than a date. */
+function countdown(pubDate) {
+  const days = Math.ceil((pubDate.valueOf() - now) / 86_400_000);
+  if (days <= 0) return 'publishes today';
+  if (days === 1) return 'publishes tomorrow';
+  return `publishes in ${days} days`;
+}
+---
+
+<Desk
+  title="The Desk"
+  subtitle={
+    totals.scheduled === 0 && totals.openNotes === 0
+      ? 'Nothing scheduled and no open notes.'
+      : `${plural(totals.scheduled, 'draft')} scheduled · ${plural(totals.openNotes, 'open note')} · ${plural(totals.liveLinks, 'live link')}`
+  }
+>
+  {dbError && (
+    <p class="desk-empty">⚠ {dbError}</p>
+  )}
+
+  <section class="desk-section" aria-labelledby="outstanding">
+    <h2 id="outstanding">Outstanding</h2>
+    <p class="desk-note">
+      Scheduled drafts, plus any post still carrying open notes or live links.
+      A published post with neither is not listed.
+    </p>
+
+    {rows.length === 0 ? (
+      <p class="desk-empty">Nothing outstanding.</p>
+    ) : (
+      <ul class="desk-list">
+        {rows.map((row) => (
+          <li>
+            <a class="desk-card" href={`/admin/${row.slug}/`}>
+              <p class="desk-card-title">{row.title}</p>
+              <p class="desk-card-meta">
+                {!row.published && <span class="desk-badge desk-badge-scheduled">scheduled</span>}
+                <span>
+                  <time datetime={isoDate(row.pubDate)}>{dateFormatter.format(row.pubDate)}</time>
+                  {!row.published && <> · {countdown(row.pubDate)}</>}
+                </span>
+                <span class={row.openNotes > 0 ? 'desk-count-live' : undefined}>
+                  {plural(row.openNotes, 'open note')}
+                </span>
+                <span class={row.liveLinks > 0 ? 'desk-count-live' : undefined}>
+                  {plural(row.liveLinks, 'live link')}
+                </span>
+              </p>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+
+  {orphans.length > 0 && (
+    <section class="desk-section" aria-labelledby="orphans">
+      <h2 id="orphans">Links with no post</h2>
+      <p class="desk-note">
+        Minted against a slug this build does not have — renamed, deleted, or never
+        merged. These are the links hardest to find and most worth withdrawing, so
+        they are listed by id rather than left to be inferred from an empty page.
+      </p>
+      <ul class="desk-links">
+        {orphans.flatMap((group) =>
+          group.links.map((link) => {
+            const state = linkState(link, { pubDate: null, now });
+            return (
+              <li class="desk-link">
+                <span class="desk-link-id">{link.id}</span>
+                <span class="desk-link-who">{group.slug}</span>
+                <span class="desk-link-who">{link.reviewer ?? 'view only'}</span>
+                <span class={`desk-state desk-state-${state.state}`}>{state.state}</span>
+              </li>
+            );
+          }),
+        )}
+      </ul>
+    </section>
+  )}
+
+  <section class="desk-section" aria-labelledby="doing">
+    <h2 id="doing">Changing anything</h2>
+    <p class="desk-note">
+      The Desk reads. Minting, extending, revoking and closing a round all still
+      run from the laptop — a pull writes <span class="desk-cmd">docs/galley/&lt;slug&gt;.md</span>
+      into the repo and a close reads that same file back as its manifest, so both
+      are git operations rather than database ones.
+    </p>
+    <ul class="desk-links">
+      <li class="desk-link"><span class="desk-cmd">just preview-roster-all --remote</span></li>
+      <li class="desk-link"><span class="desk-cmd">just preview-extend &lt;slug&gt; &lt;id&gt; --hours N --remote</span></li>
+      <li class="desk-link"><span class="desk-cmd">just preview-revoke &lt;slug&gt; &lt;id&gt; --remote</span></li>
+      <li class="desk-link"><span class="desk-cmd">just galley &lt;slug&gt; --remote</span></li>
+    </ul>
+  </section>
+</Desk>

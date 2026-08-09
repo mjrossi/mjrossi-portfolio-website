@@ -1,0 +1,140 @@
+---
+// One post at the Desk: its preview links, and what the reviewers said.
+//
+// Access-gated in src/middleware.ts before this runs, and forced to no-store +
+// noindex there. Read-only, no client JS — see the index page's header.
+//
+// SCOPED BY SLUG only because the URL says so, and that is worth being explicit
+// about: unlike /api/galley, whose scoping is an authorisation boundary carried
+// by a signed token, this page is behind a gate that already grants everything.
+// The slug here is navigation, not permission. Do not copy this file's shape
+// into anything reachable without Access.
+import { getCollection } from 'astro:content';
+import Desk from '../../layouts/Desk.astro';
+import { linkState } from '../../lib/link-state.js';
+import { listLinks } from '../../lib/links-store.js';
+import { listNotes } from '../../lib/notes-store.js';
+import { tryGetEnv } from '../../lib/server.ts';
+import { isPublished } from '../../lib/schedule.js';
+import { dateFormatter, isoDate } from '../../lib/blog.ts';
+import { SLUG_RE } from '../../lib/preview.js';
+
+export const prerender = false;
+
+const { slug } = Astro.params;
+
+// Shape-checked before it reaches a query. The store modules check too, but a
+// slug that cannot be a slug should 404 as "no such page" rather than surface a
+// validation error from two modules down as a 500.
+if (!slug || !SLUG_RE.test(slug)) {
+  return new Response('Not found', { status: 404 });
+}
+
+// The post may legitimately be absent: a link can outlive its slug, and this
+// page is reachable from the index's "links with no post" section. Rendering
+// the roster for a post that is gone is the point of that path, so a missing
+// post is a state rather than a 404.
+const post = (await getCollection('blog')).find((entry) => entry.id === slug) ?? null;
+const pubDate = post?.data.pubDate ?? null;
+
+const DB = tryGetEnv()?.DB ?? null;
+let links = [];
+let notes = [];
+let dbError = DB ? null : 'no DB binding on this worker';
+if (DB) {
+  try {
+    [links, notes] = await Promise.all([
+      listLinks(DB, slug),
+      listNotes(DB, slug, { includeClosed: true }),
+    ]);
+  } catch (err) {
+    console.error('desk: D1 query failed', err);
+    dbError = 'the galley database did not answer';
+  }
+}
+
+const now = Date.now();
+const published = pubDate !== null && isPublished(pubDate, now);
+const states = links.map((link) => ({ link, state: linkState(link, { pubDate, now }) }));
+const liveCount = states.filter((entry) => entry.state.live).length;
+const openNotes = notes.filter((note) => note.closed_at === null);
+
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const day = (date) => date.toISOString().slice(0, 10);
+const stamp = (date) => date.toISOString().slice(0, 16).replace('T', ' ');
+
+const title = post?.data.title ?? slug;
+const subtitle = post
+  ? `${published ? 'Published' : 'Scheduled'} ${dateFormatter.format(pubDate)} · ${plural(openNotes.length, 'open note')} · ${plural(liveCount, 'live link')}`
+  : 'No post with this slug in the current build.';
+---
+
+<Desk title={title} subtitle={subtitle} back={{ href: '/admin/', label: 'The Desk' }}>
+  {dbError && <p class="desk-empty">⚠ {dbError}</p>}
+
+  {post && (
+    <section class="desk-section" aria-labelledby="post">
+      <h2 id="post">Post</h2>
+      <ul class="desk-links">
+        <li class="desk-link">
+          <span class="desk-link-who">slug</span>
+          <span class="desk-link-id">{slug}</span>
+        </li>
+        <li class="desk-link">
+          <span class="desk-link-who">publishes</span>
+          <span>
+            <time datetime={isoDate(pubDate)}>{stamp(pubDate)}</time>
+            {' '}
+            <span class={`desk-state desk-state-${published ? 'spent' : 'live'}`}>
+              {published ? 'live' : 'scheduled'}
+            </span>
+          </span>
+        </li>
+        <li class="desk-link">
+          <span class="desk-link-who">read it</span>
+          {/* Only useful once the post is public. A draft needs a signed
+              preview link, which this page cannot mint — so rather than offer a
+              URL that 404s, say what it would take. */}
+          {published ? (
+            <a href={`/blog/${slug}/`}>/blog/{slug}/</a>
+          ) : (
+            <span class="desk-cmd">just preview-link {slug} --remote --reviewer &lt;initials&gt;</span>
+          )}
+        </li>
+      </ul>
+    </section>
+  )}
+
+  <section class="desk-section" aria-labelledby="links">
+    <h2 id="links">Preview links</h2>
+    <p class="desk-note">
+      {published
+        ? 'The post is public, so any link still in the table reads spent — it grants nothing a plain URL does not.'
+        : 'Every link ever minted for this post. Revoked rows stay listed, because an inventory that forgets is not one.'}
+    </p>
+
+    {states.length === 0 ? (
+      <p class="desk-empty">No links minted for this post.</p>
+    ) : (
+      <ul class="desk-links">
+        {states.map(({ link, state }) => (
+          <li class="desk-link">
+            <span class="desk-link-id">{link.id}</span>
+            <span class="desk-link-who">{link.reviewer ?? 'view only'}</span>
+            <span class={`desk-state desk-state-${state.state}`}>
+              {state.state === 'revoked'
+                ? `revoked ${day(state.revokedAt)}`
+                : state.state === 'spent'
+                  ? `spent (published ${day(state.publishedAt)})`
+                  : state.state}
+            </span>
+            <span class="desk-link-who">expires {stamp(state.expires)}</span>
+            {state.extendTo && (
+              <span class="desk-link-who">· extend to {day(state.extendTo)}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+</Desk>

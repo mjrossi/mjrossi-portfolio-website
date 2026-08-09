@@ -18,6 +18,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { results } from './check.mjs';
+import { ACCESS_ARGS } from './access.mjs';
 import { BASE, PORT, PREVIEW_KEY_ARGS, READY_TIMEOUT_MS } from './config.mjs';
 
 /** Exit code for "the runtime died", as distinct from "an assertion failed" (1). */
@@ -62,6 +63,11 @@ export function startRuntime() {
     [
       'wrangler', 'dev', '--port', String(PORT), '--ip', '127.0.0.1', '--log-level', 'warn',
       ...PREVIEW_KEY_ARGS,
+      // The Access key set the Desk checks sign against, replacing the fetch to
+      // Cloudflare's certs endpoint for the length of this run. Always injected
+      // — wrangler.jsonc's real values are placeholders, and smoke.mjs refuses
+      // to start if .dev.vars would shadow these. See scripts/smoke/access.mjs.
+      ...ACCESS_ARGS,
     ],
     // Both streams are piped so a runtime that dies mid-run can be told apart
     // from an assertion that genuinely failed. stderr is still forwarded live,

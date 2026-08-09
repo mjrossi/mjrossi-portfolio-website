@@ -154,6 +154,25 @@ export function checkBuildArtifacts() {
     check(`asset: ${asset}`, existsSync(resolve(DIST, asset)));
   }
 
+  // THE SITEMAP MUST NOT NAME THE DESK. /admin is 404ed without an Access JWT,
+  // so an entry would not hand anyone the page — but the per-post URLs under it
+  // are built from slugs, and every scheduled draft has one. Publishing that
+  // list is the single thing scheduled publishing exists to prevent, and it
+  // would happen in a file crawlers are invited to read.
+  //
+  // The filter is in astro.config.mjs and shares isAdminPath with middleware, so
+  // this catches the filter being dropped rather than the predicate being wrong
+  // — src/lib/admin-path.test.js covers the predicate.
+  for (const name of ['sitemap-index.xml', 'sitemap-0.xml']) {
+    const path = resolve(DIST, name);
+    if (!existsSync(path)) continue;
+    check(
+      `sitemap: ${name} does not name /admin`,
+      !readFileSync(path, 'utf8').includes('/admin'),
+      'the Desk is in the sitemap — with it, the slug of every scheduled draft',
+    );
+  }
+
   // _headers is generated post-build by scripts/gen-headers.mjs from the
   // canonical CSP in src/lib/csp.js. Assert the CSP made it into the file —
   // regression guard for the generator and for CSP drift between middleware

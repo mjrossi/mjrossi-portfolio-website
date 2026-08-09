@@ -14,10 +14,14 @@
 // else's link, which is the failure this scoping exists to prevent.
 //
 // Reads and writes D1 through `wrangler d1 execute`, which is already
-// authenticated as you. That is the whole reason there is no admin endpoint:
-// the operator surface is a CLI you are already logged into, so the deployed
-// worker never needs a way to enumerate or mutate links — and handing someone
-// one draft must not hand them the rest.
+// authenticated as you. That is why there is no admin WRITE endpoint: the
+// deployed worker never needs a way to mutate a link, and handing someone one
+// draft must not hand them the rest.
+//
+// The Desk at /admin does now READ this same table — see CLAUDE.md, "The Desk"
+// — behind Cloudflare Access and a JWT the worker verifies itself. It shows the
+// same four states this command prints, from the same src/lib/link-state.js, so
+// the two cannot disagree about what is outstanding. It cannot revoke anything.
 //
 // This list is the ONLY inventory. A token is recorded nowhere else, so a link
 // missing from here cannot be revoked, only waited out.

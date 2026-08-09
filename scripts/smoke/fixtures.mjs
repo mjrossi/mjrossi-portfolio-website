@@ -1,4 +1,5 @@
-// The preview_links fixtures, and the one place links-db's SQL runs under test.
+// The preview_links fixtures, and the one place src/lib/links-store.js's SQL
+// runs under test.
 //
 // All of this happens BEFORE wrangler dev is spawned, and it has to. wrangler dev
 // reads the persisted SQLite once at startup and does not flush its own writes

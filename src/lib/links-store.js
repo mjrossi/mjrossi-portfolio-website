@@ -250,8 +250,16 @@ export async function revokeLinks(store, slug, { id = null } = {}) {
  *
  * The "local database only" guard lives in scripts/links-db.mjs rather than
  * here, because `--local` is a fact about which database a CLI was pointed at
- * and this module deliberately does not know what a database is. The worker has
- * no path to this function at all.
+ * and this module deliberately does not know what a database is.
+ *
+ * That guard is CLI-side, so it protects only callers that go through the CLI.
+ * While this statement lived in scripts/ that was every caller by construction —
+ * the worker's module graph did not reach it. It does now, so the claim is only
+ * as good as the fact that no route imports this: scripts/smoke/static.mjs
+ * asserts exactly that, over src/pages/** and src/middleware.ts, in the same
+ * shape as the previewSlug-must-not-reach-blog.ts grep. Don't restore the old
+ * "the worker has no path to this function at all" wording — it stopped being
+ * structural the moment the SQL moved here.
  *
  * Scoped by slug rather than by reviewer, because view-only rows have no
  * reviewer to scope by.

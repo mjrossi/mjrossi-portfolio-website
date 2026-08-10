@@ -140,7 +140,10 @@ export async function reopenNote(store, slug, id) {
  *
  * The "local database only" guard lives in scripts/notes-db.mjs, for the same
  * reason clearLinks' does: `--local` is a fact about which database a CLI was
- * pointed at, and this module does not know what a database is.
+ * pointed at, and this module does not know what a database is. And it is
+ * CLI-side, so it covers every caller only for as long as no route imports this
+ * — which scripts/smoke/static.mjs now asserts rather than leaves implied. See
+ * clearLinks' header for why that stopped being structural.
  *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {{ id: string, slug: string, revisionHash: string, reviewer: string,

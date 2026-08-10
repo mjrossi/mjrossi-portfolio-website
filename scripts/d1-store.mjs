@@ -29,7 +29,17 @@
 // The façade is deliberately partial. It implements the four methods this
 // repo's statements actually use — bind, all, first, run — and nothing else. A
 // caller reaching for D1 API this does not have should get a TypeError here
-// rather than a subtly different behaviour.
+// rather than a subtly different behaviour. Note the direction of that rule:
+// it licenses omitting `raw()` and `batch()`, which are absent and therefore
+// throw. It does NOT license implementing a method D1 has with a signature D1
+// does not — hence `first(column)` below.
+//
+// The one place the two paths genuinely cannot match: D1 caps a statement at
+// 100 bound parameters, and rendered text has no such limit. recordLinks binds
+// 7 per row and seedNotes 14, so a multi-row insert crosses that ceiling on the
+// binding long before it troubles this file. Nothing reaches it today (smoke's
+// largest fixture set is 12 links, 84 parameters) and the worker never writes,
+// but a future batch write belongs chunked rather than assumed portable.
 
 import { renderSql } from '../src/lib/sql-literal.js';
 import { d1Execute } from './d1.mjs';
@@ -47,30 +57,47 @@ import { d1Execute } from './d1.mjs';
  * nothing here wants.
  */
 class WranglerStatement {
-  constructor(sql, params, local) {
+  constructor(sql, params, local, exec) {
     this.sql = sql;
     this.params = params;
     this.local = local;
+    this.exec = exec;
   }
 
   bind(...params) {
-    return new WranglerStatement(this.sql, params, this.local);
+    return new WranglerStatement(this.sql, params, this.local, this.exec);
   }
 
   async all() {
-    const { results, meta } = d1Execute(renderSql(this.sql, this.params), { local: this.local });
-    return { results, meta, success: true };
+    // `success` is wrangler's own, not a constant. Hardcoding `true` here would
+    // mean a future wrangler that reports a failed statement with exit code 0
+    // gets read as a success by every caller — the same class of silent-empty
+    // failure d1Execute's shape check exists to refuse.
+    const { results, meta, success } = this.exec(renderSql(this.sql, this.params), {
+      local: this.local,
+    });
+    return { results, meta, success: success ?? true };
   }
 
-  async first() {
+  /**
+   * @param {string} [column] D1's own overload: name a column and get that
+   *   value rather than the whole row. Implemented rather than refused, because
+   *   this is API D1 HAS — the "partial façade" argument in the header is about
+   *   methods it does not. A no-arg `first()` returning the row where the worker
+   *   returns a scalar is a divergence that is silent AND truthy: `Number(row)`
+   *   is NaN, a comparison is false, and neither throws.
+   */
+  async first(column) {
     const { results } = await this.all();
     // D1 answers null, not undefined, for a query that matched nothing.
-    return results[0] ?? null;
+    const row = results[0] ?? null;
+    if (column === undefined) return row;
+    return row === null ? null : (row[column] ?? null);
   }
 
   async run() {
-    const { meta } = await this.all();
-    return { meta, success: true };
+    const { meta, success } = await this.all();
+    return { meta, success };
   }
 }
 
@@ -80,15 +107,21 @@ class WranglerStatement {
  * The worker passes `env.DB` to those same functions. This is the other
  * implementation of that one interface — see the header above.
  *
- * @param {{ local?: boolean }} [opts] which database, decided explicitly by the
- *   caller. There is no default here for the same reason there is none in
- *   scripts/database-target.mjs: pointing a write at the wrong database is
- *   silent at the time.
+ * @param {{ local?: boolean, exec?: typeof d1Execute }} [opts] `local` decides
+ *   which database, explicitly, for the same reason scripts/database-target.mjs
+ *   has no default: pointing a write at the wrong database is silent at the
+ *   time. `exec` is a test seam and nothing else — every caller in this repo
+ *   leaves it alone. It exists because the rest of this file is a shape
+ *   contract with the D1 binding, and the only way to check a shape is to run
+ *   it; `execFileSync` at the bottom otherwise makes that untestable without an
+ *   experimental module-mocking flag on the whole `npm test` run. Same
+ *   duck-typing as the store modules taking `store` rather than importing a
+ *   binding.
  */
-export function wranglerStore({ local = false } = {}) {
+export function wranglerStore({ local = false, exec = d1Execute } = {}) {
   return {
     prepare(sql) {
-      return new WranglerStatement(sql, [], local);
+      return new WranglerStatement(sql, [], local, exec);
     },
   };
 }

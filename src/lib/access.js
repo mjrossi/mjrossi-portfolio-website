@@ -88,7 +88,12 @@ function decodeJsonSegment(segment) {
  * misbehaves, check that first.
  *
  * A failed fetch is not cached. Caching it would turn one bad minute upstream
- * into an hour of a locked-out Desk.
+ * into an hour of a locked-out Desk. An EMPTY key set counts as a failure for
+ * this purpose even when it arrives as a 200: a body of `{}` or `{"keys":[]}`
+ * cannot verify anything, so storing it would lock the Desk for the full TTL on
+ * the strength of one malformed response — the same hour this comment exists to
+ * rule out, reached through the one door `response.ok` does not cover. It fails
+ * closed either way; what is being protected here is availability.
  */
 async function loadKeys(teamDomain, jwksOverride, fetchImpl, now) {
   if (jwksOverride) {
@@ -102,7 +107,7 @@ async function loadKeys(teamDomain, jwksOverride, fetchImpl, now) {
   if (!response.ok) throw new Error(`access: certs endpoint returned ${response.status}`);
   const body = await response.json();
   const keys = Array.isArray(body?.keys) ? body.keys : [];
-  jwksCache.set(teamDomain, { at: now, keys });
+  if (keys.length > 0) jwksCache.set(teamDomain, { at: now, keys });
   return keys;
 }
 

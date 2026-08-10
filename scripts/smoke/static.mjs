@@ -9,7 +9,7 @@
 // `checkBuildArtifacts` reads dist/client — assets, the generated _headers, and
 // the CSS bundle.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { check, stripComments } from './check.mjs';
 import { DIST, GALLEY_WRITE_QUOTA } from './config.mjs';
 
@@ -138,6 +138,49 @@ export function checkSourceGuards() {
       `the endpoint's quota no longer matches GALLEY_WRITE_QUOTA in this file — the flood assertion below would go green against the wrong bound`,
     );
   }
+
+  // THE DESTRUCTIVE FIXTURE HELPERS MUST STAY OUT OF THE WORKER.
+  //
+  // clearLinks, clearNotes and seedNotes delete and forge rows. Their only
+  // guard is `if (!local) throw` in scripts/links-db.mjs and
+  // scripts/notes-db.mjs — a CLI-side guard, because `--local` is a fact about
+  // which database a script was pointed at and the store modules deliberately
+  // do not know what a database is.
+  //
+  // That guard was inherited for free while the SQL lived in scripts/, outside
+  // the worker's module graph: the worker had no path to these functions and
+  // could not have called them unguarded. Moving the statements into
+  // src/lib/*-store.js so one copy runs on both paths ended that — they are now
+  // one named import away from any route, and the comments in those modules
+  // still make the old structural claim. This restores it as something checked
+  // rather than something asserted, in the same shape as the previewSlug greps
+  // above. The Desk imports reads only, so this passes today.
+  const destructive = /\b(clearLinks|clearNotes|seedNotes)\b/;
+  const workerFiles = [...walk(resolve('src/pages')), resolve('src/middleware.ts')];
+  const offenders = workerFiles.filter((path) => destructive.test(source(path)));
+  // One check, not one per file, and it names the offenders in its own failure
+  // message — a per-file loop would emit assertions only when they FAIL, so a
+  // run where `walk` found nothing at all would print no checks and look
+  // identical to a clean one.
+  check(
+    `worker: no route imports a destructive fixture helper (${workerFiles.length} files scanned)`,
+    workerFiles.length > 0 && offenders.length === 0,
+    workerFiles.length === 0
+      ? 'no worker source files were scanned — this guard was vacuous'
+      : `clearLinks/clearNotes/seedNotes reached the worker in ${offenders
+          .map((p) => relative(resolve('.'), p))
+          .join(', ')}, where the --local guard in scripts/links-db.mjs and ` +
+        'scripts/notes-db.mjs cannot apply — these delete and forge rows',
+  );
+}
+
+/** Every file under `dir`, recursively. Returns [] if it isn't there. */
+function walk(dir) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = join(dir, entry.name);
+    return entry.isDirectory() ? walk(full) : [full];
+  });
 }
 
 export function checkBuildArtifacts() {
@@ -163,12 +206,22 @@ export function checkBuildArtifacts() {
   // The filter is in astro.config.mjs and shares isAdminPath with middleware, so
   // this catches the filter being dropped rather than the predicate being wrong
   // — src/lib/admin-path.test.js covers the predicate.
-  for (const name of ['sitemap-index.xml', 'sitemap-0.xml']) {
-    const path = resolve(DIST, name);
-    if (!existsSync(path)) continue;
+  // Globbed rather than named, and NOT guarded by existence — same argument as
+  // the CSS bundle below. `if (!existsSync) continue` over a fixed list would
+  // drop this assertion from the run entirely the day the integration emits
+  // sitemap-1.xml, or renames the file, or a config change stops emitting one:
+  // the check that matters most would go quiet with nothing red. Assert the
+  // files are found, then assert what they say.
+  const sitemaps = readdirSync(DIST).filter((f) => /^sitemap.*\.xml$/.test(f));
+  check(
+    'sitemap: at least one sitemap file is emitted',
+    sitemaps.length > 0,
+    'no sitemap*.xml in dist/client — the /admin assertions below would have been vacuous',
+  );
+  for (const name of sitemaps) {
     check(
       `sitemap: ${name} does not name /admin`,
-      !readFileSync(path, 'utf8').includes('/admin'),
+      !readFileSync(resolve(DIST, name), 'utf8').includes('/admin'),
       'the Desk is in the sitemap — with it, the slug of every scheduled draft',
     );
   }

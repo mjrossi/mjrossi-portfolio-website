@@ -102,8 +102,9 @@ export function extractJson(text) {
  * `{ results, success, meta }`, the same shape a D1 binding's `.run()` reports.
  *
  * Exists so scripts/d1-store.mjs can present a D1-compatible façade over this
- * CLI, including `meta.changes`. d1Query below is the thin "just the rows" case,
- * which is what every caller wanted before that façade existed.
+ * CLI, including `meta.changes`. This is the only reader left: the thin "just
+ * the rows" wrapper every caller used before the façade existed is gone, since
+ * the statements it served now go through src/lib/*-store.js.
  *
  * @param {string} sql
  * @param {{ local?: boolean }} [opts]
@@ -140,17 +141,6 @@ export function d1Execute(sql, { local = false } = {}) {
     );
   }
   return parsed[0];
-}
-
-/**
- * Run a read and return its rows.
- *
- * @param {string} sql
- * @param {{ local?: boolean }} [opts]
- * @returns {Record<string, unknown>[]}
- */
-export function d1Query(sql, { local = false } = {}) {
-  return d1Execute(sql, { local }).results;
 }
 
 /**

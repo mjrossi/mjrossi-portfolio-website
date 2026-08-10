@@ -224,6 +224,41 @@ test('a certs endpoint that fails is a denial, and is not cached', async () => {
   assert.equal(calls, 2);
 });
 
+test('a 200 carrying no usable keys is a denial, and is not cached either', async () => {
+  resetJwksCache();
+  let calls = 0;
+  // The door `response.ok` does not cover: the fetch succeeds, so nothing
+  // throws, but the body verifies nothing. Caching it would lock the Desk for
+  // the full TTL on the strength of one malformed response — the same hour the
+  // !ok case above exists to rule out.
+  const empty = async () => {
+    calls++;
+    return { ok: true, json: async () => ({ keys: [] }) };
+  };
+  const token = await mint();
+  assert.equal(await verify(token, { jwksOverride: null, fetchImpl: empty }), null);
+  assert.equal(await verify(token, { jwksOverride: null, fetchImpl: empty }), null);
+  assert.equal(calls, 2, 'an empty key set was cached');
+});
+
+test('a 200 whose body has no keys array at all is denied and not cached', async () => {
+  resetJwksCache();
+  let calls = 0;
+  const reshaped = async () => {
+    calls++;
+    return { ok: true, json: async () => ({}) };
+  };
+  const token = await mint();
+  assert.equal(await verify(token, { jwksOverride: null, fetchImpl: reshaped }), null);
+  assert.equal(calls, 1);
+  // And the isolate recovers the moment upstream does, rather than serving the
+  // stored emptiness until the TTL lapses.
+  assert.notEqual(
+    await verify(token, { jwksOverride: null, fetchImpl: async () => ({ ok: true, json: async () => JWKS }) }),
+    null,
+  );
+});
+
 test('a certs endpoint that throws is a denial rather than a 500', async () => {
   resetJwksCache();
   const throwing = async () => {

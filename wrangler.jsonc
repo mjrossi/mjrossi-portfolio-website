@@ -61,9 +61,9 @@
   // Until then src/lib/access.js compares against a tag no real token carries
   // and every request 404s, which is the correct direction to be wrong in.
   "vars": {
-    "ACCESS_TEAM_DOMAIN": "REPLACE-ME.cloudflareaccess.com",
-    "ACCESS_AUD": "REPLACE-ME-with-the-access-application-aud-tag"
-  },
+    "ACCESS_TEAM_DOMAIN": "link00seven.cloudflareaccess.com",
+    "ACCESS_AUD": "163548a36fdeeea35b0d5e1281627195af99b36b2e281e49eb662af09140aa99"
+  }
 
   // Astro sessions. NOT a feature this site uses — no route calls
   // `Astro.session`. It is declared because @astrojs/cloudflare injects it

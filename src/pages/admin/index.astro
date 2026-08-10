@@ -13,7 +13,7 @@
 // revoking stay on the laptop — see CLAUDE.md, "The Desk".
 import { getCollection } from 'astro:content';
 import Desk from '../../layouts/Desk.astro';
-import { countdown, deskIndex } from '../../lib/desk.js';
+import { countdown, deskIndex, plural } from '../../lib/desk.js';
 import { linkState } from '../../lib/link-state.js';
 import { listAllLinks } from '../../lib/links-store.js';
 import { countOpenNotesBySlug } from '../../lib/notes-store.js';
@@ -53,8 +53,6 @@ if (DB) {
 
 const now = Date.now();
 const { posts: rows, orphans, totals } = deskIndex({ posts, links, openNotes, now });
-
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 // countdown lives in desk.js with the rest of what this page decides — it
 // counts calendar days rather than elapsed time, for reasons that are a silent

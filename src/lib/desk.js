@@ -6,6 +6,9 @@
 // galley-render.js, which owns what a pulled review file SAYS while
 // galley-pull.mjs owns the I/O.
 //
+// `plural` sits here too, for the smaller version of the same reason: both Desk
+// pages count things aloud, and one copy each is one copy too many.
+//
 // The question this page answers is "what is outstanding?", and the hard part is
 // that the answer is not "the scheduled posts". A round can outlive its draft:
 // move a pubDate earlier, or publish while notes are still open, and the post is
@@ -16,6 +19,21 @@
 
 import { linkState } from './link-state.js';
 import { isPublished } from './schedule.js';
+
+/**
+ * `1 open note` / `3 open notes`.
+ *
+ * Both Desk pages count the same four things — drafts, open notes, live links,
+ * reviewers — and both wrote this line for themselves. Identical copies of a
+ * rule that a plural like "1 note closed in earlier rounds" is one edit away
+ * from splitting; one owner instead.
+ *
+ * @param {number} n
+ * @param {string} one singular noun
+ * @param {string} [many] plural, when it is not the singular plus an s
+ * @returns {string}
+ */
+export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** Midnight UTC on the day a date falls, as an epoch. */
 const utcDay = (date) => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());

@@ -16,8 +16,10 @@
 //
 // Plain JS so `node --test`, the worker, and astro.config.mjs can all import it.
 
-/** The one prefix, so nothing below spells it twice. */
-export const ADMIN_ROOT = '/admin';
+/** The one prefix, so nothing below spells it twice. Not exported: `isAdminPath`
+ *  is the whole of what the three callers need, and a second export invites a
+ *  fourth place to compose its own answer out of it. */
+const ADMIN_ROOT = '/admin';
 
 /**
  * Is this pathname part of the Desk?

@@ -53,27 +53,6 @@ const SOURCE_BY_SLUG = new Map<string, string>(
 );
 
 /**
- * The revision hash for one post: SHA-256 of the ENTIRE .mdx, frontmatter
- * included, lowercase hex. `undefined` for a slug with no post.
- *
- * The whole file is hashed rather than the body because anchors are absolute
- * line numbers — adding one frontmatter tag shifts every one of them while
- * leaving the prose untouched, and a body-only hash would call that "unchanged".
- * See src/lib/galley.js.
- *
- * Computed here rather than trusted from a client for the write path: a browser
- * has no way to know the file's bytes, and a note that misreported which
- * revision it was written against would defeat the drift warning it exists to
- * raise. What the client sends is only ever compared against this, never stored.
- *
- * Memoised, because the sources are build-time constants inlined into the
- * bundle: a slug's hash cannot change for the life of an isolate, and this is
- * called on every review render, on every GET (which the margin now issues on
- * each tab focus), and on every POST. The PROMISE is cached rather than the
- * string, so concurrent callers share one digest instead of racing to compute
- * the same one.
- */
-/**
  * The raw .mdx for one post, or undefined for a slug with no file.
  *
  * The third caller, and the one that needed more than a hash: the Desk
@@ -98,6 +77,27 @@ export function sourceOf(slug: string): string | undefined {
 
 const REVISIONS = new Map<string, Promise<string>>();
 
+/**
+ * The revision hash for one post: SHA-256 of the ENTIRE .mdx, frontmatter
+ * included, lowercase hex. `undefined` for a slug with no post.
+ *
+ * The whole file is hashed rather than the body because anchors are absolute
+ * line numbers — adding one frontmatter tag shifts every one of them while
+ * leaving the prose untouched, and a body-only hash would call that "unchanged".
+ * See src/lib/galley.js.
+ *
+ * Computed here rather than trusted from a client for the write path: a browser
+ * has no way to know the file's bytes, and a note that misreported which
+ * revision it was written against would defeat the drift warning it exists to
+ * raise. What the client sends is only ever compared against this, never stored.
+ *
+ * Memoised, because the sources are build-time constants inlined into the
+ * bundle: a slug's hash cannot change for the life of an isolate, and this is
+ * called on every review render, on every GET (which the margin now issues on
+ * each tab focus), and on every POST. The PROMISE is cached rather than the
+ * string, so concurrent callers share one digest instead of racing to compute
+ * the same one.
+ */
 export function revisionOf(slug: string): Promise<string | undefined> {
   const source = SOURCE_BY_SLUG.get(slug);
   if (source === undefined) return Promise.resolve(undefined);

@@ -9,7 +9,7 @@
 // by a signed token, this page is behind a gate that already grants everything.
 // The slug here is navigation, not permission. Do not copy this file's shape
 // into anything reachable without Access.
-import { getCollection } from 'astro:content';
+import { getEntry } from 'astro:content';
 import Desk from '../../layouts/Desk.astro';
 import { linkState } from '../../lib/link-state.js';
 import { listLinks } from '../../lib/links-store.js';
@@ -19,6 +19,7 @@ import { isPublished } from '../../lib/schedule.js';
 import { dateFormatter, isoDate } from '../../lib/blog.ts';
 import { SLUG_RE } from '../../lib/preview.js';
 import { reviewModel, isoDay } from '../../lib/galley-render.js';
+import { plural } from '../../lib/desk.js';
 import { revisionOf, sourceOf } from '../../lib/post-source.ts';
 
 export const prerender = false;
@@ -36,7 +37,12 @@ if (!slug || !SLUG_RE.test(slug)) {
 // page is reachable from the index's "links with no post" section. Rendering
 // the roster for a post that is gone is the point of that path, so a missing
 // post is a state rather than a 404.
-const post = (await getCollection('blog')).find((entry) => entry.id === slug) ?? null;
+//
+// getEntry, not getCollection().find() — a keyed lookup rather than
+// materialising every post to select one. It logs `Entry blog → <slug> was not
+// found` on the orphan path; that warning is EXPECTED here and is not a fault,
+// which is worth knowing before chasing it in Worker observability.
+const post = (await getEntry('blog', slug)) ?? null;
 const pubDate = post?.data.pubDate ?? null;
 
 const DB = tryGetEnv()?.DB ?? null;
@@ -81,8 +87,10 @@ const review =
         closedRows: notes.filter((note) => note.closed_at !== null),
       });
 
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const day = (date) => date.toISOString().slice(0, 10);
+// Day precision comes from isoDay, imported above for the note meta lines — the
+// link states below want the same slice, and its own docblock is about exactly
+// this: three spellings of it is how one ends up a character wider than the
+// others. `stamp` is the one format nothing else here needs.
 const stamp = (date) => date.toISOString().slice(0, 16).replace('T', ' ');
 
 const title = post?.data.title ?? slug;
@@ -145,14 +153,14 @@ const subtitle = post
             <span class="desk-link-who">{link.reviewer ?? 'view only'}</span>
             <span class={`desk-state desk-state-${state.state}`}>
               {state.state === 'revoked'
-                ? `revoked ${day(state.revokedAt)}`
+                ? `revoked ${isoDay(state.revokedAt)}`
                 : state.state === 'spent'
-                  ? `spent (published ${day(state.publishedAt)})`
+                  ? `spent (published ${isoDay(state.publishedAt)})`
                   : state.state}
             </span>
             <span class="desk-link-who">expires {stamp(state.expires)}</span>
             {state.extendTo && (
-              <span class="desk-link-who">· extend to {day(state.extendTo)}</span>
+              <span class="desk-link-who">· extend to {isoDay(state.extendTo)}</span>
             )}
           </li>
         ))}

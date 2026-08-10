@@ -236,4 +236,22 @@ export function checkBuildArtifacts() {
     !/galley-/.test(css),
     'galley CSS was hoisted into a route stylesheet — is:inline dropped from GalleyMargin.astro?',
   );
+
+  // The Desk's styles, for the same reason and against the same mechanism.
+  // src/layouts/Desk.astro keeps its rules out of global.css precisely so they
+  // stay off every public page, and Astro decides that from the module graph —
+  // so a single import of Desk.astro (or of a component that pulls it in) from
+  // anything public ships the whole operator stylesheet site-wide.
+  //
+  // THE HTML CHECK IN live-desk.mjs DOES NOT COVER THIS, which is the whole
+  // reason for a second assertion. That one greps public HTML for `desk-`; a
+  // hoisted stylesheet appears there as `<link href="/_astro/….css">` and
+  // carries no `desk-` substring at all, so the leak would be invisible to it
+  // while every reader paid for it. Exactly how the galley bug above shipped.
+  check(
+    'css: desk styles are not in the public bundle',
+    !/desk-/.test(css),
+    'Desk CSS was hoisted into a route stylesheet — something public now imports ' +
+      'src/layouts/Desk.astro, directly or through a component',
+  );
 }

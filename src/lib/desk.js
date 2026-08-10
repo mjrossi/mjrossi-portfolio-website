@@ -17,6 +17,41 @@
 import { linkState } from './link-state.js';
 import { isPublished } from './schedule.js';
 
+/** Midnight UTC on the day a date falls, as an epoch. */
+const utcDay = (date) => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+
+/**
+ * How long until a draft publishes, as the deadline rather than a date.
+ *
+ * COUNTED IN CALENDAR DAYS, NOT IN ELAPSED TIME, and the difference is the last
+ * day of every schedule — the one day this page exists to show. Ceiling the raw
+ * millisecond gap (which this did) reads that day wrong in BOTH directions: a
+ * draft going live in thirty minutes rounds up to "publishes tomorrow", and one
+ * going live in twenty-five hours — tomorrow — becomes "publishes in 2 days".
+ * This is the deadline deskIndex sorts every row by, so it has to name the same
+ * day as the date printed beside it.
+ *
+ * UTC because that is what `pubDate` means: a bare `YYYY-MM-DD` in frontmatter
+ * is midnight UTC, and dateFormatter renders it in UTC too. Counting in local
+ * time would put the countdown and the date next to it a day apart for part of
+ * every day, which is worse than either being wrong alone.
+ *
+ * Lives here rather than inline in the page for the reason the rest of this
+ * module does: it is a decision about what the Desk says, its failure is a
+ * plausible-looking wrong number rather than an error, and `node --test` cannot
+ * reach an .astro file.
+ *
+ * @param {Date} pubDate
+ * @param {number} [now] epoch MS
+ * @returns {string}
+ */
+export function countdown(pubDate, now = Date.now()) {
+  const days = Math.round((utcDay(pubDate) - utcDay(new Date(now))) / 86_400_000);
+  if (days <= 0) return 'publishes today';
+  if (days === 1) return 'publishes tomorrow';
+  return `publishes in ${days} days`;
+}
+
 /**
  * @typedef {object} DeskPost
  * @property {string} slug

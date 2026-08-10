@@ -17,7 +17,7 @@
 // for this run and handed to the worker as ACCESS_JWKS_OVERRIDE.
 import { check, checkHeader, checkStatus } from './check.mjs';
 import { accessHeader, mintAccessJwt, OTHER_AUD } from './access.mjs';
-import { BASE, FIXTURE_SLUG, PUBLISHED_SLUG, SMOKE_REVIEWER_TWO } from './config.mjs';
+import { BASE, FIXTURE_SLUG, OTHER_SLUG, PUBLISHED_SLUG, SMOKE_REVIEWER_TWO } from './config.mjs';
 import { LINKS, NOTES } from './fixtures.mjs';
 
 const DESK = `${BASE}/admin/`;
@@ -93,6 +93,16 @@ export async function checkDesk() {
     'desk: marks it scheduled',
     indexHtml.includes('desk-badge-scheduled'),
     'a scheduled draft rendered without its badge',
+  );
+  // A link whose slug names no post is the one most in need of withdrawing and
+  // the hardest to find — it is absent from the list above by definition, so the
+  // orphan section is the only route to its roster. OTHER_SLUG names no real
+  // post, so the fixtures put one there on every run.
+  check(
+    'desk: a link with no post is listed and navigable',
+    indexHtml.includes(`href="/admin/${OTHER_SLUG}/"`),
+    'an orphan slug rendered as plain text — the operator has to retype the URL ' +
+      'for exactly the links this section exists to surface',
   );
   check(
     'desk: ships no client JavaScript',

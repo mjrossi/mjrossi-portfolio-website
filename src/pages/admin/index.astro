@@ -13,7 +13,7 @@
 // revoking stay on the laptop — see CLAUDE.md, "The Desk".
 import { getCollection } from 'astro:content';
 import Desk from '../../layouts/Desk.astro';
-import { deskIndex } from '../../lib/desk.js';
+import { countdown, deskIndex } from '../../lib/desk.js';
 import { linkState } from '../../lib/link-state.js';
 import { listAllLinks } from '../../lib/links-store.js';
 import { countOpenNotesBySlug } from '../../lib/notes-store.js';
@@ -56,13 +56,10 @@ const { posts: rows, orphans, totals } = deskIndex({ posts, links, openNotes, no
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** Days until publication, as the deadline rather than a date. */
-function countdown(pubDate) {
-  const days = Math.ceil((pubDate.valueOf() - now) / 86_400_000);
-  if (days <= 0) return 'publishes today';
-  if (days === 1) return 'publishes tomorrow';
-  return `publishes in ${days} days`;
-}
+// countdown lives in desk.js with the rest of what this page decides — it
+// counts calendar days rather than elapsed time, for reasons that are a silent
+// wrong number rather than an error. Only ever called for a post that has NOT
+// published, so its count cannot be negative here.
 ---
 
 <Desk
@@ -96,7 +93,7 @@ function countdown(pubDate) {
                 {!row.published && <span class="desk-badge desk-badge-scheduled">scheduled</span>}
                 <span>
                   <time datetime={isoDate(row.pubDate)}>{dateFormatter.format(row.pubDate)}</time>
-                  {!row.published && <> · {countdown(row.pubDate)}</>}
+                  {!row.published && <> · {countdown(row.pubDate, now)}</>}
                 </span>
                 <span class={row.openNotes > 0 ? 'desk-count-live' : undefined}>
                   {plural(row.openNotes, 'open note')}
@@ -127,7 +124,12 @@ function countdown(pubDate) {
             return (
               <li class="desk-link">
                 <span class="desk-link-id">{link.id}</span>
-                <span class="desk-link-who">{group.slug}</span>
+                {/* Linked, not just named. /admin/<slug> handles a missing post
+                    deliberately — see that file's header — and this is the only
+                    route to it, since an orphan slug is by definition absent
+                    from the list above. Left as plain text the operator had to
+                    retype the URL for the links most in need of withdrawing. */}
+                <a class="desk-link-who" href={`/admin/${group.slug}/`}>{group.slug}</a>
                 <span class="desk-link-who">{link.reviewer ?? 'view only'}</span>
                 <span class={`desk-state desk-state-${state.state}`}>{state.state}</span>
               </li>

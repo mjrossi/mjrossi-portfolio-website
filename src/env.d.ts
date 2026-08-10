@@ -37,7 +37,8 @@ interface Env {
   // could point at instead.
   //
   // THIS REPLACES THE TRUST ROOT. It lives in .dev.vars only — gitignored, never
-  // deployed — and production must never set it. Nothing in CI can prove that.
+  // deployed — and production must never set it. Smoke proves wrangler.jsonc
+  // does not declare it; nothing can prove a `wrangler secret put` did not.
   ACCESS_JWKS_OVERRIDE?: string;
 }
 

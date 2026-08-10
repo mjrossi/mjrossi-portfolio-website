@@ -125,6 +125,34 @@ function checkWorkerName() {
   );
 }
 
+// ACCESS_JWKS_OVERRIDE replaces the trust root for /admin: whatever key set it
+// names is what src/lib/access.js verifies Desk tokens against, in place of
+// Cloudflare's certs endpoint. It belongs in .dev.vars — gitignored, never
+// deployed — and nowhere else.
+//
+// This proves only the half that is observable, and the distinction is worth
+// keeping straight rather than letting the check imply more than it does. A
+// `wrangler secret put` of the same name is invisible to this repo and no test
+// can see it; that remains a "check this first" if the gate ever misbehaves.
+// But `vars` in wrangler.jsonc IS committed, it IS deployed, and it is the one
+// route by which the trust root could be replaced in a reviewable file and
+// still go unnoticed. So that route gets closed.
+//
+// Read off the raw text rather than the parsed config, so it fires on a
+// commented-out line too — a `// "ACCESS_JWKS_OVERRIDE": …` sitting in the file
+// is a paste waiting to be uncommented, and this check is cheaper to satisfy
+// than to explain.
+function checkAccessTrustRoot() {
+  if (!existsSync(WRANGLER_CONFIG)) return;
+  const raw = readFileSync(WRANGLER_CONFIG, 'utf8');
+  check(
+    'wrangler.jsonc does not declare ACCESS_JWKS_OVERRIDE',
+    !raw.includes('ACCESS_JWKS_OVERRIDE'),
+    'the Desk\'s trust root is being set from committed config — a deploy carrying ' +
+      'this var verifies Access tokens against a key set that is not Cloudflare\'s',
+  );
+}
+
 // Re-derive NAME_KEYED_BINDINGS from wrangler's own config schema, so the list
 // above cannot quietly rot. A collection it misses is missed *silently* —
 // `ratelimits` sat in exactly that state until a review caught it — and nobody
@@ -221,6 +249,7 @@ function checkBindingDrift() {
 
 export function checkWranglerConfig() {
   checkWorkerName();
+  checkAccessTrustRoot();
   checkNameKeyedBindingsList();
   checkBindingDrift();
 }

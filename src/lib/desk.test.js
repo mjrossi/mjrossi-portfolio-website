@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deskIndex } from './desk.js';
+import { countdown, deskIndex } from './desk.js';
 
 // What earns a row on the Desk index, and in what order. See desk.js for why
 // the row set is a union rather than a filter over the collection.
@@ -171,4 +171,54 @@ test('no posts, no links and no notes is an empty desk', () => {
   assert.deepEqual(out.posts, []);
   assert.deepEqual(out.orphans, []);
   assert.deepEqual(out.totals, { scheduled: 0, liveLinks: 0, openNotes: 0 });
+});
+
+// ── the countdown ────────────────────────────────────
+//
+// NOW is midday UTC, so every case below sits inside the same day and the two
+// that matter are the ones on either side of midnight. Counting elapsed time
+// instead of calendar days got both wrong — thirty minutes out read "tomorrow",
+// twenty-five hours out read "in 2 days" — while every case a day or more away
+// stayed right, which is why it survived.
+
+const hours = (n) => new Date(NOW + n * 3_600_000);
+
+test('publishing later today is today, not tomorrow', () => {
+  assert.equal(countdown(hours(0.5), NOW), 'publishes today');
+  assert.equal(countdown(hours(11), NOW), 'publishes today');
+});
+
+test('publishing after midnight UTC is tomorrow, however few hours away', () => {
+  // 12.5h from midday is 00:30 the next day: a different date, so "tomorrow",
+  // even though less than a day has elapsed.
+  assert.equal(countdown(hours(12.5), NOW), 'publishes tomorrow');
+  assert.equal(countdown(hours(25), NOW), 'publishes tomorrow');
+});
+
+test('further out counts calendar days, not elapsed 24h blocks', () => {
+  // From midday, 36h and 49h both land on the day after tomorrow — 49 hours is
+  // "2 days" here and "3 days" under the old ceiling, which is the same mistake
+  // one step further out.
+  assert.equal(countdown(hours(36), NOW), 'publishes in 2 days');
+  assert.equal(countdown(hours(49), NOW), 'publishes in 2 days');
+  assert.equal(countdown(hours(61), NOW), 'publishes in 3 days');
+});
+
+test('the countdown names the same day as the date beside it', () => {
+  // The invariant the calendar-day count exists for: the row prints pubDate
+  // formatted in UTC next to this string, and they must not disagree.
+  for (const h of [0.5, 5, 11.9, 12.1, 25, 36, 100]) {
+    const pubDate = hours(h);
+    const daysApart =
+      (Date.UTC(pubDate.getUTCFullYear(), pubDate.getUTCMonth(), pubDate.getUTCDate()) -
+        Date.UTC(2026, 4, 10)) /
+      86_400_000;
+    const expected =
+      daysApart === 0
+        ? 'publishes today'
+        : daysApart === 1
+          ? 'publishes tomorrow'
+          : `publishes in ${daysApart} days`;
+    assert.equal(countdown(pubDate, NOW), expected, `${h}h out`);
+  }
 });

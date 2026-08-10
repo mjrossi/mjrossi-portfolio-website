@@ -80,8 +80,12 @@ function decodeJsonSegment(segment) {
  * at all — so there is no local URL this could be pointed at.
  *
  * THE OVERRIDE REPLACES THE TRUST ROOT, so it is read only from .dev.vars, which
- * is gitignored and never deployed. Nothing in CI can prove it is unset in
- * production; if the gate ever misbehaves, check this first.
+ * is gitignored and never deployed. Half of that is now checkable and half is
+ * not, and the split is worth keeping straight: smoke asserts wrangler.jsonc
+ * never declares this name, which closes the one route by which it could be
+ * deployed from a reviewable file. A `wrangler secret put` of the same name is
+ * invisible to this repo and no test can see it — so if the gate ever
+ * misbehaves, check that first.
  *
  * A failed fetch is not cached. Caching it would turn one bad minute upstream
  * into an hour of a locked-out Desk.

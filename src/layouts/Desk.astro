@@ -214,6 +214,15 @@ const { admin } = Astro.locals;
     color: var(--muted);
   }
 
+  /* An orphan slug in the "links with no post" section is a link — the only
+     route to its roster, since it is by definition absent from the list above.
+     Given its own colour because .desk-link-who is a class selector and would
+     otherwise beat global.css's `a` rule on specificity, leaving something
+     clickable that reads as plain text. */
+  a.desk-link-who {
+    color: var(--accent);
+  }
+
   .desk-state {
     font-variant-caps: all-small-caps;
     letter-spacing: 0.06em;

@@ -338,6 +338,127 @@ export function pushNoteContent(lines, note, hint = null) {
 }
 
 /**
+ * What a review round SAYS, as a data structure.
+ *
+ * Split out of renderReviewFile when the Desk (/admin/<slug>) came to need the
+ * same answers in HTML. Everything hard about a pull is in here — which passage
+ * a group is about, whether its anchor still means anything, where it moved to,
+ * what section it falls under, which notes are duplicates of each other — and
+ * all of it fails SILENTLY when it is wrong: a heading claims a line the note
+ * was never about, or an excerpt comes from elsewhere entirely. Two
+ * implementations of that would be two chances to get it wrong, and only one of
+ * them would be under test.
+ *
+ * So: one model, two presentations. renderReviewFile emits the markdown
+ * `just galley` writes; the Desk renders HTML from the identical object.
+ *
+ * @param {object} args
+ * @param {string[]} args.sourceLines the .mdx split on newlines
+ * @param {string} args.currentHash revision hash of the .mdx as it stands
+ * @param {Record<string, unknown>[]} args.rows open notes, oldest first
+ * @param {Record<string, unknown>[]} [args.closedRows] closed notes
+ */
+export function reviewModel({ sourceLines, currentHash, rows, closedRows = [] }) {
+  const locate = createLocator(sourceLines);
+
+  // Counted over OPEN notes only. A closed note is drifted almost by definition --
+  // the revision that closed it is the one that changed the file -- so counting
+  // those would put a drift warning on every pull forever and train the reader to
+  // ignore the one that matters.
+  const drifted = rows.filter((r) => r.revision_hash !== currentHash).length;
+
+  // Everything about a group that both the summary and the body need, resolved
+  // ONCE. The section label and the excerpt must be read at the SAME index —
+  // two independently computed ones is how a heading ends up naming a different
+  // passage than the excerpt printed under it, which is the resolveGroup failure
+  // mode one level up.
+  const sections = sectionMap(sourceLines);
+  const groups = groupByAnchor(rows).map(([key, notes]) => {
+    const entries = collapseDuplicates(notes);
+    if (key === 'general') {
+      return {
+        key,
+        notes,
+        entries,
+        label: WHOLE_DRAFT,
+        sectionKey: WHOLE_DRAFT,
+        section: null,
+        stale: false,
+        current: null,
+        anchorIndex: null,
+        excerpt: null,
+      };
+    }
+    const stale = notes.some((n) => n.revision_hash !== currentHash);
+    const { line: current, anyFound, lineOf } = resolveGroup(notes, locate);
+    // Where this group's passage is in the file as it stands. Null when the
+    // group is stale and its quote could not be found: the stored line number
+    // means nothing in the current file, so there is no honest place to read a
+    // heading from and the label is withheld rather than guessed.
+    const anchorIndex = !stale ? Number(key.split('-')[0]) - 1 : current ? current - 1 : null;
+    const heading = anchorIndex === null ? null : (sections.get(anchorIndex) ?? null);
+    const section = sectionLabel(heading?.text ?? null);
+    const label = section ?? (anchorIndex === null ? UNKNOWN_SECTION : NO_SECTION);
+    // Read at anchorIndex, the SAME index the label came from. Elided here
+    // rather than at each call site so both presentations cut it identically.
+    let excerpt = null;
+    if (anchorIndex !== null) {
+      const text = excerptAt(sourceLines, anchorIndex);
+      if (text) excerpt = text.length > EXCERPT_MAX ? `${text.slice(0, EXCERPT_MAX)}…` : text;
+    }
+    return {
+      key,
+      notes,
+      entries,
+      stale,
+      current,
+      anyFound,
+      lineOf,
+      anchorIndex,
+      section,
+      label,
+      excerpt,
+      // Which section this IS, as opposed to what it is called. The three
+      // label-only buckets have no heading to point at and key on the label
+      // itself; a string and a number never collide as Map keys.
+      sectionKey: heading ? heading.line : label,
+    };
+  });
+
+  // Where the notes fell, before you have read any of them. A round's shape is
+  // its clusters — seven notes on one section is a rewrite and seven notes
+  // spread over seven is an afternoon of small edits — and nothing in a list
+  // ordered by line number shows that.
+  //
+  // Counts NOTES, not entries, so they add up to the total even where duplicates
+  // collapsed.
+  //
+  // BUCKETED BY THE HEADING'S LINE, NOT ITS TEXT. Two sections can carry the
+  // same words — `### What worked` under Part two and again under Part three —
+  // and SECTION_MAX can truncate two long ones to the same string besides.
+  // Merging either pair reports one cluster of seven where the truth is four and
+  // three, which is the exact inference this exists to support. Same words
+  // therefore appear on two rows, in source order; the line ranges say which is
+  // which.
+  const bySection = new Map();
+  for (const group of groups) {
+    const bucket = bySection.get(group.sectionKey);
+    if (bucket) bucket.count += group.notes.length;
+    else bySection.set(group.sectionKey, { label: group.label, count: group.notes.length });
+  }
+
+  return {
+    groups,
+    sections: [...bySection.values()],
+    closedEntries: collapseDuplicates(closedRows),
+    open: rows.length,
+    closed: closedRows.length,
+    drifted,
+    reviewers: new Set(rows.map((r) => r.reviewer)).size,
+  };
+}
+
+/**
  * The whole pulled review file.
  *
  * THIS FILE IS A MANIFEST as well as a document: every note is printed with its
@@ -369,67 +490,17 @@ export function renderReviewFile({
   database,
   pulledAt = new Date(),
 }) {
-  const locate = createLocator(sourceLines);
-
-  // Counted over OPEN notes only. A closed note is drifted almost by definition --
-  // the revision that closed it is the one that changed the file -- so counting
-  // those would put a drift warning on every pull forever and train the reader to
-  // ignore the one that matters.
-  const drifted = rows.filter((r) => r.revision_hash !== currentHash).length;
-
-  // Everything about a group that both the summary and the body below need,
-  // resolved ONCE. The section label and the excerpt must be read at the SAME
-  // index — two independently computed ones is how a heading ends up naming a
-  // different passage than the excerpt printed under it, which is the
-  // resolveGroup failure mode one level up.
-  const sections = sectionMap(sourceLines);
-  const groups = groupByAnchor(rows).map(([key, notes]) => {
-    const entries = collapseDuplicates(notes);
-    if (key === 'general') {
-      return {
-        key,
-        notes,
-        entries,
-        label: WHOLE_DRAFT,
-        sectionKey: WHOLE_DRAFT,
-        section: null,
-        stale: false,
-        current: null,
-      };
-    }
-    const stale = notes.some((n) => n.revision_hash !== currentHash);
-    const { line: current, anyFound, lineOf } = resolveGroup(notes, locate);
-    // Where this group's passage is in the file as it stands. Null when the
-    // group is stale and its quote could not be found: the stored line number
-    // means nothing in the current file, so there is no honest place to read a
-    // heading from and the label is withheld rather than guessed.
-    const anchorIndex = !stale ? Number(key.split('-')[0]) - 1 : current ? current - 1 : null;
-    const heading = anchorIndex === null ? null : (sections.get(anchorIndex) ?? null);
-    const section = sectionLabel(heading?.text ?? null);
-    const label = section ?? (anchorIndex === null ? UNKNOWN_SECTION : NO_SECTION);
-    return {
-      key,
-      notes,
-      entries,
-      stale,
-      current,
-      anyFound,
-      lineOf,
-      anchorIndex,
-      section,
-      label,
-      // Which section this IS, as opposed to what it is called. The three
-      // label-only buckets have no heading to point at and key on the label
-      // itself; a string and a number never collide as Map keys.
-      sectionKey: heading ? heading.line : label,
-    };
+  const { groups, sections: bySection, closedEntries, drifted, reviewers } = reviewModel({
+    sourceLines,
+    currentHash,
+    rows,
+    closedRows,
   });
 
   const lines = [];
   lines.push(`# Review notes — ${slug}`);
   lines.push('');
   lines.push(`Pulled ${pulledAt.toISOString()} from \`${database}\`.`);
-  const reviewers = new Set(rows.map((r) => r.reviewer)).size;
   const openLabel = `${rows.length} open note${rows.length === 1 ? '' : 's'}`;
   lines.push(
     closedRows.length > 0
@@ -438,36 +509,17 @@ export function renderReviewFile({
   );
   lines.push('');
 
-  // Where the notes fell, before you have read any of them. A round's shape is
-  // its clusters — seven notes on one section is a rewrite and seven notes
-  // spread over seven is an afternoon of small edits — and nothing in a file
-  // ordered by line number shows that.
-  //
-  // Counts NOTES, not entries, so they add up to the number on the line above
-  // even where duplicates collapsed. Skipped below two buckets: one bucket is
-  // not a grouping, it is the same fact restated.
-  //
-  // BUCKETED BY THE HEADING'S LINE, NOT ITS TEXT. Two sections can carry the
-  // same words — `### What worked` under Part two and again under Part three —
-  // and SECTION_MAX can truncate two long ones to the same string besides.
-  // Merging either pair reports one cluster of seven where the truth is four and
-  // three, which is the exact inference this block exists to support. Same words
-  // therefore print on two rows; they are in source order, and the line ranges
-  // on the headings below say which is which.
-  const bySection = new Map();
-  for (const group of groups) {
-    const bucket = bySection.get(group.sectionKey);
-    if (bucket) bucket.count += group.notes.length;
-    else bySection.set(group.sectionKey, { label: group.label, count: group.notes.length });
-  }
-  if (bySection.size > 1) {
+  // The by-section summary — a round's shape before you have read any of it.
+  // Computed in reviewModel; see there for why it buckets on the heading's LINE
+  // rather than its text. Skipped below two buckets: one bucket is not a
+  // grouping, it is the same fact restated.
+  if (bySection.length > 1) {
     lines.push('Notes by section:');
     lines.push('');
-    const buckets = [...bySection.values()];
-    const width = Math.max(...buckets.map(({ label }) => label.length));
+    const width = Math.max(...bySection.map(({ label }) => label.length));
     pushFenced(
       lines,
-      buckets.map(({ label, count }) => `${label.padEnd(width)}  ${count}`).join('\n'),
+      bySection.map(({ label, count }) => `${label.padEnd(width)}  ${count}`).join('\n'),
     );
     lines.push('');
   }
@@ -494,7 +546,7 @@ export function renderReviewFile({
   lines.push('---');
   lines.push('');
 
-  for (const { key, entries, stale, current, anyFound, lineOf, anchorIndex, section } of groups) {
+  for (const { key, entries, stale, current, anyFound, lineOf, excerpt, section } of groups) {
     if (key === 'general') {
       lines.push('## Whole-draft notes');
     } else {
@@ -515,16 +567,13 @@ export function renderReviewFile({
         }
       }
       lines.push(heading);
-      // anchorIndex is the same index the section label was read at. When the
-      // file has NOT drifted the stored anchor is authoritative by definition,
-      // so it wins over a relocation: the quote resolving elsewhere in an
-      // unchanged file means the anchor is the trustworthy half.
-      if (anchorIndex !== null) {
-        const text = excerptAt(sourceLines, anchorIndex);
-        if (text) {
-          lines.push('');
-          pushFenced(lines, text.length > EXCERPT_MAX ? `${text.slice(0, EXCERPT_MAX)}…` : text, 'md');
-        }
+      // Read at the same index the section label came from — see reviewModel.
+      // When the file has NOT drifted the stored anchor is authoritative by
+      // definition, so it wins over a relocation: the quote resolving elsewhere
+      // in an unchanged file means the anchor is the trustworthy half.
+      if (excerpt) {
+        lines.push('');
+        pushFenced(lines, excerpt, 'md');
       }
     }
     lines.push('');
@@ -598,7 +647,7 @@ export function renderReviewFile({
     // Collapsed here too — printing identical content twice is noise wherever it
     // happens. No section label and no same-passage marker: this appendix is
     // flat and unanchored by design, so neither has anything to attach to.
-    for (const { notes: same } of collapseDuplicates(closedRows)) {
+    for (const { notes: same } of closedEntries) {
       for (const note of same) {
         lines.push(
           noteMetaLine({

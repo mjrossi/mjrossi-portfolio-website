@@ -33,6 +33,42 @@
     "directory": "dist/client"
   },
 
+  // The Cloudflare Access application guarding /admin — the Desk. Neither of
+  // these is a credential: the team domain is public and the AUD tag is an
+  // application identifier that confers nothing without a JWT Cloudflare itself
+  // signed. They live here on exactly the argument made for the KV `id` and
+  // `database_id` below — account-scoped identifiers belong in committed config
+  // rather than only in the dashboard, which is the drift this file exists to
+  // close.
+  //
+  // `vars` rather than secrets also means a deploy cannot forget them silently.
+  // If either is missing, src/lib/access.js denies every request and the Desk is
+  // UNREACHABLE — never open. That is the intended failure.
+  //
+  // The Access app itself is a dashboard resource and produces no binding, so
+  // nothing in CI can see it drift. docs/ARCHITECTURE.md's account inventory is
+  // the only record of it.
+  // Both values below are REAL, not placeholders. They must match the Access
+  // application actually covering mjrossi.com/admin — read them off the
+  // dashboard rather than guessing, and re-read them if that app is ever
+  // deleted and recreated, because a recreated app gets a NEW AUD tag:
+  //
+  //   ACCESS_TEAM_DOMAIN  Zero Trust → Settings → Custom Pages, or the
+  //                       "team domain" on the Zero Trust overview. It is NOT
+  //                       necessarily the workers.dev subdomain — those are two
+  //                       independent settings that merely tend to match.
+  //   ACCESS_AUD          Zero Trust → Access → Applications → the /admin app →
+  //                       Overview → "Application Audience (AUD) Tag".
+  //
+  // If either is wrong or missing, src/lib/access.js compares against a tag no
+  // real token carries and every request 404s — the correct direction to be
+  // wrong in, but indistinguishable from the Desk simply not existing. Check
+  // these two lines first if a valid login still 404s.
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "link00seven.cloudflareaccess.com",
+    "ACCESS_AUD": "163548a36fdeeea35b0d5e1281627195af99b36b2e281e49eb662af09140aa99"
+  },
+
   // Astro sessions. NOT a feature this site uses — no route calls
   // `Astro.session`. It is declared because @astrojs/cloudflare injects it
   // whether we ask for it or not: when `config.session.driver` is unset the

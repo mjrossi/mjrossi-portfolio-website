@@ -14,10 +14,14 @@
 // else's link, which is the failure this scoping exists to prevent.
 //
 // Reads and writes D1 through `wrangler d1 execute`, which is already
-// authenticated as you. That is the whole reason there is no admin endpoint:
-// the operator surface is a CLI you are already logged into, so the deployed
-// worker never needs a way to enumerate or mutate links — and handing someone
-// one draft must not hand them the rest.
+// authenticated as you. That is why there is no admin WRITE endpoint: the
+// deployed worker never needs a way to mutate a link, and handing someone one
+// draft must not hand them the rest.
+//
+// The Desk at /admin does now READ this same table — see CLAUDE.md, "The Desk"
+// — behind Cloudflare Access and a JWT the worker verifies itself. It shows the
+// same four states this command prints, from the same src/lib/link-state.js, so
+// the two cannot disagree about what is outstanding. It cannot revoke anything.
 //
 // This list is the ONLY inventory. A token is recorded nowhere else, so a link
 // missing from here cannot be revoked, only waited out.
@@ -36,8 +40,8 @@
 // plain URL doesn't. Nothing needs doing about a spent link; the label exists so
 // the roster's answer to "what is outstanding?" stays true.
 
+import { linkState } from '../src/lib/link-state.js';
 import { LINK_ID_RE, SLUG_RE } from '../src/lib/preview.js';
-import { clampToPublication, isPublished } from '../src/lib/schedule.js';
 import { readPubDate } from './content.mjs';
 import { cli } from './cli.mjs';
 import { databaseLabel } from './database-target.mjs';
@@ -66,7 +70,7 @@ for (let i = 0; i < argv.length; i++) {
   } else if (arg === '--revoke') {
     revokeId = argv[++i];
     if (!revokeId) die('--revoke requires a link id');
-    // Checked here as well as in links-db so the message names the constraint
+    // Checked here as well as in links-store so the message names the constraint
     // rather than surfacing a validation error from two modules down.
     if (!LINK_ID_RE.test(revokeId)) {
       die(
@@ -118,7 +122,7 @@ const where = databaseLabel(useLocal);
 
 try {
   if (revokeId || revokeAll) {
-    const revoked = revokeLinks(slug, { id: revokeId }, { local: useLocal });
+    const revoked = await revokeLinks(slug, { id: revokeId }, { local: useLocal });
     // Said out loud, because both no-op cases are otherwise indistinguishable
     // from success: an id that belongs to a different post is scoped away by
     // revokeLinks, and --revoke-all against a slug whose links are already
@@ -136,7 +140,9 @@ try {
     }
   }
 
-  const rows = all ? listAllLinks({ local: useLocal }) : listLinks(slug, { local: useLocal });
+  const rows = all
+    ? await listAllLinks({ local: useLocal })
+    : await listLinks(slug, { local: useLocal });
 
   if (rows.length === 0) {
     // Names the database. An operator who minted with --local and listed without
@@ -150,7 +156,9 @@ try {
     process.exit(0);
   }
 
-  const nowSec = Math.floor(Date.now() / 1000);
+  // One instant for the whole listing, so a row cannot be classified against a
+  // later clock than the row above it.
+  const now = Date.now();
 
   // When each post goes live, read once per slug from its own frontmatter. A
   // published post ends its links: the draft they were minted to show is public,
@@ -174,38 +182,39 @@ try {
     return pubDates.get(slug);
   }
 
-  /** One link, as a line. Shared so both modes render identically. */
+  /** Just the date, for the two labels that carry one. */
+  const day = (date) => date.toISOString().slice(0, 10);
+
+  /**
+   * One link, as a line. Shared so both modes render identically.
+   *
+   * The CLASSIFICATION is src/lib/link-state.js, which the Desk at /admin reads
+   * too — two derivations of "live" is how a roster and a dashboard start
+   * disagreeing about what is outstanding. What stays here is the presentation:
+   * the column widths, the dash for a view-only link, and the `· extend to`
+   * suffix.
+   *
+   * `expired` is not just a label: since migrations/0002 this is the expiry
+   * isLinkActive enforces, so a row reading expired here is a link already
+   * 404ing in the reviewer's browser. `spent` is the same idea one step on —
+   * the row may not have expired, but the post it guarded is public.
+   */
   function format(row) {
-    const pubDate = publicationOf(row.slug);
-    const published = pubDate !== null && isPublished(pubDate);
-    // `expired` is no longer just a label: since migrations/0002 this is the
-    // expiry isLinkActive enforces, so a row reading expired here is a link
-    // already 404ing in the reviewer's browser. `spent` is the same idea one
-    // step on — the row may not have expired, but the post it guarded is public.
-    const state = row.revoked_at
-      ? `revoked ${new Date(row.revoked_at).toISOString().slice(0, 10)}`
-      : row.exp <= nowSec
-        ? 'expired'
-        : published
-          ? `spent (published ${pubDate.toISOString().slice(0, 10)})`
-          : 'live';
+    const info = linkState(row, { pubDate: publicationOf(row.slug), now });
+    const state =
+      info.state === 'revoked'
+        ? `revoked ${day(info.revokedAt)}`
+        : info.state === 'spent'
+          ? `spent (published ${day(info.publishedAt)})`
+          : info.state;
     // A view-only link has no reviewer. Shown as a dash rather than blank so
     // the column stays readable and "who holds this?" has a visible answer.
     const who = row.reviewer ?? '—';
-    const expires = new Date(row.exp * 1000).toISOString().slice(0, 16).replace('T', ' ');
-    // Headroom, shown only where it is actionable. A revoked link cannot be
-    // extended at all, a spent one has nothing to be extended to, and a link
-    // already standing at its cap has nowhere to go -- in every case the absence
-    // of this suffix is the answer.
-    //
-    // The cap shown is the SIGNATURE ceiling or PUBLICATION, whichever comes
-    // first, because that is what `just preview-extend` will actually honour.
-    // Showing the raw ceiling would advertise headroom the clamp then removes.
-    const limit = pubDate === null ? row.max_exp : clampToPublication(row.max_exp, pubDate);
-    const ceiling =
-      !row.revoked_at && !published && limit > row.exp
-        ? `  · extend to ${new Date(limit * 1000).toISOString().slice(0, 10)}`
-        : '';
+    const expires = info.expires.toISOString().slice(0, 16).replace('T', ' ');
+    // Headroom, shown only where it is actionable — linkState returns null for
+    // every case where extending would do nothing, and the absence of this
+    // suffix is the answer.
+    const ceiling = info.extendTo ? `  · extend to ${day(info.extendTo)}` : '';
     return `  ${row.id}  ${who.padEnd(14)}  expires ${expires}  ${state}${ceiling}`;
   }
 
@@ -223,10 +232,9 @@ try {
       }
       // "Still live" excludes spent rows for the same reason format() labels
       // them differently: a link to a post that is already public is not
-      // outstanding in any sense that matters.
-      const pubDate = publicationOf(row.slug);
-      const spent = pubDate !== null && isPublished(pubDate);
-      if (!row.revoked_at && row.exp > nowSec && !spent) live++;
+      // outstanding in any sense that matters. Read from the same classifier
+      // format() uses, so the tally and the lines below it cannot disagree.
+      if (linkState(row, { pubDate: publicationOf(row.slug), now }).live) live++;
       console.log(format(row));
     }
     console.log('');

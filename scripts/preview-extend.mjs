@@ -104,7 +104,7 @@ if (!slug || (!id && !all)) {
 }
 if (all && id) die(`pass either a link id or --all, not both (got ${JSON.stringify(id)})`);
 if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
-// Checked here as well as in links-db so the message names the constraint
+// Checked here as well as in links-store so the message names the constraint
 // rather than surfacing a validation error from two modules down.
 if (id && !LINK_ID_RE.test(id)) {
   die(
@@ -159,8 +159,8 @@ let changed;
 try {
   // The ceiling is enforced inside this statement, not here -- see extendLink.
   changed = all
-    ? extendLinks(slug, exp, { local: useLocal })
-    : extendLink(slug, id, exp, { local: useLocal });
+    ? await extendLinks(slug, exp, { local: useLocal })
+    : await extendLink(slug, id, exp, { local: useLocal });
 } catch (err) {
   die(err.message);
 }
@@ -170,7 +170,7 @@ try {
 if (all) {
   let rows;
   try {
-    rows = listLinks(slug, { local: useLocal });
+    rows = await listLinks(slug, { local: useLocal });
   } catch (err) {
     die(err.message);
   }
@@ -213,7 +213,7 @@ if (changed.length === 0) {
   // applied; this is the only thing getLink is for.
   let row;
   try {
-    row = getLink(slug, id, { local: useLocal });
+    row = await getLink(slug, id, { local: useLocal });
   } catch (err) {
     die(err.message);
   }

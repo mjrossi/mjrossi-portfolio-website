@@ -1,14 +1,22 @@
 // The one place this repo shells out to `wrangler d1 execute`.
 //
-// Four callers need the same three things — spawn wrangler, strip the banner it
+// Every caller needs the same three things — spawn wrangler, strip the banner it
 // sometimes prints before its JSON, and tell the operator to migrate when the
-// table isn't there: scripts/galley-pull.mjs, scripts/preview-link.mjs,
-// scripts/preview-roster.mjs, and scripts/smoke.mjs. Before this module the
-// first two hand-rolled all three, and the allowlist would have made that four.
+// table isn't there. Before this module the operator scripts hand-rolled all
+// three, once each.
+//
+// The SQL itself is no longer written against these functions. It lives in
+// src/lib/links-store.js and src/lib/notes-store.js in ordinary D1 idiom
+// (`prepare(sql).bind(...params)`), so the worker and this CLI run the same
+// statements; scripts/d1-store.mjs is the façade that renders those bound
+// parameters back into a `--command` string, because wrangler's CLI has no
+// parameters at all. This file is the transport under that façade and nothing
+// more.
 //
 // D1 is reached through wrangler rather than the HTTP API because wrangler is
 // already authenticated as the operator. That is the same reasoning that keeps
-// the deployed Worker free of any admin surface — see scripts/galley-pull.mjs.
+// the deployed Worker free of any admin WRITE surface — see
+// scripts/galley-pull.mjs.
 //
 // These functions THROW; they never process.exit. Each script keeps its own
 // die() prefix so a failure still names the tool the operator actually ran.
@@ -44,7 +52,7 @@ function failureDetail(err) {
       if (inner) return inner;
     } catch {
       // Not JSON — it is wrangler's pretty output, which is what the non-JSON
-      // commands (d1Exec, d1Migrate) produce. Strip the presentation so the
+      // command (d1Migrate) produces. Strip the presentation so the
       // operator reads one line of cause rather than a wall of escape codes:
       // ANSI colours, the ✘/[ERROR] furniture, and the "Logs were written to"
       // trailer, which points at a file that says the same thing again.
@@ -90,13 +98,19 @@ export function extractJson(text) {
 }
 
 /**
- * Run a read and return its rows.
+ * Run one statement and return wrangler's whole result object for it —
+ * `{ results, success, meta }`, the same shape a D1 binding's `.run()` reports.
+ *
+ * Exists so scripts/d1-store.mjs can present a D1-compatible façade over this
+ * CLI, including `meta.changes`. This is the only reader left: the thin "just
+ * the rows" wrapper every caller used before the façade existed is gone, since
+ * the statements it served now go through src/lib/*-store.js.
  *
  * @param {string} sql
  * @param {{ local?: boolean }} [opts]
- * @returns {Record<string, unknown>[]}
+ * @returns {{ results: Record<string, unknown>[], meta?: Record<string, unknown> }}
  */
-export function d1Query(sql, { local = false } = {}) {
+export function d1Execute(sql, { local = false } = {}) {
   const raw = wrangler(
     ['d1', 'execute', DB_NAME, local ? '--local' : '--remote', '--json', '--command', sql],
     local,
@@ -126,22 +140,7 @@ export function d1Query(sql, { local = false } = {}) {
         `  first 200 characters were: ${JSON.stringify(raw.slice(0, 200))}`,
     );
   }
-  return parsed[0].results;
-}
-
-/**
- * Run one or more writes. An array is joined into a single `--command`, so a
- * caller needing several statements pays one wrangler round-trip rather than N.
- *
- * @param {string | string[]} sql
- * @param {{ local?: boolean }} [opts]
- */
-export function d1Exec(sql, { local = false } = {}) {
-  const command = Array.isArray(sql) ? sql.join(';\n') : sql;
-  wrangler(
-    ['d1', 'execute', DB_NAME, local ? '--local' : '--remote', '--command', command],
-    local,
-  );
+  return parsed[0];
 }
 
 /**

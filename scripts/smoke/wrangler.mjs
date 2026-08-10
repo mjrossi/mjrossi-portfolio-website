@@ -21,9 +21,12 @@ const WRANGLER_CONFIG = resolve('wrangler.jsonc');
 // without this check the next adapter release can quietly add another one and
 // nothing fails until someone audits the account by hand.
 //
-// Compares binding NAMES only. Secrets never appear in the generated config
-// (`vars` is `{}` and there is no secret list), so this cannot leak one or trip
-// over a missing .dev.vars.
+// Compares binding NAMES only, and never values. `vars` is no longer empty —
+// it carries the Cloudflare Access team domain and AUD tag that gate /admin —
+// but those are account-scoped identifiers rather than credentials, and the walk
+// below reads only the `binding` property of objects, so a var's value is never
+// touched. Real secrets still never appear in the generated config, so this
+// cannot leak one or trip over a missing .dev.vars.
 //
 // The walk is structural rather than a list of known binding categories, and
 // that is the whole point: the case this check exists for is an adapter release
@@ -119,6 +122,34 @@ function checkWorkerName() {
     'wrangler.jsonc disables the production workers.dev alias',
     /"workers_dev"\s*:\s*false/.test(raw),
     'workers_dev is not set to false — the production alias would expose scheduled drafts',
+  );
+}
+
+// ACCESS_JWKS_OVERRIDE replaces the trust root for /admin: whatever key set it
+// names is what src/lib/access.js verifies Desk tokens against, in place of
+// Cloudflare's certs endpoint. It belongs in .dev.vars — gitignored, never
+// deployed — and nowhere else.
+//
+// This proves only the half that is observable, and the distinction is worth
+// keeping straight rather than letting the check imply more than it does. A
+// `wrangler secret put` of the same name is invisible to this repo and no test
+// can see it; that remains a "check this first" if the gate ever misbehaves.
+// But `vars` in wrangler.jsonc IS committed, it IS deployed, and it is the one
+// route by which the trust root could be replaced in a reviewable file and
+// still go unnoticed. So that route gets closed.
+//
+// Read off the raw text rather than the parsed config, so it fires on a
+// commented-out line too — a `// "ACCESS_JWKS_OVERRIDE": …` sitting in the file
+// is a paste waiting to be uncommented, and this check is cheaper to satisfy
+// than to explain.
+function checkAccessTrustRoot() {
+  if (!existsSync(WRANGLER_CONFIG)) return;
+  const raw = readFileSync(WRANGLER_CONFIG, 'utf8');
+  check(
+    'wrangler.jsonc does not declare ACCESS_JWKS_OVERRIDE',
+    !raw.includes('ACCESS_JWKS_OVERRIDE'),
+    'the Desk\'s trust root is being set from committed config — a deploy carrying ' +
+      'this var verifies Access tokens against a key set that is not Cloudflare\'s',
   );
 }
 
@@ -218,6 +249,7 @@ function checkBindingDrift() {
 
 export function checkWranglerConfig() {
   checkWorkerName();
+  checkAccessTrustRoot();
   checkNameKeyedBindingsList();
   checkBindingDrift();
 }

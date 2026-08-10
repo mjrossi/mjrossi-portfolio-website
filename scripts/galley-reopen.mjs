@@ -60,7 +60,7 @@ requirePost(slug);
 
 let changed;
 try {
-  changed = reopenNote(slug, noteId, { local: useLocal });
+  changed = await reopenNote(slug, noteId, { local: useLocal });
 } catch (err) {
   die(err.message);
 }
@@ -74,7 +74,7 @@ const where = databaseLabel(useLocal);
 if (!changed) {
   let all;
   try {
-    all = listNotes(slug, { includeClosed: true }, { local: useLocal });
+    all = await listNotes(slug, { includeClosed: true }, { local: useLocal });
   } catch (err) {
     die(err.message);
   }

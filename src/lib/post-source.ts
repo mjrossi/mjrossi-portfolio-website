@@ -41,9 +41,9 @@ const RAW_POSTS = import.meta.glob('/src/content/blog/**/*.mdx', {
  * slug that reaches here from a signed grant (which carries a collection id)
  * finds the file it names.
  *
- * NOT exported: `revisionOf` below is the only thing either caller needs, and
- * handing out a map of every post's entire raw source is standing API surface
- * for a caller this module exists to make unnecessary.
+ * NOT exported. `revisionOf` and `sourceOf` below are the whole of what callers
+ * need, and handing out a map of every post's entire raw source is standing API
+ * surface for a caller this module exists to make unnecessary.
  */
 const SOURCE_BY_SLUG = new Map<string, string>(
   Object.entries(RAW_POSTS).map(([path, raw]) => {
@@ -51,6 +51,31 @@ const SOURCE_BY_SLUG = new Map<string, string>(
     return [rel.endsWith('/index') ? rel.slice(0, -'/index'.length) : rel, raw];
   }),
 );
+
+/**
+ * The raw .mdx for one post, or undefined for a slug with no file.
+ *
+ * The third caller, and the one that needed more than a hash: the Desk
+ * (src/pages/admin/[slug].astro) renders galley notes against the current
+ * source, and src/lib/galley-render.js's reviewModel works in source LINES — it
+ * relocates a drifted note by searching for its quote, reads the section
+ * heading a note falls under, and cuts the excerpt printed above it. None of
+ * that can be done from a digest.
+ *
+ * A narrow accessor rather than exporting SOURCE_BY_SLUG, so the map stays
+ * private and the one thing a caller can do with this is ask about a post it
+ * already names. Same reason `revisionOf` takes a slug rather than handing back
+ * the whole map.
+ *
+ * Deliberately NOT reachable without Cloudflare Access: the only caller is under
+ * /admin, which src/middleware.ts gates. This returns the raw source of
+ * UNPUBLISHED drafts, so keep it that way.
+ */
+export function sourceOf(slug: string): string | undefined {
+  return SOURCE_BY_SLUG.get(slug);
+}
+
+const REVISIONS = new Map<string, Promise<string>>();
 
 /**
  * The revision hash for one post: SHA-256 of the ENTIRE .mdx, frontmatter
@@ -73,8 +98,6 @@ const SOURCE_BY_SLUG = new Map<string, string>(
  * string, so concurrent callers share one digest instead of racing to compute
  * the same one.
  */
-const REVISIONS = new Map<string, Promise<string>>();
-
 export function revisionOf(slug: string): Promise<string | undefined> {
   const source = SOURCE_BY_SLUG.get(slug);
   if (source === undefined) return Promise.resolve(undefined);

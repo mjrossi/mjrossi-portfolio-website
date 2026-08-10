@@ -121,10 +121,10 @@ if (noteId !== null) {
 let closed;
 let stillOpen;
 try {
-  closed = closeNotes(slug, ids, { local: useLocal });
+  closed = await closeNotes(slug, ids, { local: useLocal });
   // Read back AFTER the write, so "left open" reflects the state the operator is
   // walking away from rather than a snapshot taken before it changed.
-  stillOpen = listNotes(slug, { includeClosed: false }, { local: useLocal });
+  stillOpen = await listNotes(slug, { includeClosed: false }, { local: useLocal });
 } catch (err) {
   die(err.message);
 }

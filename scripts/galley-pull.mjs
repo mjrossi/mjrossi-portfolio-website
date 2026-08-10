@@ -21,9 +21,16 @@
 // from the wrong database reports "no notes" for a post that has them.
 //
 // Reads D1 through `wrangler d1 execute`, which is already authenticated as
-// you. That is the whole reason there is no admin endpoint and no admin auth:
-// the operator surface is a CLI you are already logged into, so the deployed
-// worker never needs a way to list notes across posts.
+// you. The deployed worker still has no way to WRITE anything here, and
+// /api/galley still has no "list every post with notes" mode — a signed review
+// link grants one post and must not grant the rest.
+//
+// The Desk at /admin reads notes across posts, which is a real widening and is
+// why it is gated on a Cloudflare Access JWT the worker verifies itself rather
+// than on a preview token. It renders from the same reviewModel this file's
+// output is built from, so the page and the pull say the same thing. THE PULL
+// IS STILL THE ARTIFACT: it writes the file, the file is the manifest, and
+// `just galley-close` closes exactly the ids in it.
 //
 // Output goes to docs/galley/<slug>.md and is meant to be committed. Reviewer
 // labels are whatever was chosen when the link was minted (see
@@ -91,12 +98,12 @@ const sourceLines = source.split('\n');
 
 // ── read the notes ───────────────────────────────────
 
-// scripts/notes-db.mjs owns the SQL; scripts/d1.mjs owns the shell-out, the
+// src/lib/notes-store.js owns the SQL; scripts/d1.mjs owns the shell-out, the
 // banner-anchored JSON parse, and the two distinct failure messages (unreachable
 // database vs unparseable output).
 let allRows;
 try {
-  allRows = listNotes(slug, { includeClosed }, { local: useLocal });
+  allRows = await listNotes(slug, { includeClosed }, { local: useLocal });
 } catch (err) {
   die(err.message);
 }

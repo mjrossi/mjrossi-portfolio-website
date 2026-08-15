@@ -676,6 +676,24 @@ export async function checkHostUnlock() {
   );
   checkHeader('preview host: RSS is no-store', previewRss, 'cache-control', 'no-store');
 
+  // The fixture belongs in the LISTINGS (that is what the three checks above
+  // are for) but never in a slot that features ONE post: dated 2099, it is the
+  // newest post there is wherever scheduled posts are visible, so a plain
+  // newest-first pick made the home page's "From the Lexicon" block read
+  // "Scheduled-post fixture (not a real post)" on every preview deploy.
+  //
+  // Only reachable here. In production the fixture is filtered by date long
+  // before the teaser sees it, so the front page's own assertions in
+  // live-site.mjs would stay green through this.
+  const previewHome = await asHost('/', PREVIEW_HOST);
+  const previewHomeHtml = await previewHome.text();
+  const teaser = previewHomeHtml.slice(previewHomeHtml.indexOf('class="lexicon-teaser"'));
+  check(
+    'preview host: "From the Lexicon" features a real post, not the fixture',
+    teaser.length > 0 && !teaser.slice(0, 800).includes(FIXTURE_SLUG),
+    'the home page featured the smoke fixture — getLatestPost stopped skipping it',
+  );
+
   // The negative twin: the Worker's OWN workers.dev alias serves production on
   // a hostname anyone can derive from this repo, so it must NOT unlock. Only
   // proven at the unit level until now.

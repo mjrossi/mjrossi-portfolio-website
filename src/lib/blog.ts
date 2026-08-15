@@ -63,6 +63,36 @@ export async function getPostsByTag(tag: string, opts: PostQuery = {}): Promise<
 }
 
 /**
+ * The permanently future-dated test fixture in src/content/blog/.
+ *
+ * It is a real entry in the collection and belongs in the listings — the whole
+ * point of it is that `/blog`, RSS and the host unlock can be asserted against
+ * something scheduled. What it must never be is the ONE post a surface picks
+ * out to feature, because its `pubDate` of 2099 makes it the newest post there
+ * is wherever scheduled posts are visible at all.
+ *
+ * `scripts/smoke/config.mjs` names the same slug (it can't import this module —
+ * `astro:content` doesn't load under bare `node`), and smoke pins the two
+ * against each other, the same way `WORKER_NAME` is pinned against
+ * `wrangler.jsonc`.
+ */
+export const FIXTURE_SLUG = 'smoke-scheduled-fixture';
+
+/**
+ * The post a surface should feature — the newest one that isn't the fixture.
+ *
+ * In production this is just the newest post: the fixture is filtered out by
+ * date long before it gets here. On a *.workers.dev preview host and in `astro
+ * dev`, where scheduled posts ARE visible, this is the newest real draft, and
+ * it falls back to the newest published post when the fixture is the only
+ * scheduled one — which is the case today.
+ */
+export async function getLatestPost(opts: PostQuery = {}): Promise<Post | null> {
+  const posts = await getPublishedPosts(opts);
+  return posts.find((post) => post.id !== FIXTURE_SLUG) ?? null;
+}
+
+/**
  * Every tag with its post count, for the topic index (/blog/tags).
  *
  * Ordered the way the index reads: most-used first, then alphabetically, so

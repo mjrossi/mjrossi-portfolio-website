@@ -11,7 +11,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { check, stripComments } from './check.mjs';
-import { DIST, GALLEY_WRITE_QUOTA } from './config.mjs';
+import { DIST, FIXTURE_SLUG, GALLEY_WRITE_QUOTA } from './config.mjs';
 
 /** Read and comment-strip a source file, or return '' if it isn't there. */
 function source(path) {
@@ -91,6 +91,7 @@ export function checkSourceGuards() {
     !/previewReviewer/.test(blogLibSource),
     'previewReviewer leaked into blog.ts — a review link could reach the index/tags/RSS',
   );
+
   if (existsSync(rssRoutePath)) {
     check(
       'rss route: previewReviewer does NOT reach the feed',
@@ -98,6 +99,19 @@ export function checkSourceGuards() {
       'previewReviewer leaked into the RSS route — a review link could trigger the subscriber email',
     );
   }
+
+  // blog.ts names the fixture slug too, so getLatestPost can skip it when a
+  // surface features ONE post (the fixture is dated 2099 and therefore newest
+  // wherever scheduled posts are visible). It cannot import this suite's copy —
+  // astro:content doesn't load under bare node — so the two are pinned here,
+  // the same way preview.js's WORKER_NAME is pinned against wrangler.jsonc.
+  // Drift would be silent: the teaser would quietly go back to featuring the
+  // fixture on preview deploys and production would look fine.
+  check(
+    'src/lib/blog.ts FIXTURE_SLUG matches the smoke fixture',
+    new RegExp(`FIXTURE_SLUG\\s*=\\s*['"]${FIXTURE_SLUG}['"]`).test(blogLibSource),
+    `blog.ts does not declare FIXTURE_SLUG = '${FIXTURE_SLUG}'`,
+  );
 
   // The galley's client JS is the site's SECOND carve-out from the no-client-JS
   // rule, and the narrower of the two: it may only ship on a response that

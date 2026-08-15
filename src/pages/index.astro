@@ -1,12 +1,19 @@
 ---
 import Base from '../layouts/Base.astro';
-import { getPublishedPosts, dateFormatter, isoDate, postReadingTime } from '../lib/blog.ts';
+import { getLatestPost, dateFormatter, isoDate, postReadingTime } from '../lib/blog.ts';
+import { isPublished } from '../lib/schedule.js';
 import { nowUpdatedLabel } from '../lib/now.js';
 
 // "From the Lexicon" (finding 4.3): the periodical's name was doing no work
 // outside /blog. One entry, the latest — this is a pointer, not a second index.
-const posts = await getPublishedPosts({ showScheduled: Astro.locals.showScheduled });
-const latest = posts[0] ?? null;
+//
+// getLatestPost, not posts[0]: on a *.workers.dev preview host scheduled posts
+// are visible, and the smoke fixture is dated 2099, so the plain newest-first
+// pick featured "Scheduled-post fixture (not a real post)" on every preview
+// deploy. This features the newest real draft there instead, falling back to
+// the newest published post when the fixture is the only scheduled one.
+const latest = await getLatestPost({ showScheduled: Astro.locals.showScheduled });
+const latestScheduled = latest ? !isPublished(latest.data.pubDate) : false;
 ---
 
 <Base title="Matthew Rossi" masthead="full">
@@ -42,6 +49,10 @@ const latest = posts[0] ?? null;
         <a href={`/blog/${latest.id}/`}>{latest.data.title}</a>
       </h2>
       <p class="lexicon-teaser-meta">
+        {/* Only reachable where scheduled posts are visible at all — a preview
+            host or `astro dev` — and it is what says the featured post isn't
+            live yet. Keyed off isPublished, like every other badge. */}
+        {latestScheduled && <span class="post-scheduled">Scheduled</span>}
         <time datetime={isoDate(latest.data.pubDate)}>{dateFormatter.format(latest.data.pubDate)}</time>
         <span class="meta-sep" aria-hidden="true">·</span>
         <span>{postReadingTime(latest)}</span>

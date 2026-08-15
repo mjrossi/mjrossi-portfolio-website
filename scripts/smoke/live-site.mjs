@@ -14,69 +14,22 @@ export async function fetchRoute(path) {
   return { res, html };
 }
 
-/**
- * Assertions that must hold on every on-demand HTML route.
- *
- * `home` gets the full masthead and interior pages get the compact one
- * (finding 3.2). Both are asserted, in both directions: the full masthead
- * appearing on an interior page is the regression this replaced, and the
- * compact one appearing on the front page loses the site's signature.
- */
-function assertSharedChrome(label, res, html, activeHref, { masthead = 'compact' } = {}) {
-  const full = masthead === 'full';
+/** Assertions that must hold on every on-demand HTML route. */
+function assertSharedChrome(label, res, html, activeHref) {
   checkStatus(`${label}: 200 OK`, res, 200);
   checkHeader(`${label}: Cache-Control max-age=3600`, res, 'cache-control', 'max-age=3600');
-  check(
-    `${label}: ${masthead} masthead`,
-    html.includes(`class="masthead ${masthead}"`) && !html.includes(`class="masthead ${full ? 'compact' : 'full'}"`),
-  );
-  // ONE treatment of the edition line, on both mastheads. The compact one used
-  // to print an uppercase, letterspaced short form with the month dropped —
-  // one datum in two costumes, and the half it dropped was the part that
-  // signals freshness. Same issue() call either way; a mismatch between the two
-  // was finding 3.1 in the first place.
+  check(`${label}: full masthead`, html.includes('class="masthead full"'));
   check(
     `${label}: edition line (Vol. X · No. Y · Month YYYY)`,
     /Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+ · \w+ \d{4}/.test(html),
   );
-  if (!full) {
-    check(
-      `${label}: edition line is the compact masthead's`,
-      /class="masthead-issue">Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+ · \w+ \d{4}</.test(html),
-    );
-  }
-  // See the matching css-side guard in static.mjs. Guards the class names of a
-  // DIFFERENT, earlier condensed masthead that was reverted — not the compact
-  // variant above, which is the August 2026 review's design.
+  // See the matching css-side guard in static.mjs — same prior-design regression.
   check(
     `${label}: no condensed-masthead residue`,
     !/masthead condensed|masthead-home-link|masthead-page-label/.test(html),
   );
-  // Once per page, in the footer, on every route (finding 4.2). The masthead
-  // contact row is gone entirely — see the nav-order check below for why the
-  // strip has to be identical everywhere.
   const contactCount = occurrences(html, 'aria-label="Contact"');
-  check(
-    `${label}: ContactLinks rendered once`,
-    contactCount === 1,
-    `found ${contactCount}`,
-  );
-
-  // THE NAV STRIP COMES BEFORE THE MASTHEAD, ON EVERY PAGE.
-  //
-  // With the masthead first, the nav sat at y=144 on the front page and y=62
-  // everywhere else — an 85px jump on every navigation away from home, landing
-  // the cursor over content instead of over the nav it just used. Only the DOM
-  // order is checkable here (smoke has no browser and cannot measure layout),
-  // but the order is what produces the position, and reordering these two is
-  // the one way the jump comes back.
-  const navIdx = html.indexOf('class="broadsheet-nav"');
-  const mastIdx = html.indexOf('class="masthead ');
-  check(
-    `${label}: nav strip precedes the masthead`,
-    navIdx > 0 && mastIdx > 0 && navIdx < mastIdx,
-    'the masthead is back above the nav — nav position will differ between home and interior pages',
-  );
+  check(`${label}: ContactLinks rendered twice`, contactCount === 2, `found ${contactCount}`);
   if (activeHref) {
     const activeRx = new RegExp(
       `<a[^>]*href="${activeHref}"[^>]*class="active"|<a[^>]*class="active"[^>]*href="${activeHref}"`,
@@ -111,9 +64,7 @@ export async function checkRoutes() {
     const [label, path, activeHref] = topRoutes[i];
     if (path === '/') homeHtml = html;
     if (path === '/blog') blog = { res, html };
-    assertSharedChrome(label, res, html, activeHref, {
-      masthead: path === '/' ? 'full' : 'compact',
-    });
+    assertSharedChrome(label, res, html, activeHref);
   });
 
   // Blog chain: pick a post + a tag off the index, then fetch both in parallel.

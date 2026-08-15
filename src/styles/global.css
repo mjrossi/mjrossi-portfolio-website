@@ -191,145 +191,49 @@ a.masthead-name-link:hover .surname {
   color: var(--accent);
 }
 
-/* Compact masthead — every page but the front one (finding 3.2).
-   Two bands instead of five: wordmark + issue here, nav below, closed by one
-   heavy rule. The tagline and the contact row are dropped rather than shrunk;
-   both are in the footer on every page already.
+/* ── Broadsheet nav (page + contact links) ──────────── */
 
-   IT IS A SMALLER MASTHEAD, NOT A DIFFERENT COMPONENT — which is what the first
-   attempt got wrong. That one kept the amber band and shrank it to a 41px
-   strip, so it read as a toolbar rather than a nameplate: the same colour doing
-   none of the same work. And at 0.95rem the wordmark sat only 0.17rem above the
-   nav, so the eye landed on the active nav pill before the name.
-
-   So: the amber band is now the FRONT PAGE'S signature and nothing else's,
-   which is what a broadsheet actually does — the flag runs in full on page one
-   and inside pages carry a quieter running head. Interior pages set the
-   nameplate on the cream page background at a size that unambiguously outranks
-   the nav. Still roughly half the chrome of the full masthead. */
-
-/* The heavy rule closes the interior header. It lives here rather than on the
-   nav because the nav is now the strip ABOVE the masthead on every page — put
-   it there and it would divide the nav from the nameplate instead of closing
-   the pair against the content. */
-.masthead.compact {
-  background: var(--bg);
-  border-bottom: 2px solid var(--text);
-}
-
-/* The grain overlay and the double rule belong to the amber band; with no band
-   under them they are texture and a rule floating on the page. */
-.masthead.compact::before,
-.masthead.compact::after {
-  display: none;
-}
-
-.masthead.compact .masthead-inner {
-  padding: 1.15rem var(--pad) 0.55rem;
-}
-
-.masthead-compact-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-}
-
-.masthead-wordmark {
-  font-family: var(--font-serif);
-  font-size: 2rem;
-  font-weight: 600;
-  letter-spacing: -0.035em;
-  line-height: 1.1;
-  color: var(--text);
-  text-decoration: none;
-  font-optical-sizing: auto;
-  transition: color 0.15s ease;
-}
-
-.masthead-wordmark .surname {
-  color: var(--accent-surname);
-}
-
-.masthead-wordmark:hover .surname {
-  color: var(--accent);
-}
-
-/* Same treatment as .masthead-meta-edition on the front page — mixed case,
-   with the month. One datum, one costume. */
-.masthead-issue {
-  font-family: var(--font-ui);
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-
-/* ── Broadsheet nav ─────────────────────────────────── */
-
-/* THE ONE FIXED THING ON THE PAGE. It sits above the masthead on every route,
-   with identical content and identical height, so a nav item is at the same y
-   whichever page you are on and clicking one never moves the others out from
-   under the cursor. Everything that varies between the front page and an
-   interior page varies BELOW it. */
-/* A UTILITY RAIL, NOT THE MASTHEAD'S FIRST TIER. Sitting above the nameplate it
-   would otherwise read as the top band of the flag, which inverts the thing —
-   in print the nameplate always comes first. Tinted, hairline-ruled top and
-   bottom, smaller and tighter than the nav was, so it reads as a rail the
-   masthead sits under rather than a band competing with the wordmark. */
 .broadsheet-nav {
-  background: var(--bg2);
-  border-top: 1px solid var(--border);
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
 
 .broadsheet-nav-inner {
   max-width: var(--max);
   margin: 0 auto;
-  padding: 0.3rem var(--pad);
+  padding: 0.55rem var(--pad);
   display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 1rem;
 }
 
-/* Five items (Work · Projects · Education · Urban Mobility · Blog) wrap rather
-   than overflow at any width — verified at 360px, where they take two rows.
-   Finding 3.2 keeps all five for now; Urban Mobility is the one to fold into
-   Projects if it ever has to shrink. */
 .broadsheet-nav-inner .page-links {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.8rem 1.5rem;
+  gap: 1.5rem;
 }
 
 .broadsheet-nav-inner .page-links a {
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.03em;
   color: var(--muted);
   text-decoration: none;
-  /* 0.4rem vertical keeps the hit area at 24px against 0.7rem type, which is
-     the floor worth holding on a phone. That is also why the type stopped at
-     0.7rem rather than going smaller. */
-  padding: 0.4rem 0.5rem;
-  transition: color 0.15s ease, box-shadow 0.15s ease;
+  padding: 0.25rem 0.6rem;
+  border-radius: 2px;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .broadsheet-nav-inner .page-links a:hover {
   color: var(--accent);
 }
 
-/* "You are here" as a rule, not a filled box. The box was the same grammar as
-   a topic chip — tinted, bordered, rounded — and the chips are the only other
-   chip on the site, so an active nav item read as a tag. Colour is still not
-   the only signal: the rule is a shape and the weight bump is a third cue. */
 .broadsheet-nav-inner .page-links a.active {
   color: var(--accent);
+  background: var(--bg2);
   font-weight: 700;
-  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .contact-links {
@@ -519,27 +423,10 @@ main {
 
 /* ── Inner-page content wrapper ─────────────────────── */
 
-/* An interior page is a FRAME at the site's measure with its column aligned to
-   the left edge of that frame — not a narrower box centred inside it.
-   Centring is what made the wordmark hang 160px left of every heading beneath
-   it (210px on a post), so the masthead read as a separate document from the
-   page it belonged to. Home never had the problem because its two-column grid
-   fills the frame.
-   The other way to fix it — insetting the masthead and nav to the content
-   column — was rejected: the nav would then start at a different x on home
-   than on an interior page, which is the same instability in the other axis as
-   the one the nav-first ordering exists to remove.
-   `--page-measure` is the reading width, applied to the page's own children so
-   a post can narrow it without moving the frame. */
 .page {
-  --page-measure: 780px;
-  max-width: var(--max);
+  max-width: 780px;
   margin: 0 auto;
   padding: 3rem var(--pad) 5rem;
-}
-
-.page > * {
-  max-width: var(--page-measure);
 }
 
 .page-header {
@@ -863,66 +750,21 @@ em {
     white-space: normal;
   }
 
-  /* PHONE NAV IS A TWO-COLUMN CONTENTS TABLE, not a wrapped row.
-     Five items in a row wrap to two lines with "Blog" alone on the second,
-     which reads as an accident rather than a decision. As a ruled grid it reads
-     as the contents block a broadsheet puts under its nameplate: nothing
-     ragged, every row a ~42px tap target instead of a 19px text link, and the
-     rules tie it to the masthead grid.
-     The odd item out spans both columns — expressed as "the last child, when
-     the count is odd", so adding or removing a nav item can't strand one. */
   .broadsheet-nav-inner {
-    padding-top: 0;
-    padding-bottom: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.65rem;
   }
 
   .broadsheet-nav-inner .page-links {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 1.25rem;
-    row-gap: 0;
-    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.9rem;
   }
 
-  .broadsheet-nav-inner .page-links a {
-    font-size: 0.75rem;
-    padding: 0.7rem 0 0.7rem 0.55rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .broadsheet-nav-inner .page-links a:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-  }
-
-  /* The strip's own bottom border already closes the block. */
-  .broadsheet-nav-inner .page-links a:last-child {
-    border-bottom: 0;
-  }
-
-  /* Active reads down the left edge here rather than underneath: with a rule
-     already under every row, another one would be indistinguishable. */
-  .broadsheet-nav-inner .page-links a.active {
-    box-shadow: inset 2px 0 0 var(--accent);
-  }
-
-  /* The nameplate steps down with the measure — at 2rem it and the issue
-     together are wider than a 360px column once the gutter is taken out. */
-  .masthead-wordmark {
-    font-size: 1.5rem;
-    white-space: nowrap;
-  }
-
-  /* …and the pair stacks rather than sharing a row. Side by side, the full
-     edition line ("Vol. I · No. V · August 2026") leaves the nameplate too
-     little width and it breaks across two lines mid-name. */
-  .masthead-compact-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.15rem;
-  }
-
-  .masthead.compact .masthead-inner {
-    padding: 0.85rem var(--pad) 0.45rem;
+  .nav-contact {
+    display: none;
   }
 
   .broadsheet-footer-inner {
@@ -1175,10 +1017,8 @@ em {
 
 /* ── Blog: single post ──────────────────────────────── */
 
-/* A post narrows the reading measure without moving the frame, so its title
-   still starts on the same left edge as the nameplate above it. */
 .page.post {
-  --page-measure: 680px;
+  max-width: 680px;
 }
 
 .post-header {

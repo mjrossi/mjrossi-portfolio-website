@@ -8,15 +8,6 @@ interface Props {
   title: string;
   description?: string;
   noindex?: boolean;
-  /**
-   * 'full' is the front page's signature: display name, location + edition
-   * line, italic tagline between rules, then nav *and* a contact row. Every
-   * other page gets 'compact' — wordmark, issue, nav, one heavy rule — which
-   * is why the default is the interior variant rather than the home one: a new
-   * page that forgets the prop should get the quiet masthead, not the
-   * five-band one. See finding 3.2 in the August 2026 design review.
-   */
-  masthead?: 'full' | 'compact';
   /** Absolute path to a per-page OG card; defaults to the site-level one. */
   ogImage?: string;
   /** Alt text for that card. Defaults to the site description. */
@@ -29,7 +20,6 @@ const {
   title,
   description = 'Matthew Rossi — software engineer turning toward sustainable urban mobility.',
   noindex = false,
-  masthead = 'compact',
   ogImage: ogImagePath = '/og.png',
   ogImageAlt = SITE_ALT,
 } = Astro.props;
@@ -39,16 +29,10 @@ const canonical = new URL(pathname, Astro.site).href;
 const ogImage = new URL(ogImagePath, Astro.site).href;
 const fullTitle = title === 'Matthew Rossi' ? title : `${title} — Matthew Rossi`;
 
-// ONE call, per render, and BOTH mastheads print the same `label`. They used to
-// differ in treatment as well as content — the front page's mixed-case
-// "Vol. I · No. V · August 2026" against the interior's uppercase, letterspaced
-// "VOL. I · NO. V" — which is one datum in two costumes, and the half the
-// interior dropped was the month, the part that signals freshness. Neither
-// derives an issue of its own either; that divergence is what finding 3.1
-// caught between /blog and everything else. See src/lib/edition.js.
+// ONE call, per render, for the one masthead every page carries. Nothing may
+// derive an issue of its own — that divergence is what finding 3.1 caught
+// between /blog and everything else. See src/lib/edition.js.
 const edition = issue();
-
-const isFullMasthead = masthead === 'full';
 
 const navLinks = [
   { href: '/work', label: 'Work' },
@@ -94,22 +78,27 @@ const isHome = pathname === '/';
 </head>
 <body>
 
-  {/*
-    NAV FIRST, ON EVERY PAGE, AND THIS ORDER IS THE POINT.
+  <header class="masthead full">
+    <div class="masthead-inner">
+      <div class="masthead-name-row">
+        {isHome ? (
+          <h1 class="masthead-name">Matthew <span class="surname">Rossi</span></h1>
+        ) : (
+          <a href="/" class="masthead-name masthead-name-link">Matthew <span class="surname">Rossi</span></a>
+        )}
+        <div class="masthead-meta">
+          <span class="masthead-meta-loc">Lisbon, Portugal</span>
+          <span class="masthead-meta-edition">{edition.label}</span>
+        </div>
+      </div>
+      <div class="masthead-tagline-row">
+        <span class="masthead-rule" aria-hidden="true"></span>
+        <span class="masthead-tagline">Software engineer turning toward sustainable urban mobility</span>
+        <span class="masthead-rule" aria-hidden="true"></span>
+      </div>
+    </div>
+  </header>
 
-    With the masthead above it, the nav sat at y=144 on the front page and y=62
-    everywhere else — an 85px jump on every navigation away from home. Click
-    "Work" and your cursor lands 85px below the nav on the page you arrive at,
-    over the content, so reaching a second section means going back up. Print
-    varies the flag between page one and inside pages, but print is not clicked;
-    on the web the nav is the thing that has to stay put.
-
-    So the strip is identical on every page — same content, same height, same
-    y — and the masthead varies beneath it. That is also why the contact row is
-    gone from here entirely (finding 4.2): the footer carries all four on every
-    page, and icons that appeared on one page's strip and not another's would
-    reintroduce the difference this order exists to remove.
-  */}
   <nav class="broadsheet-nav" aria-label="Primary">
     <div class="broadsheet-nav-inner">
       <div class="page-links">
@@ -123,40 +112,11 @@ const isHome = pathname === '/';
           </a>
         ))}
       </div>
+      <div class="nav-contact">
+        <ContactLinks />
+      </div>
     </div>
   </nav>
-
-  {isFullMasthead ? (
-    <header class="masthead full">
-      <div class="masthead-inner">
-        <div class="masthead-name-row">
-          {isHome ? (
-            <h1 class="masthead-name">Matthew <span class="surname">Rossi</span></h1>
-          ) : (
-            <a href="/" class="masthead-name masthead-name-link">Matthew <span class="surname">Rossi</span></a>
-          )}
-          <div class="masthead-meta">
-            <span class="masthead-meta-loc">Lisbon, Portugal</span>
-            <span class="masthead-meta-edition">{edition.label}</span>
-          </div>
-        </div>
-        <div class="masthead-tagline-row">
-          <span class="masthead-rule" aria-hidden="true"></span>
-          <span class="masthead-tagline">Software engineer turning toward sustainable urban mobility</span>
-          <span class="masthead-rule" aria-hidden="true"></span>
-        </div>
-      </div>
-    </header>
-  ) : (
-    <header class="masthead compact">
-      <div class="masthead-inner">
-        <div class="masthead-compact-row">
-          <a href="/" class="masthead-wordmark">Matthew <span class="surname">Rossi</span></a>
-          <span class="masthead-issue">{edition.label}</span>
-        </div>
-      </div>
-    </header>
-  )}
 
   <main>
     <slot />

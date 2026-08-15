@@ -43,13 +43,17 @@ const posts = await getPublishedPosts({ showScheduled: Astro.locals.showSchedule
       Deliberately OUTSIDE the subscribe aside, and named without a
       "newsletter" / "subscribe" / "signup" / "email" / "form" substring, so an
       ad-block filter list that hides the band above cannot take this with it.
-      That is the whole reason it exists, which is why BOTH halves stay: RSS,
-      and a human who will add you by hand. §5 of the design review moved the
-      hand-add offer to /privacy; a reader whose blocker ate the form never gets
-      to /privacy to find it, so it is here as well as there.
+      §5 of the design review moved the hand-add offer to /privacy; a reader
+      whose blocker ate the form never gets to /privacy to find it, so it is
+      here as well as there.
+
+      RSS is NOT repeated here, unlike on a post: the Topics/RSS pills in the
+      header above are outside the aside too, so a blocked band still leaves an
+      RSS route on this page. Saying it twice inside 200px was the second of
+      two subscribe rows on an index whose band is justified by being one line.
     */}
     <p class="blog-follow-note">
-      Or follow by <a href="/blog/rss.xml">RSS</a> · <a href="/api/contact">email me</a> to be added by hand
+      Or <a href="/api/contact">email me</a> to be added by hand
     </p>
 
     {posts.length === 0 ? (

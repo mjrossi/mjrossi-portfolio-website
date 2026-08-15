@@ -1,19 +1,22 @@
 ---
 import Base from '../layouts/Base.astro';
-import { getLatestPost, dateFormatter, isoDate, postReadingTime } from '../lib/blog.ts';
+import { getLatestPosts, dateFormatter, isoDate, postReadingTime } from '../lib/blog.ts';
 import { isPublished } from '../lib/schedule.js';
 import { nowUpdatedLabel } from '../lib/now.js';
 
 // "From the Lexicon" (finding 4.3): the periodical's name was doing no work
 // outside /blog. One entry, the latest — this is a pointer, not a second index.
 //
-// getLatestPost, not posts[0]: on a *.workers.dev preview host scheduled posts
-// are visible, and the smoke fixture is dated 2099, so the plain newest-first
-// pick featured "Scheduled-post fixture (not a real post)" on every preview
-// deploy. This features the newest real draft there instead, falling back to
-// the newest published post when the fixture is the only scheduled one.
-const latest = await getLatestPost({ showScheduled: Astro.locals.showScheduled });
-const latestScheduled = latest ? !isPublished(latest.data.pubDate) : false;
+// getLatestPosts, not posts.slice(0, 2): on a *.workers.dev preview host
+// scheduled posts are visible, and the smoke fixture is dated 2099, so the
+// plain newest-first pick featured "Scheduled-post fixture (not a real post)"
+// on every preview deploy.
+//
+// TWO entries, not one. With one, the front page was three short blocks above a
+// bottom-pinned footer and left a 512px void on a tall display — it read as
+// unfinished. Two is also just a better pointer at a periodical: the latest
+// issue and the one before it.
+const latest = await getLatestPosts(2, { showScheduled: Astro.locals.showScheduled });
 ---
 
 <Base title="Matthew Rossi" masthead="full">
@@ -42,22 +45,27 @@ const latestScheduled = latest ? !isPublished(latest.data.pubDate) : false;
     </div>
   </section>
 
-  {latest && (
+  {latest.length > 0 && (
     <section class="lexicon-teaser" aria-labelledby="lexicon-teaser-label">
       <span class="section-label" id="lexicon-teaser-label">From the Lexicon</span>
-      <h2 class="lexicon-teaser-title">
-        <a href={`/blog/${latest.id}/`}>{latest.data.title}</a>
-      </h2>
-      <p class="lexicon-teaser-meta">
-        {/* Only reachable where scheduled posts are visible at all — a preview
-            host or `astro dev` — and it is what says the featured post isn't
-            live yet. Keyed off isPublished, like every other badge. */}
-        {latestScheduled && <span class="post-scheduled">Scheduled</span>}
-        <time datetime={isoDate(latest.data.pubDate)}>{dateFormatter.format(latest.data.pubDate)}</time>
-        <span class="meta-sep" aria-hidden="true">·</span>
-        <span>{postReadingTime(latest)}</span>
-      </p>
-      <p class="lexicon-teaser-excerpt">{latest.data.description}</p>
+      {latest.map((post) => (
+        <article class="lexicon-teaser-item">
+          <h2 class="lexicon-teaser-title">
+            <a href={`/blog/${post.id}/`}>{post.data.title}</a>
+          </h2>
+          <p class="lexicon-teaser-meta">
+            {/* Only reachable where scheduled posts are visible at all — a
+                preview host or `astro dev` — and it is what says a featured
+                post isn't live yet. Keyed off isPublished, like every other
+                badge. */}
+            {!isPublished(post.data.pubDate) && <span class="post-scheduled">Scheduled</span>}
+            <time datetime={isoDate(post.data.pubDate)}>{dateFormatter.format(post.data.pubDate)}</time>
+            <span class="meta-sep" aria-hidden="true">·</span>
+            <span>{postReadingTime(post)}</span>
+          </p>
+          <p class="lexicon-teaser-excerpt">{post.data.description}</p>
+        </article>
+      ))}
       <a class="lexicon-teaser-more" href="/blog">More issues →</a>
     </section>
   )}

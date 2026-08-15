@@ -691,7 +691,7 @@ export async function checkHostUnlock() {
   check(
     'preview host: "From the Lexicon" features a real post, not the fixture',
     teaser.length > 0 && !teaser.slice(0, 800).includes(FIXTURE_SLUG),
-    'the home page featured the smoke fixture — getLatestPost stopped skipping it',
+    'the home page featured the smoke fixture — getLatestPosts stopped skipping it',
   );
 
   // Same shape one surface over: previous/next is the other slot that names a

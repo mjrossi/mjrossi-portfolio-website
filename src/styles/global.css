@@ -255,13 +255,13 @@ a.masthead-name-link:hover .surname {
   color: var(--accent);
 }
 
+/* Same treatment as .masthead-meta-edition on the front page — mixed case,
+   with the month. One datum, one costume. */
 .masthead-issue {
   font-family: var(--font-ui);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--accent-tagline);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
   white-space: nowrap;
 }
 
@@ -273,15 +273,21 @@ a.masthead-name-link:hover .surname {
    whichever page you are on and clicking one never moves the others out from
    under the cursor. Everything that varies between the front page and an
    interior page varies BELOW it. */
+/* A UTILITY RAIL, NOT THE MASTHEAD'S FIRST TIER. Sitting above the nameplate it
+   would otherwise read as the top band of the flag, which inverts the thing —
+   in print the nameplate always comes first. Tinted, hairline-ruled top and
+   bottom, smaller and tighter than the nav was, so it reads as a rail the
+   masthead sits under rather than a band competing with the wordmark. */
 .broadsheet-nav {
-  background: var(--bg);
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
 
 .broadsheet-nav-inner {
   max-width: var(--max);
   margin: 0 auto;
-  padding: 0.55rem var(--pad);
+  padding: 0.3rem var(--pad);
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -300,24 +306,30 @@ a.masthead-name-link:hover .surname {
 
 .broadsheet-nav-inner .page-links a {
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 500;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
   color: var(--muted);
   text-decoration: none;
-  padding: 0.25rem 0.6rem;
-  border-radius: 2px;
-  transition: color 0.15s ease, background 0.15s ease;
+  /* 0.4rem vertical keeps the hit area at 24px against 0.7rem type, which is
+     the floor worth holding on a phone. That is also why the type stopped at
+     0.7rem rather than going smaller. */
+  padding: 0.4rem 0.5rem;
+  transition: color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .broadsheet-nav-inner .page-links a:hover {
   color: var(--accent);
 }
 
+/* "You are here" as a rule, not a filled box. The box was the same grammar as
+   a topic chip — tinted, bordered, rounded — and the chips are the only other
+   chip on the site, so an active nav item read as a tag. Colour is still not
+   the only signal: the rule is a shape and the weight bump is a third cue. */
 .broadsheet-nav-inner .page-links a.active {
   color: var(--accent);
-  background: var(--bg2);
   font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .contact-links {
@@ -433,6 +445,12 @@ main {
   border-top: 1px solid var(--border);
 }
 
+.lexicon-teaser-item + .lexicon-teaser-item {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
 .lexicon-teaser-title {
   font-family: var(--font-serif);
   font-size: 1.3rem;
@@ -470,10 +488,12 @@ main {
   line-height: 1.75;
   color: var(--muted);
   max-width: 580px;
-  margin: 0 0 0.75rem;
+  margin: 0;
 }
 
 .lexicon-teaser-more {
+  display: inline-block;
+  margin-top: 1.25rem;
   font-family: var(--font-ui);
   font-size: 0.78rem;
   letter-spacing: 0.02em;
@@ -499,10 +519,27 @@ main {
 
 /* ── Inner-page content wrapper ─────────────────────── */
 
+/* An interior page is a FRAME at the site's measure with its column aligned to
+   the left edge of that frame — not a narrower box centred inside it.
+   Centring is what made the wordmark hang 160px left of every heading beneath
+   it (210px on a post), so the masthead read as a separate document from the
+   page it belonged to. Home never had the problem because its two-column grid
+   fills the frame.
+   The other way to fix it — insetting the masthead and nav to the content
+   column — was rejected: the nav would then start at a different x on home
+   than on an interior page, which is the same instability in the other axis as
+   the one the nav-first ordering exists to remove.
+   `--page-measure` is the reading width, applied to the page's own children so
+   a post can narrow it without moving the frame. */
 .page {
-  max-width: 780px;
+  --page-measure: 780px;
+  max-width: var(--max);
   margin: 0 auto;
   padding: 3rem var(--pad) 5rem;
+}
+
+.page > * {
+  max-width: var(--page-measure);
 }
 
 .page-header {
@@ -1097,8 +1134,10 @@ em {
 
 /* ── Blog: single post ──────────────────────────────── */
 
+/* A post narrows the reading measure without moving the frame, so its title
+   still starts on the same left edge as the nameplate above it. */
 .page.post {
-  max-width: 680px;
+  --page-measure: 680px;
 }
 
 .post-header {
@@ -1736,15 +1775,17 @@ em {
    aside (and named without "newsletter" / "subscribe" / "signup" / "email"
    / "form" substrings) so it survives ad-block filter lists that hide the
    signup card. Reads as a quiet editor's note in italics. */
+/* Left-aligned, small and quiet. Centred italic at 0.92rem it read as a second
+   subscribe row under the band, which undercut the one-line justification for
+   putting the band at the top in the first place. It is a fallback, and it
+   should look like one. */
 .blog-follow-note {
-  font-family: var(--font);
-  font-style: italic;
-  font-size: 0.92rem;
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  line-height: 1.6;
   color: var(--muted);
-  text-align: center;
-  margin: 1.5rem auto 0;
-  max-width: 32rem;
-  letter-spacing: 0.01em;
+  margin: 0.5rem 0 0;
+  letter-spacing: 0.02em;
 }
 
 .blog-follow-note a {

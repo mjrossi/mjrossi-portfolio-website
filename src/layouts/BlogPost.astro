@@ -126,8 +126,12 @@ const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
             inside Subscribe.astro for two reasons: the component renders the
             <aside> an ad-block filter list hides, and it renders nothing at all
             when PUBLIC_TURNSTILE_SITE_KEY is missing — which is precisely when
-            a way to subscribe matters most. Same line, same class and same
-            argument as the one under the band on /blog.
+            a way to subscribe matters most.
+
+            This one DOES keep RSS, unlike the index's. There is no RSS pill in
+            a post's header, and the card's own RSS link is inside the aside a
+            blocker would hide — so drop it here and a blocked card leaves the
+            page with no feed route at all.
           */}
           <p class="blog-follow-note">
             Or follow by <a href="/blog/rss.xml">RSS</a> · <a href="/api/contact">email me</a> to be added by hand

@@ -30,18 +30,19 @@ function assertSharedChrome(label, res, html, activeHref, { masthead = 'compact'
     `${label}: ${masthead} masthead`,
     html.includes(`class="masthead ${masthead}"`) && !html.includes(`class="masthead ${full ? 'compact' : 'full'}"`),
   );
-  if (full) {
+  // ONE treatment of the edition line, on both mastheads. The compact one used
+  // to print an uppercase, letterspaced short form with the month dropped —
+  // one datum in two costumes, and the half it dropped was the part that
+  // signals freshness. Same issue() call either way; a mismatch between the two
+  // was finding 3.1 in the first place.
+  check(
+    `${label}: edition line (Vol. X · No. Y · Month YYYY)`,
+    /Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+ · \w+ \d{4}/.test(html),
+  );
+  if (!full) {
     check(
-      `${label}: edition line (Vol. X · No. Y · Month YYYY)`,
-      /Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+ · \w+ \d{4}/.test(html),
-    );
-  } else {
-    // The compact masthead prints the short form and drops the month, which is
-    // already in every dateline below it. Same issue() call either way — a
-    // mismatch between the two was finding 3.1.
-    check(
-      `${label}: issue line (Vol. X · No. Y)`,
-      /class="masthead-issue">Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+</.test(html),
+      `${label}: edition line is the compact masthead's`,
+      /class="masthead-issue">Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+ · \w+ \d{4}</.test(html),
     );
   }
   // See the matching css-side guard in static.mjs. Guards the class names of a

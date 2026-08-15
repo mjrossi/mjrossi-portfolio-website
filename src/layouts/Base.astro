@@ -39,10 +39,13 @@ const canonical = new URL(pathname, Astro.site).href;
 const ogImage = new URL(ogImagePath, Astro.site).href;
 const fullTitle = title === 'Matthew Rossi' ? title : `${title} — Matthew Rossi`;
 
-// ONE call, per render, for both variants. The full masthead prints the label,
-// the compact one prints the short form, and neither derives an issue of its
-// own — that divergence is exactly what finding 3.1 caught between /blog and
-// everything else. See src/lib/edition.js.
+// ONE call, per render, and BOTH mastheads print the same `label`. They used to
+// differ in treatment as well as content — the front page's mixed-case
+// "Vol. I · No. V · August 2026" against the interior's uppercase, letterspaced
+// "VOL. I · NO. V" — which is one datum in two costumes, and the half the
+// interior dropped was the month, the part that signals freshness. Neither
+// derives an issue of its own either; that divergence is what finding 3.1
+// caught between /blog and everything else. See src/lib/edition.js.
 const edition = issue();
 
 const isFullMasthead = masthead === 'full';
@@ -149,7 +152,7 @@ const isHome = pathname === '/';
       <div class="masthead-inner">
         <div class="masthead-compact-row">
           <a href="/" class="masthead-wordmark">Matthew <span class="surname">Rossi</span></a>
-          <span class="masthead-issue">{edition.short}</span>
+          <span class="masthead-issue">{edition.label}</span>
         </div>
       </div>
     </header>

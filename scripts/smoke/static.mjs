@@ -100,7 +100,7 @@ export function checkSourceGuards() {
     );
   }
 
-  // blog.ts names the fixture slug too, so getLatestPost can skip it when a
+  // blog.ts names the fixture slug too, so getLatestPosts can skip it when a
   // surface features ONE post (the fixture is dated 2099 and therefore newest
   // wherever scheduled posts are visible). It cannot import this suite's copy —
   // astro:content doesn't load under bare node — so the two are pinned here,

@@ -863,21 +863,62 @@ em {
     white-space: normal;
   }
 
-  /* No column stacking any more: the strip holds nav links and nothing else,
-     and it must stay the same height on every page at every width. */
+  /* PHONE NAV IS A TWO-COLUMN CONTENTS TABLE, not a wrapped row.
+     Five items in a row wrap to two lines with "Blog" alone on the second,
+     which reads as an accident rather than a decision. As a ruled grid it reads
+     as the contents block a broadsheet puts under its nameplate: nothing
+     ragged, every row a ~42px tap target instead of a 19px text link, and the
+     rules tie it to the masthead grid.
+     The odd item out spans both columns — expressed as "the last child, when
+     the count is odd", so adding or removing a nav item can't strand one. */
   .broadsheet-nav-inner {
-    padding-top: 0.6rem;
-    padding-bottom: 0.6rem;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
   .broadsheet-nav-inner .page-links {
-    gap: 0.8rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 1.25rem;
+    row-gap: 0;
+    width: 100%;
+  }
+
+  .broadsheet-nav-inner .page-links a {
+    font-size: 0.75rem;
+    padding: 0.7rem 0 0.7rem 0.55rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .broadsheet-nav-inner .page-links a:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  /* The strip's own bottom border already closes the block. */
+  .broadsheet-nav-inner .page-links a:last-child {
+    border-bottom: 0;
+  }
+
+  /* Active reads down the left edge here rather than underneath: with a rule
+     already under every row, another one would be indistinguishable. */
+  .broadsheet-nav-inner .page-links a.active {
+    box-shadow: inset 2px 0 0 var(--accent);
   }
 
   /* The nameplate steps down with the measure — at 2rem it and the issue
      together are wider than a 360px column once the gutter is taken out. */
   .masthead-wordmark {
     font-size: 1.5rem;
+    white-space: nowrap;
+  }
+
+  /* …and the pair stacks rather than sharing a row. Side by side, the full
+     edition line ("Vol. I · No. V · August 2026") leaves the nameplate too
+     little width and it breaks across two lines mid-name. */
+  .masthead-compact-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
   }
 
   .masthead.compact .masthead-inner {

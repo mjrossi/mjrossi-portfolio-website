@@ -49,8 +49,7 @@ const posts = await getPublishedPosts({ showScheduled: Astro.locals.showSchedule
       to /privacy to find it, so it is here as well as there.
     */}
     <p class="blog-follow-note">
-      Or follow by <a href="/blog/rss.xml">RSS</a> ·
-      <a href="/api/contact">email me</a> to be added by hand
+      Or follow by <a href="/blog/rss.xml">RSS</a> · <a href="/api/contact">email me</a> to be added by hand
     </p>
 
     {posts.length === 0 ? (

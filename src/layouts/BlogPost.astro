@@ -2,7 +2,7 @@
 import { Image } from 'astro:assets';
 import Base from './Base.astro';
 import PostTags from '../components/PostTags.astro';
-import PostTopic from '../components/PostTopic.astro';
+import PostTopics from '../components/PostTopics.astro';
 import PostNav from '../components/PostNav.astro';
 import Subscribe from '../components/Subscribe.astro';
 import GalleyMargin from '../components/GalleyMargin.astro';
@@ -69,8 +69,8 @@ const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
     <header class="post-header">
       <h1 class="post-title">{title}</h1>
       {/*
-        One topic in the meta line, not the full chip row (finding 1.4). Six
-        chips used to stack between the title and the first word of prose —
+        Up to two topics in the meta line, not the full chip row (finding 1.4).
+        Six chips used to stack between the title and the first word of prose —
         the loudest coloured thing on the page, doing discovery work at the
         moment the reader wants to start reading. The full set is in the
         footer under "Filed under", where discovery belongs.
@@ -90,7 +90,7 @@ const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
             </span>
           </>
         )}
-        <PostTopic tags={tags} />
+        <PostTopics tags={tags} />
       </p>
       {cover && (
         <figure class="post-cover">
@@ -121,6 +121,17 @@ const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
       {!scheduled && (
         <>
           <Subscribe variant="card" />
+          {/*
+            The card's blocker fallback, and it must stay OUT here rather than
+            inside Subscribe.astro for two reasons: the component renders the
+            <aside> an ad-block filter list hides, and it renders nothing at all
+            when PUBLIC_TURNSTILE_SITE_KEY is missing — which is precisely when
+            a way to subscribe matters most. Same line, same class and same
+            argument as the one under the band on /blog.
+          */}
+          <p class="blog-follow-note">
+            Or follow by <a href="/blog/rss.xml">RSS</a> · <a href="/api/contact">email me</a> to be added by hand
+          </p>
           <PostNav previous={previous} next={next} />
           <a href="/blog" class="post-back post-back-all">All posts</a>
         </>

@@ -170,9 +170,19 @@ function checkPostFurniture(slug, html) {
   const header = bodyIdx > 0 ? html.slice(0, bodyIdx) : html;
 
   check(
-    `blog post ${slug}: one topic in the meta line`,
+    `blog post ${slug}: topics in the meta line`,
     /class="post-topic"/.test(header),
     'no .post-topic link before the post body',
+  );
+  // The cap is the whole point of the meta line — two topics instead of the six
+  // chips of finding 1.4. Without this, "show the first N tags" can drift back
+  // to N = all and quietly restore the clutter, and every other assertion here
+  // would stay green.
+  const headerTopics = occurrences(header, 'class="post-topic"');
+  check(
+    `blog post ${slug}: at most two topics`,
+    headerTopics <= 2,
+    `${headerTopics} topics in the meta line — the cap in PostTopics.astro moved`,
   );
   // Finding 1.4 — the chip row between the title and the first word of prose.
   check(
@@ -185,6 +195,17 @@ function checkPostFurniture(slug, html) {
     /class="post-tags-label">Filed under</.test(html) && /class="tag-chip"/.test(html),
   );
   check(`blog post ${slug}: subscribe card at the end`, /class="subscribe-card"/.test(html));
+  // Same blocker fallback as the index, and for the same reason: the card lives
+  // in an <aside class="subscribe-card"> that a filter list will hide, so the
+  // way out has to sit outside it.
+  const cardCloseIdx = html.indexOf('</aside>');
+  const postNoteIdx = html.indexOf('class="blog-follow-note"');
+  check(
+    `blog post ${slug}: hand-add fallback outside the subscribe card`,
+    postNoteIdx > 0 && cardCloseIdx > 0 && postNoteIdx > cardCloseIdx &&
+      /class="blog-follow-note"[\s\S]{0,240}?\/api\/contact/.test(html),
+    'no follow note after the card — a blocked card leaves the post with no way to subscribe',
+  );
   check(`blog post ${slug}: previous/next nav`, /class="post-nav"/.test(html));
   // Per-post OG card (finding 3.4) — a published post must not fall back to the
   // site-level image, and its alt text must be the post's own.

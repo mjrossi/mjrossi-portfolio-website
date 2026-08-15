@@ -1,5 +1,5 @@
 ---
-import PostTopic from './PostTopic.astro';
+import PostTopics from './PostTopics.astro';
 import { dateFormatter, isoDate, postReadingTime, type Post } from '../lib/blog.ts';
 import { isPublished } from '../lib/schedule.js';
 
@@ -23,7 +23,7 @@ const scheduled = !isPublished(post.data.pubDate);
     </time>
     <span class="meta-sep" aria-hidden="true">·</span>
     <span>{postReadingTime(post)}</span>
-    <PostTopic tags={post.data.tags} />
+    <PostTopics tags={post.data.tags} />
   </div>
   <h2 class="post-entry-title">
     <a href={`/blog/${post.id}/`}>{post.data.title}</a>
@@ -31,8 +31,8 @@ const scheduled = !isPublished(post.data.pubDate);
   {/*
     The chip row is deliberately gone from index entries (finding 2.1): five or
     six saturated chips per entry were the first thing the eye landed on, ahead
-    of the titles. One topic goes in the meta line above; the full set lives on
-    the post itself.
+    of the titles. Up to two topics go in the meta line above; the full set
+    lives on the post itself.
   */}
   <p class="post-entry-description">{post.data.description}</p>
 </article>

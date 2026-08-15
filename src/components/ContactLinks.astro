@@ -2,27 +2,66 @@
 // Inline SVG so the icons inherit currentColor from .contact-links a and
 // stay CSP-clean (same-origin, no external <img src>). Each anchor carries
 // its own aria-label; the wrapper nav's aria-label names the cluster.
+//
+// `only` narrows the set without forking the markup. The footer takes all four
+// on every page; the front page's masthead row takes GitHub + Email (finding
+// 4.2 — four icons twice on one page). Interior pages have no masthead row at
+// all now, so this is the front page's problem alone. An unknown key is a
+// build-time error rather than a silently missing icon.
+interface Props {
+  only?: string[];
+}
+
+const { only } = Astro.props;
+
+const LINKS = [
+  { key: 'github', href: 'https://github.com/mjrossi', label: 'GitHub', external: true },
+  { key: 'linkedin', href: 'https://www.linkedin.com/in/matthew-j-rossi/', label: 'LinkedIn', external: true },
+  { key: 'email', href: '/api/contact', label: 'Email', external: false },
+  { key: 'bluesky', href: 'https://bsky.app/profile/mjrossi.com', label: 'Bluesky', external: true },
+];
+
+if (only) {
+  const known = new Set(LINKS.map((l) => l.key));
+  const unknown = only.filter((k) => !known.has(k));
+  if (unknown.length > 0) {
+    throw new Error(
+      `ContactLinks: unknown key(s) ${unknown.join(', ')} — expected one of ${[...known].join(', ')}`,
+    );
+  }
+}
+
+const shown = only ? LINKS.filter((l) => only.includes(l.key)) : LINKS;
 ---
 <nav class="contact-links" aria-label="Contact">
-  <a href="https://github.com/mjrossi" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
-      <path fill="currentColor" d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.55v-2.02c-3.2.69-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.18 1.17a11 11 0 0 1 5.79 0c2.21-1.48 3.18-1.17 3.18-1.17.63 1.59.23 2.77.11 3.06.74.8 1.19 1.82 1.19 3.08 0 4.41-2.69 5.39-5.26 5.67.41.36.78 1.06.78 2.13v3.16c0 .3.21.66.8.55C20.22 21.38 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5Z"/>
-    </svg>
-  </a>
-  <a href="https://www.linkedin.com/in/matthew-j-rossi/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
-      <path fill="currentColor" d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12ZM7.12 20.45H3.56V9h3.56v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45C23.2 24 24 23.23 24 22.28V1.72C24 .77 23.2 0 22.22 0Z"/>
-    </svg>
-  </a>
-  <a href="/api/contact" aria-label="Email">
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
-      <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M3.25 5.75h17.5a1 1 0 0 1 1 1v10.5a1 1 0 0 1-1 1H3.25a1 1 0 0 1-1-1V6.75a1 1 0 0 1 1-1Z"/>
-      <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="m2.75 7 9.25 6.5L21.25 7"/>
-    </svg>
-  </a>
-  <a href="https://bsky.app/profile/mjrossi.com" target="_blank" rel="noopener noreferrer" aria-label="Bluesky">
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
-      <path fill="currentColor" d="M5.35 3.65c2.86 2.15 5.93 6.5 7.06 8.84 1.13-2.34 4.2-6.69 7.06-8.84 2.06-1.55 5.4-2.75 5.4 1.05 0 .76-.44 6.38-.7 7.3-.87 3.17-4.1 3.98-6.97 3.49 5.02.85 6.3 3.68 3.54 6.5-5.25 5.36-7.55-1.35-8.14-3.07-.11-.32-.16-.47-.16-.34 0-.13-.05.02-.16.34-.59 1.72-2.89 8.43-8.14 3.07-2.76-2.82-1.48-5.65 3.54-6.5-2.87.49-6.1-.32-6.97-3.49C.5 11.08.06 5.46.06 4.7c0-3.8 3.33-2.6 5.4-1.05Z"/>
-    </svg>
-  </a>
+  {shown.map((link) => (
+    <a
+      href={link.href}
+      target={link.external ? '_blank' : undefined}
+      rel={link.external ? 'noopener noreferrer' : undefined}
+      aria-label={link.label}
+    >
+      {link.key === 'github' && (
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.55v-2.02c-3.2.69-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.18 1.17a11 11 0 0 1 5.79 0c2.21-1.48 3.18-1.17 3.18-1.17.63 1.59.23 2.77.11 3.06.74.8 1.19 1.82 1.19 3.08 0 4.41-2.69 5.39-5.26 5.67.41.36.78 1.06.78 2.13v3.16c0 .3.21.66.8.55C20.22 21.38 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5Z"/>
+        </svg>
+      )}
+      {link.key === 'linkedin' && (
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12ZM7.12 20.45H3.56V9h3.56v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45C23.2 24 24 23.23 24 22.28V1.72C24 .77 23.2 0 22.22 0Z"/>
+        </svg>
+      )}
+      {link.key === 'email' && (
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M3.25 5.75h17.5a1 1 0 0 1 1 1v10.5a1 1 0 0 1-1 1H3.25a1 1 0 0 1-1-1V6.75a1 1 0 0 1 1-1Z"/>
+          <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="m2.75 7 9.25 6.5L21.25 7"/>
+        </svg>
+      )}
+      {link.key === 'bluesky' && (
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M5.35 3.65c2.86 2.15 5.93 6.5 7.06 8.84 1.13-2.34 4.2-6.69 7.06-8.84 2.06-1.55 5.4-2.75 5.4 1.05 0 .76-.44 6.38-.7 7.3-.87 3.17-4.1 3.98-6.97 3.49 5.02.85 6.3 3.68 3.54 6.5-5.25 5.36-7.55-1.35-8.14-3.07-.11-.32-.16-.47-.16-.34 0-.13-.05.02-.16.34-.59 1.72-2.89 8.43-8.14 3.07-2.76-2.82-1.48-5.65 3.54-6.5-2.87.49-6.1-.32-6.97-3.49C.5 11.08.06 5.46.06 4.7c0-3.8 3.33-2.6 5.4-1.05Z"/>
+        </svg>
+      )}
+    </a>
+  ))}
 </nav>

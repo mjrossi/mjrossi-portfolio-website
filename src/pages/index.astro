@@ -1,8 +1,15 @@
 ---
 import Base from '../layouts/Base.astro';
+import { getPublishedPosts, dateFormatter, isoDate, postReadingTime } from '../lib/blog.ts';
+import { nowUpdatedLabel } from '../lib/now.js';
+
+// "From the Lexicon" (finding 4.3): the periodical's name was doing no work
+// outside /blog. One entry, the latest — this is a pointer, not a second index.
+const posts = await getPublishedPosts({ showScheduled: Astro.locals.showScheduled });
+const latest = posts[0] ?? null;
 ---
 
-<Base title="Matthew Rossi">
+<Base title="Matthew Rossi" masthead="full">
 
   <section class="broadsheet-body">
     <div class="col-about">
@@ -13,6 +20,7 @@ import Base from '../layouts/Base.astro';
     <div class="broadsheet-gutter" aria-hidden="true"></div>
     <div class="col-now">
       <span class="section-label">Now</span>
+      <span class="section-updated">{nowUpdatedLabel()}</span>
       <img
         src="/profile-avatar.webp"
         alt="Matthew Rossi"
@@ -22,9 +30,25 @@ import Base from '../layouts/Base.astro';
         loading="lazy"
         decoding="async"
       />
-      <p>As of May 2026, I'll have wrapped up 5 years as a Senior Software Engineer at <a href="https://www.heroku.com" target="_blank" rel="noopener noreferrer">Heroku (Salesforce)</a> in New York.</p>
-      <p>Starting autumn 2026, I'll be in the <strong>EIT Urban Mobility Master's Program (SUMT)</strong> — a two-year double degree, first at Técnico Lisboa in Lisbon, then at UPC BarcelonaTech in Barcelona.</p>
+      <p>I live in Lisbon, with five years as a Senior Software Engineer at <a href="https://www.heroku.com" target="_blank" rel="noopener noreferrer">Heroku (Salesforce)</a> in New York now behind me.</p>
+      <p>This autumn I start the <strong>EIT Urban Mobility Master's Program (SUMT)</strong> — a two-year double degree, first at Técnico Lisboa here in Lisbon, then at UPC BarcelonaTech in Barcelona.</p>
     </div>
   </section>
+
+  {latest && (
+    <section class="lexicon-teaser" aria-labelledby="lexicon-teaser-label">
+      <span class="section-label" id="lexicon-teaser-label">From the Lexicon</span>
+      <h2 class="lexicon-teaser-title">
+        <a href={`/blog/${latest.id}/`}>{latest.data.title}</a>
+      </h2>
+      <p class="lexicon-teaser-meta">
+        <time datetime={isoDate(latest.data.pubDate)}>{dateFormatter.format(latest.data.pubDate)}</time>
+        <span class="meta-sep" aria-hidden="true">·</span>
+        <span>{postReadingTime(latest)}</span>
+      </p>
+      <p class="lexicon-teaser-excerpt">{latest.data.description}</p>
+      <a class="lexicon-teaser-more" href="/blog">More issues →</a>
+    </section>
+  )}
 
 </Base>

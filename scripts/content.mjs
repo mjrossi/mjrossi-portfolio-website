@@ -7,12 +7,34 @@
 // <slug>.mdx or <slug>/index.mdx (the second form colocates images) and Astro
 // derives the same slug from both.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import yaml from 'js-yaml';
 import { coercePubDate } from '../src/lib/pubdate.js';
 
 export const CONTENT_DIR = resolve('src/content/blog');
+
+/**
+ * Every post slug on disk, in the same two shapes the loader accepts.
+ *
+ * Mirrors `generateId` in src/content.config.ts: `<slug>.mdx` or
+ * `<slug>/index.mdx`, the id being the slug either way. A directory without an
+ * index.mdx is not a post and is skipped rather than throwing — that is an
+ * images-only folder, not a mistake.
+ *
+ * @returns {string[]}
+ */
+export function listPostSlugs() {
+  const slugs = [];
+  for (const entry of readdirSync(CONTENT_DIR, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (existsSync(resolve(CONTENT_DIR, entry.name, 'index.mdx'))) slugs.push(entry.name);
+    } else if (entry.name.endsWith('.mdx')) {
+      slugs.push(entry.name.replace(/\.mdx$/, ''));
+    }
+  }
+  return slugs.sort();
+}
 
 /**
  * Absolute path to the .mdx behind a slug, or null if there isn't one.
@@ -61,10 +83,25 @@ const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
  * @returns {Date | null} null when the post has no source file
  */
 export function readPubDate(slug) {
+  return readPost(slug)?.pubDate ?? null;
+}
+
+/**
+ * Frontmatter + body for a post, or null when there is no source file.
+ *
+ * The `pubDate` on the way out has already been through js-yaml *and*
+ * `coercePubDate` — see readPubDate's argument above, which is the whole reason
+ * this parsing lives in one function rather than in each caller.
+ *
+ * @param {string} slug
+ * @returns {{ path: string, data: Record<string, unknown>, pubDate: Date, body: string } | null}
+ */
+export function readPost(slug) {
   const path = resolvePostSource(slug);
   if (!path) return null;
 
-  const block = FRONTMATTER_RE.exec(readFileSync(path, 'utf8'));
+  const source = readFileSync(path, 'utf8');
+  const block = FRONTMATTER_RE.exec(source);
   if (!block) throw new Error(`content: ${slug} has no frontmatter block`);
 
   let data;
@@ -76,5 +113,6 @@ export function readPubDate(slug) {
 
   const result = coercePubDate(data?.pubDate);
   if (!result.ok) throw new Error(`content: ${slug}: ${result.message}`);
-  return result.date;
+
+  return { path, data: data ?? {}, pubDate: result.date, body: source.slice(block[0].length) };
 }

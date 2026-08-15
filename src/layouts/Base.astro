@@ -2,26 +2,50 @@
 import { Font } from 'astro:assets';
 import '../styles/global.css';
 import ContactLinks from '../components/ContactLinks.astro';
-import { editionLine } from '../lib/edition';
+import { issue } from '../lib/edition.js';
 
 interface Props {
   title: string;
   description?: string;
   noindex?: boolean;
+  /**
+   * 'full' is the front page's signature: display name, location + edition
+   * line, italic tagline between rules, then nav *and* a contact row. Every
+   * other page gets 'compact' — wordmark, issue, nav, one heavy rule — which
+   * is why the default is the interior variant rather than the home one: a new
+   * page that forgets the prop should get the quiet masthead, not the
+   * five-band one. See finding 3.2 in the August 2026 design review.
+   */
+  masthead?: 'full' | 'compact';
+  /** Absolute path to a per-page OG card; defaults to the site-level one. */
+  ogImage?: string;
+  /** Alt text for that card. Defaults to the site description. */
+  ogImageAlt?: string;
 }
+
+const SITE_ALT = 'Matthew Rossi — software engineer turning toward sustainable urban mobility.';
 
 const {
   title,
   description = 'Matthew Rossi — software engineer turning toward sustainable urban mobility.',
   noindex = false,
+  masthead = 'compact',
+  ogImage: ogImagePath = '/og.png',
+  ogImageAlt = SITE_ALT,
 } = Astro.props;
 
 const pathname = Astro.url.pathname;
 const canonical = new URL(pathname, Astro.site).href;
-const ogImage = new URL('/og.png', Astro.site).href;
+const ogImage = new URL(ogImagePath, Astro.site).href;
 const fullTitle = title === 'Matthew Rossi' ? title : `${title} — Matthew Rossi`;
 
-const editionLineStr = editionLine();
+// ONE call, per render, for both variants. The full masthead prints the label,
+// the compact one prints the short form, and neither derives an issue of its
+// own — that divergence is exactly what finding 3.1 caught between /blog and
+// everything else. See src/lib/edition.js.
+const edition = issue();
+
+const isFullMasthead = masthead === 'full';
 
 const navLinks = [
   { href: '/work', label: 'Work' },
@@ -53,13 +77,13 @@ const isHome = pathname === '/';
   <meta property="og:image" content={ogImage}>
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Matthew Rossi — software engineer turning toward sustainable urban mobility.">
+  <meta property="og:image:alt" content={ogImageAlt}>
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content={fullTitle}>
   <meta name="twitter:description" content={description}>
   <meta name="twitter:image" content={ogImage}>
-  <meta name="twitter:image:alt" content="Matthew Rossi — software engineer turning toward sustainable urban mobility.">
+  <meta name="twitter:image:alt" content={ogImageAlt}>
 
   <Font cssVariable="--font-inter" preload />
   <Font cssVariable="--font-fraunces" preload />
@@ -67,28 +91,39 @@ const isHome = pathname === '/';
 </head>
 <body>
 
-  <header class="masthead full">
-    <div class="masthead-inner">
-      <div class="masthead-name-row">
-        {isHome ? (
-          <h1 class="masthead-name">Matthew <span class="surname">Rossi</span></h1>
-        ) : (
-          <a href="/" class="masthead-name masthead-name-link">Matthew <span class="surname">Rossi</span></a>
-        )}
-        <div class="masthead-meta">
-          <span class="masthead-meta-loc">Lisbon, Portugal</span>
-          <span class="masthead-meta-edition">{editionLineStr}</span>
+  {isFullMasthead ? (
+    <header class="masthead full">
+      <div class="masthead-inner">
+        <div class="masthead-name-row">
+          {isHome ? (
+            <h1 class="masthead-name">Matthew <span class="surname">Rossi</span></h1>
+          ) : (
+            <a href="/" class="masthead-name masthead-name-link">Matthew <span class="surname">Rossi</span></a>
+          )}
+          <div class="masthead-meta">
+            <span class="masthead-meta-loc">Lisbon, Portugal</span>
+            <span class="masthead-meta-edition">{edition.label}</span>
+          </div>
+        </div>
+        <div class="masthead-tagline-row">
+          <span class="masthead-rule" aria-hidden="true"></span>
+          <span class="masthead-tagline">Software engineer turning toward sustainable urban mobility</span>
+          <span class="masthead-rule" aria-hidden="true"></span>
         </div>
       </div>
-      <div class="masthead-tagline-row">
-        <span class="masthead-rule" aria-hidden="true"></span>
-        <span class="masthead-tagline">Software engineer turning toward sustainable urban mobility</span>
-        <span class="masthead-rule" aria-hidden="true"></span>
+    </header>
+  ) : (
+    <header class="masthead compact">
+      <div class="masthead-inner">
+        <div class="masthead-compact-row">
+          <a href="/" class="masthead-wordmark">Matthew <span class="surname">Rossi</span></a>
+          <span class="masthead-issue">{edition.short}</span>
+        </div>
       </div>
-    </div>
-  </header>
+    </header>
+  )}
 
-  <nav class="broadsheet-nav" aria-label="Primary">
+  <nav class={`broadsheet-nav${isFullMasthead ? '' : ' broadsheet-nav-compact'}`} aria-label="Primary">
     <div class="broadsheet-nav-inner">
       <div class="page-links">
         {navLinks.map(link => (
@@ -101,9 +136,18 @@ const isHome = pathname === '/';
           </a>
         ))}
       </div>
-      <div class="nav-contact">
-        <ContactLinks />
-      </div>
+      {/*
+        The masthead contact row exists on the front page only. Everywhere else
+        the compact masthead drops it, because the footer already carries the
+        full set on every page and four icons twice per page was finding 4.2.
+        Here it is trimmed to GitHub + Email, per that finding's suggestion —
+        the two people actually reach for at the top of a page.
+      */}
+      {isFullMasthead && (
+        <div class="nav-contact">
+          <ContactLinks only={['github', 'email']} />
+        </div>
+      )}
     </div>
   </nav>
 

@@ -1,0 +1,23 @@
+---
+// The primary topic, inline in a post's meta line (findings 1.4 / 2.1).
+//
+// "Primary" is simply the FIRST tag in frontmatter — the ordering there is
+// editorial, most specific first, and it is the only signal available. One
+// linked topic replaces the five or six chips that used to sit between the
+// title and the prose; the full set moves to the post footer under "Filed
+// under", which is where discovery actually belongs.
+import { tagLabel } from '../lib/tags.js';
+
+interface Props {
+  tags: string[];
+}
+
+const [primary] = Astro.props.tags;
+---
+
+{primary && (
+  <>
+    <span class="meta-sep" aria-hidden="true">·</span>
+    <a href={`/blog/tag/${primary}/`} class="post-topic">{tagLabel(primary)}</a>
+  </>
+)}

@@ -14,22 +14,53 @@ export async function fetchRoute(path) {
   return { res, html };
 }
 
-/** Assertions that must hold on every on-demand HTML route. */
-function assertSharedChrome(label, res, html, activeHref) {
+/**
+ * Assertions that must hold on every on-demand HTML route.
+ *
+ * `home` gets the full masthead and interior pages get the compact one
+ * (finding 3.2). Both are asserted, in both directions: the full masthead
+ * appearing on an interior page is the regression this replaced, and the
+ * compact one appearing on the front page loses the site's signature.
+ */
+function assertSharedChrome(label, res, html, activeHref, { masthead = 'compact' } = {}) {
+  const full = masthead === 'full';
   checkStatus(`${label}: 200 OK`, res, 200);
   checkHeader(`${label}: Cache-Control max-age=3600`, res, 'cache-control', 'max-age=3600');
-  check(`${label}: full masthead`, html.includes('class="masthead full"'));
   check(
-    `${label}: edition line (Vol. X · No. Y · Month YYYY)`,
-    /Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+ · \w+ \d{4}/.test(html),
+    `${label}: ${masthead} masthead`,
+    html.includes(`class="masthead ${masthead}"`) && !html.includes(`class="masthead ${full ? 'compact' : 'full'}"`),
   );
-  // See the matching css-side guard in static.mjs — same prior-design regression.
+  if (full) {
+    check(
+      `${label}: edition line (Vol. X · No. Y · Month YYYY)`,
+      /Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+ · \w+ \d{4}/.test(html),
+    );
+  } else {
+    // The compact masthead prints the short form and drops the month, which is
+    // already in every dateline below it. Same issue() call either way — a
+    // mismatch between the two was finding 3.1.
+    check(
+      `${label}: issue line (Vol. X · No. Y)`,
+      /class="masthead-issue">Vol\. [IVXLCDM]+ · No\. [IVXLCDM]+</.test(html),
+    );
+  }
+  // See the matching css-side guard in static.mjs. Guards the class names of a
+  // DIFFERENT, earlier condensed masthead that was reverted — not the compact
+  // variant above, which is the August 2026 review's design.
   check(
     `${label}: no condensed-masthead residue`,
     !/masthead condensed|masthead-home-link|masthead-page-label/.test(html),
   );
+  // Twice on the front page (masthead row + footer), once everywhere else:
+  // the compact masthead drops the top row because the footer already carries
+  // it on every page (finding 4.2).
   const contactCount = occurrences(html, 'aria-label="Contact"');
-  check(`${label}: ContactLinks rendered twice`, contactCount === 2, `found ${contactCount}`);
+  const expectedContacts = full ? 2 : 1;
+  check(
+    `${label}: ContactLinks rendered ${expectedContacts}×`,
+    contactCount === expectedContacts,
+    `found ${contactCount}`,
+  );
   if (activeHref) {
     const activeRx = new RegExp(
       `<a[^>]*href="${activeHref}"[^>]*class="active"|<a[^>]*class="active"[^>]*href="${activeHref}"`,
@@ -64,7 +95,9 @@ export async function checkRoutes() {
     const [label, path, activeHref] = topRoutes[i];
     if (path === '/') homeHtml = html;
     if (path === '/blog') blog = { res, html };
-    assertSharedChrome(label, res, html, activeHref);
+    assertSharedChrome(label, res, html, activeHref, {
+      masthead: path === '/' ? 'full' : 'compact',
+    });
   });
 
   // Blog chain: pick a post + a tag off the index, then fetch both in parallel.
@@ -73,16 +106,33 @@ export async function checkRoutes() {
   check('blog index: links to at least one post', !!postSlug);
   check('blog index: links to at least one tag',  !!tag);
 
-  const [post, tagPage, rss] = await Promise.all([
+  const [post, tagPage, topics, rss] = await Promise.all([
     postSlug ? fetchRoute(`/blog/${postSlug}/`) : Promise.resolve(null),
     tag ? fetchRoute(`/blog/tag/${tag}/`) : Promise.resolve(null),
+    fetchRoute('/blog/tags'),
     fetchRoute('/blog/rss.xml'),
   ]);
 
   if (post) {
     assertSharedChrome(`blog post ${postSlug}`, post.res, post.html, '/blog');
     check(`blog post ${postSlug}: back link to /blog`, /href="\/blog"/.test(post.html));
+    checkPostFurniture(postSlug, post.html);
   }
+
+  assertSharedChrome('blog topics', topics.res, topics.html, '/blog');
+  check(
+    'blog topics: lists topics with counts',
+    /class="topic-row"/.test(topics.html) && /class="topic-count"/.test(topics.html),
+  );
+  check(
+    'blog index: Topics pill links to /blog/tags',
+    /href="\/blog\/tags"/.test(blog.html),
+    'the index header has no Topics pill',
+  );
+  // The count line is gone (finding 4.1) — the Topics pill took its place.
+  check('blog index: no "N posts" count line', !/class="post-count"/.test(blog.html));
+
+  await checkRetiredTagRedirect();
 
   // Lock in the <Figure> contract: the Netherlands cycling post embeds three
   // <Figure> components, each of which must render a <figcaption>. If this
@@ -98,10 +148,66 @@ export async function checkRoutes() {
   if (tagPage) {
     assertSharedChrome(`blog tag ${tag}`, tagPage.res, tagPage.html, '/blog');
     check(`blog tag ${tag}: lists at least one post`, /href="\/blog\/[^"/]+\//.test(tagPage.html));
+    check(
+      `blog tag ${tag}: links back to the topic index`,
+      /href="\/blog\/tags"/.test(tagPage.html),
+      'no "All topics" link — a reader who lands here can only go back',
+    );
+    check(`blog tag ${tag}: shows sibling topics`, /class="topic-siblings"/.test(tagPage.html));
   }
 
   checkRss(rss);
   return { homeHtml, blog, post };
+}
+
+/**
+ * What the August 2026 review moved around a post: one topic in the meta line
+ * rather than a chip row above the prose, the full set under "Filed under", the
+ * subscribe card, and the previous/next pair.
+ */
+function checkPostFurniture(slug, html) {
+  const bodyIdx = html.indexOf('class="post-body"');
+  const header = bodyIdx > 0 ? html.slice(0, bodyIdx) : html;
+
+  check(
+    `blog post ${slug}: one topic in the meta line`,
+    /class="post-topic"/.test(header),
+    'no .post-topic link before the post body',
+  );
+  // Finding 1.4 — the chip row between the title and the first word of prose.
+  check(
+    `blog post ${slug}: no tag chips above the prose`,
+    !/class="tag-chip"/.test(header),
+    'a tag chip still renders in the post header',
+  );
+  check(
+    `blog post ${slug}: "Filed under" chips in the footer`,
+    /class="post-tags-label">Filed under</.test(html) && /class="tag-chip"/.test(html),
+  );
+  check(`blog post ${slug}: subscribe card at the end`, /class="subscribe-card"/.test(html));
+  check(`blog post ${slug}: previous/next nav`, /class="post-nav"/.test(html));
+  // Per-post OG card (finding 3.4) — a published post must not fall back to the
+  // site-level image, and its alt text must be the post's own.
+  check(
+    `blog post ${slug}: per-post og:image`,
+    new RegExp(`property="og:image" content="[^"]*/og/${slug}\\.png"`).test(html),
+    'og:image still points at the generic /og.png',
+  );
+}
+
+/**
+ * A tag retired by the taxonomy consolidation must 301, not 404 — those URLs
+ * were on a chip under every post that carried them.
+ */
+async function checkRetiredTagRedirect() {
+  const res = await fetch(`${BASE}/blog/tag/urban-mobility/`, { redirect: 'manual' });
+  await res.text();
+  checkStatus('blog: retired tag 301s', res, 301);
+  check(
+    'blog: retired tag redirects to a live page',
+    res.headers.get('location') === '/blog/',
+    res.headers.get('location') ?? '(none)',
+  );
 }
 
 function checkRss(rss) {
@@ -173,11 +279,23 @@ export async function checkEndpoints({ homeHtml, blog }) {
 }
 
 function checkNewsletter(homeHtml, blog) {
-  // Newsletter form on /blog only.
+  // The signup, placement A: a one-line band under the blog index header,
+  // replacing the block that used to sit below the last entry (finding 2.2).
   check('blog index: newsletter form present', /id="newsletter-form"/.test(blog.html));
+  check('blog index: subscribe band, not the old block', /class="subscribe-line"/.test(blog.html));
   check(
     'blog index: Turnstile script tag',
     /challenges\.cloudflare\.com\/turnstile\/v0\/api\.js/.test(blog.html),
+  );
+  // The band sits ABOVE the first entry — that placement is the whole argument
+  // for it (always in view however long the archive gets), so it is worth
+  // asserting rather than assuming.
+  const bandIdx = blog.html.indexOf('class="subscribe-line"');
+  const firstEntryIdx = blog.html.indexOf('class="post-entry"');
+  check(
+    'blog index: subscribe band is above the first entry',
+    bandIdx > 0 && firstEntryIdx > 0 && bandIdx < firstEntryIdx,
+    'the band renders below the archive again',
   );
 
   // CSP must be set on the HTML response (via middleware, since public/_headers
@@ -213,10 +331,11 @@ function checkNewsletter(homeHtml, blog) {
     'an inline script referencing newsletter-form is still present',
   );
 
-  // The subscription fallback line ("Or follow by RSS · email me") must live
-  // OUTSIDE the .newsletter <aside> so ad-block filter lists that target the
-  // newsletter card don't hide it too. Regression guard against re-inlining
-  // the fallback into the form fineprint.
+  // The subscription fallback line ("Or follow by RSS") must live OUTSIDE the
+  // subscribe <aside> so ad-block filter lists that target the signup don't
+  // hide it too. The fine print was condensed to one line and the add-me-by-hand
+  // offer moved to /privacy (§5), but this note stays outside the aside for the
+  // reason it was put there: it is the fallback for the block being hidden.
   const followNoteIdx = blog.html.indexOf('class="blog-follow-note"');
   const newsletterCloseIdx = blog.html.indexOf('</aside>');
   check('blog: follow note present', followNoteIdx > 0, 'no blog-follow-note paragraph found');
@@ -232,8 +351,15 @@ function checkNewsletter(homeHtml, blog) {
     /class="blog-follow-note"/.test(afterAside),
     'after </aside>, found an ad-block-magnet class name on a sibling',
   );
-  check('home: no newsletter form (JS carve-out scoped to /blog)', !/id="newsletter-form"/.test(homeHtml));
+  // The carve-out is wider than it was — placement D puts the same form at the
+  // foot of every published post — but it is still scoped to the blog. The
+  // front page is the guard against a lift into Base.astro or shared chrome.
+  check('home: no newsletter form (JS carve-out scoped to the blog)', !/id="newsletter-form"/.test(homeHtml));
   check('home: no Turnstile script', !/challenges\.cloudflare\.com\/turnstile/.test(homeHtml));
+  // Finding 4.3 — the periodical's name doing some work outside /blog.
+  check('home: "From the Lexicon" block', /class="lexicon-teaser"/.test(homeHtml));
+  // Finding 3.3 — the Now dateline, so a stale block is legible as stale.
+  check('home: Now dateline', /class="section-updated">Updated \w+ \d{4}</.test(homeHtml));
 }
 
 async function checkSubscribe() {

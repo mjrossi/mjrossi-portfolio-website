@@ -331,11 +331,17 @@ function checkNewsletter(homeHtml, blog) {
     'an inline script referencing newsletter-form is still present',
   );
 
-  // The subscription fallback line ("Or follow by RSS") must live OUTSIDE the
-  // subscribe <aside> so ad-block filter lists that target the signup don't
-  // hide it too. The fine print was condensed to one line and the add-me-by-hand
-  // offer moved to /privacy (§5), but this note stays outside the aside for the
-  // reason it was put there: it is the fallback for the block being hidden.
+  // The subscription fallback line must live OUTSIDE the subscribe <aside> so
+  // ad-block filter lists that target the signup don't hide it too. Both halves
+  // matter — RSS *and* a human who will add you by hand — because a reader whose
+  // blocker ate the form is exactly the reader who never reaches /privacy to
+  // find the offer there. §5 condensed the form's own fine print; it did not
+  // mean to take this with it.
+  check(
+    'blog: follow note keeps the add-me-by-hand offer',
+    /class="blog-follow-note"[\s\S]{0,240}?\/api\/contact/.test(blog.html),
+    'the hand-add fallback is gone — a blocked form leaves no way to subscribe',
+  );
   const followNoteIdx = blog.html.indexOf('class="blog-follow-note"');
   const newsletterCloseIdx = blog.html.indexOf('</aside>');
   check('blog: follow note present', followNoteIdx > 0, 'no blog-follow-note paragraph found');

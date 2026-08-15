@@ -694,6 +694,36 @@ export async function checkHostUnlock() {
     'the home page featured the smoke fixture — getLatestPost stopped skipping it',
   );
 
+  // Same shape one surface over: previous/next is the other slot that names a
+  // specific post, so the newest real post's "Next →" pointed at the fixture.
+  //
+  // The subject is discovered rather than named — the index is newest-first and
+  // reveals the fixture on this host, so the first non-fixture post link is the
+  // newest real post, which is precisely the one whose neighbour the fixture
+  // would be. Naming a slug here would rot the day a post's date moved.
+  const previewIndexHtml = await previewIndex.text();
+  const newestRealSlug = [...previewIndexHtml.matchAll(/href="\/blog\/(?!tag\/|tags|rss)([^"/]+)\//g)]
+    .map((m) => m[1])
+    .find((slug) => slug !== FIXTURE_SLUG);
+  check(
+    'preview host: the index still lists a real post to check',
+    !!newestRealSlug,
+    'no non-fixture post link on /blog — the assertion below would be vacuous',
+  );
+  if (newestRealSlug) {
+    const previewNewest = await asHost(`/blog/${newestRealSlug}/`, PREVIEW_HOST);
+    const newestHtml = await previewNewest.text();
+    const navStart = newestHtml.indexOf('class="post-nav"');
+    const nav = navStart > 0 ? newestHtml.slice(navStart, newestHtml.indexOf('</nav>', navStart)) : '';
+    check(
+      `preview host: ${newestRealSlug} previous/next does not link the fixture`,
+      nav.length > 0 && !nav.includes(FIXTURE_SLUG),
+      navStart > 0
+        ? 'the fixture is a neighbour again — getAdjacentPosts stopped filtering it'
+        : 'no .post-nav on the newest post — previous/next is missing entirely',
+    );
+  }
+
   // The negative twin: the Worker's OWN workers.dev alias serves production on
   // a hostname anyone can derive from this repo, so it must NOT unlock. Only
   // proven at the unit level until now.

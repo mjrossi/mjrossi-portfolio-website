@@ -125,12 +125,19 @@ export async function getTagCounts(opts: PostQuery = {}): Promise<{ tag: string;
  * once. A post the query cannot see (a draft, on production) yields two nulls
  * rather than throwing — the route rendering it has already decided the reader
  * may be there.
+ *
+ * The fixture is excluded for the same reason getLatestPost excludes it: dated
+ * 2099, it is the newest entry wherever scheduled posts are visible, so on a
+ * preview host the newest real post's "Next →" pointed at "Scheduled-post
+ * fixture (not a real post)". A consequence worth naming: on the fixture's OWN
+ * page this returns two nulls, so its nav reads "Oldest post" / "Newest post".
+ * That page is a test artifact and its neighbours are not a thing anyone needs.
  */
 export async function getAdjacentPosts(
   id: string,
   opts: PostQuery = {},
 ): Promise<{ previous: Post | null; next: Post | null }> {
-  const posts = await getPublishedPosts(opts);
+  const posts = (await getPublishedPosts(opts)).filter((post) => post.id !== FIXTURE_SLUG);
   const i = posts.findIndex((p) => p.id === id);
   if (i === -1) return { previous: null, next: null };
   return {

@@ -194,10 +194,34 @@ a.masthead-name-link:hover .surname {
 /* Compact masthead — every page but the front one (finding 3.2).
    Two bands instead of five: wordmark + issue here, nav below, closed by one
    heavy rule. The tagline and the contact row are dropped rather than shrunk;
-   both are in the footer on every page already. */
+   both are in the footer on every page already.
+
+   IT IS A SMALLER MASTHEAD, NOT A DIFFERENT COMPONENT — which is what the first
+   attempt got wrong. That one kept the amber band and shrank it to a 41px
+   strip, so it read as a toolbar rather than a nameplate: the same colour doing
+   none of the same work. And at 0.95rem the wordmark sat only 0.17rem above the
+   nav, so the eye landed on the active nav pill before the name.
+
+   So: the amber band is now the FRONT PAGE'S signature and nothing else's,
+   which is what a broadsheet actually does — the flag runs in full on page one
+   and inside pages carry a quieter running head. Interior pages set the
+   nameplate on the cream page background at a size that unambiguously outranks
+   the nav. Still roughly half the chrome of the full masthead. */
+
+.masthead.compact {
+  background: var(--bg);
+  border-bottom: 0;
+}
+
+/* The grain overlay and the double rule belong to the amber band; with no band
+   under them they are texture and a rule floating on the page. */
+.masthead.compact::before,
+.masthead.compact::after {
+  display: none;
+}
 
 .masthead.compact .masthead-inner {
-  padding: 0.7rem var(--pad) 0.6rem;
+  padding: 1.15rem var(--pad) 0.55rem;
 }
 
 .masthead-compact-row {
@@ -209,10 +233,10 @@ a.masthead-name-link:hover .surname {
 
 .masthead-wordmark {
   font-family: var(--font-serif);
-  font-size: 0.95rem;
+  font-size: 2rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
   color: var(--text);
   text-decoration: none;
   font-optical-sizing: auto;
@@ -229,7 +253,7 @@ a.masthead-name-link:hover .surname {
 
 .masthead-issue {
   font-family: var(--font-ui);
-  font-size: 0.62rem;
+  font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -822,6 +846,16 @@ em {
   .broadsheet-nav-compact .broadsheet-nav-inner {
     padding-top: 0.6rem;
     padding-bottom: 0.6rem;
+  }
+
+  /* The nameplate steps down with the measure — at 2rem it and the issue
+     together are wider than a 360px column once the gutter is taken out. */
+  .masthead-wordmark {
+    font-size: 1.5rem;
+  }
+
+  .masthead.compact .masthead-inner {
+    padding: 0.85rem var(--pad) 0.45rem;
   }
 
   .nav-contact {

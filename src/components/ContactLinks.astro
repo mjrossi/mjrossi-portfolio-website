@@ -3,38 +3,20 @@
 // stay CSP-clean (same-origin, no external <img src>). Each anchor carries
 // its own aria-label; the wrapper nav's aria-label names the cluster.
 //
-// `only` narrows the set without forking the markup. The footer takes all four
-// on every page; the front page's masthead row takes GitHub + Email (finding
-// 4.2 — four icons twice on one page). Interior pages have no masthead row at
-// all now, so this is the front page's problem alone. An unknown key is a
-// build-time error rather than a silently missing icon.
-interface Props {
-  only?: string[];
-}
-
-const { only } = Astro.props;
-
+// ONCE PER PAGE, in the footer. There is no masthead contact row any more: the
+// nav strip has to be identical on every page (see Base.astro on why the nav
+// sits above the masthead), and a row of icons present on one page's strip and
+// absent from another's is exactly the difference that ordering removes.
+// Finding 4.2 wanted the duplication gone in any case.
 const LINKS = [
   { key: 'github', href: 'https://github.com/mjrossi', label: 'GitHub', external: true },
   { key: 'linkedin', href: 'https://www.linkedin.com/in/matthew-j-rossi/', label: 'LinkedIn', external: true },
   { key: 'email', href: '/api/contact', label: 'Email', external: false },
   { key: 'bluesky', href: 'https://bsky.app/profile/mjrossi.com', label: 'Bluesky', external: true },
 ];
-
-if (only) {
-  const known = new Set(LINKS.map((l) => l.key));
-  const unknown = only.filter((k) => !known.has(k));
-  if (unknown.length > 0) {
-    throw new Error(
-      `ContactLinks: unknown key(s) ${unknown.join(', ')} — expected one of ${[...known].join(', ')}`,
-    );
-  }
-}
-
-const shown = only ? LINKS.filter((l) => only.includes(l.key)) : LINKS;
 ---
 <nav class="contact-links" aria-label="Contact">
-  {shown.map((link) => (
+  {LINKS.map((link) => (
     <a
       href={link.href}
       target={link.external ? '_blank' : undefined}

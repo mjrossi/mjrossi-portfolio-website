@@ -208,9 +208,13 @@ a.masthead-name-link:hover .surname {
    nameplate on the cream page background at a size that unambiguously outranks
    the nav. Still roughly half the chrome of the full masthead. */
 
+/* The heavy rule closes the interior header. It lives here rather than on the
+   nav because the nav is now the strip ABOVE the masthead on every page — put
+   it there and it would divide the nav from the nameplate instead of closing
+   the pair against the content. */
 .masthead.compact {
   background: var(--bg);
-  border-bottom: 0;
+  border-bottom: 2px solid var(--text);
 }
 
 /* The grain overlay and the double rule belong to the amber band; with no band
@@ -261,20 +265,14 @@ a.masthead-name-link:hover .surname {
   white-space: nowrap;
 }
 
-/* The heavy rule is what closes the compact header as one unit — it replaces
-   the full masthead's double band, so it lives on the nav rather than on the
-   masthead itself. */
-.broadsheet-nav-compact {
-  border-bottom: 2px solid var(--text);
-}
 
-.broadsheet-nav-compact .broadsheet-nav-inner {
-  padding-top: 0.35rem;
-  padding-bottom: 0.5rem;
-}
+/* ── Broadsheet nav ─────────────────────────────────── */
 
-/* ── Broadsheet nav (page + contact links) ──────────── */
-
+/* THE ONE FIXED THING ON THE PAGE. It sits above the masthead on every route,
+   with identical content and identical height, so a nav item is at the same y
+   whichever page you are on and clicking one never moves the others out from
+   under the cursor. Everything that varies between the front page and an
+   interior page varies BELOW it. */
 .broadsheet-nav {
   background: var(--bg);
   border-bottom: 1px solid var(--border);
@@ -285,7 +283,6 @@ a.masthead-name-link:hover .surname {
   margin: 0 auto;
   padding: 0.55rem var(--pad);
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 1rem;
 }
@@ -829,23 +826,15 @@ em {
     white-space: normal;
   }
 
+  /* No column stacking any more: the strip holds nav links and nothing else,
+     and it must stay the same height on every page at every width. */
   .broadsheet-nav-inner {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.6rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.65rem;
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
   }
 
   .broadsheet-nav-inner .page-links {
     gap: 0.8rem;
-  }
-
-  /* Higher specificity than the base compact rule, so the phone padding wins
-     over it rather than the other way round. */
-  .broadsheet-nav-compact .broadsheet-nav-inner {
-    padding-top: 0.6rem;
-    padding-bottom: 0.6rem;
   }
 
   /* The nameplate steps down with the measure — at 2rem it and the issue
@@ -856,10 +845,6 @@ em {
 
   .masthead.compact .masthead-inner {
     padding: 0.85rem var(--pad) 0.45rem;
-  }
-
-  .nav-contact {
-    display: none;
   }
 
   .broadsheet-footer-inner {

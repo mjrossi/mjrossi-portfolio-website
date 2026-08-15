@@ -51,15 +51,30 @@ function assertSharedChrome(label, res, html, activeHref, { masthead = 'compact'
     `${label}: no condensed-masthead residue`,
     !/masthead condensed|masthead-home-link|masthead-page-label/.test(html),
   );
-  // Twice on the front page (masthead row + footer), once everywhere else:
-  // the compact masthead drops the top row because the footer already carries
-  // it on every page (finding 4.2).
+  // Once per page, in the footer, on every route (finding 4.2). The masthead
+  // contact row is gone entirely — see the nav-order check below for why the
+  // strip has to be identical everywhere.
   const contactCount = occurrences(html, 'aria-label="Contact"');
-  const expectedContacts = full ? 2 : 1;
   check(
-    `${label}: ContactLinks rendered ${expectedContacts}×`,
-    contactCount === expectedContacts,
+    `${label}: ContactLinks rendered once`,
+    contactCount === 1,
     `found ${contactCount}`,
+  );
+
+  // THE NAV STRIP COMES BEFORE THE MASTHEAD, ON EVERY PAGE.
+  //
+  // With the masthead first, the nav sat at y=144 on the front page and y=62
+  // everywhere else — an 85px jump on every navigation away from home, landing
+  // the cursor over content instead of over the nav it just used. Only the DOM
+  // order is checkable here (smoke has no browser and cannot measure layout),
+  // but the order is what produces the position, and reordering these two is
+  // the one way the jump comes back.
+  const navIdx = html.indexOf('class="broadsheet-nav"');
+  const mastIdx = html.indexOf('class="masthead ');
+  check(
+    `${label}: nav strip precedes the masthead`,
+    navIdx > 0 && mastIdx > 0 && navIdx < mastIdx,
+    'the masthead is back above the nav — nav position will differ between home and interior pages',
   );
   if (activeHref) {
     const activeRx = new RegExp(

@@ -91,6 +91,38 @@ const isHome = pathname === '/';
 </head>
 <body>
 
+  {/*
+    NAV FIRST, ON EVERY PAGE, AND THIS ORDER IS THE POINT.
+
+    With the masthead above it, the nav sat at y=144 on the front page and y=62
+    everywhere else — an 85px jump on every navigation away from home. Click
+    "Work" and your cursor lands 85px below the nav on the page you arrive at,
+    over the content, so reaching a second section means going back up. Print
+    varies the flag between page one and inside pages, but print is not clicked;
+    on the web the nav is the thing that has to stay put.
+
+    So the strip is identical on every page — same content, same height, same
+    y — and the masthead varies beneath it. That is also why the contact row is
+    gone from here entirely (finding 4.2): the footer carries all four on every
+    page, and icons that appeared on one page's strip and not another's would
+    reintroduce the difference this order exists to remove.
+  */}
+  <nav class="broadsheet-nav" aria-label="Primary">
+    <div class="broadsheet-nav-inner">
+      <div class="page-links">
+        {navLinks.map(link => (
+          <a
+            href={link.href}
+            class={pathname === link.href || pathname.startsWith(link.href + '/') ? 'active' : ''}
+            aria-current={pathname === link.href || pathname.startsWith(link.href + '/') ? 'page' : undefined}
+          >
+            {link.label}
+          </a>
+        ))}
+      </div>
+    </div>
+  </nav>
+
   {isFullMasthead ? (
     <header class="masthead full">
       <div class="masthead-inner">
@@ -122,34 +154,6 @@ const isHome = pathname === '/';
       </div>
     </header>
   )}
-
-  <nav class={`broadsheet-nav${isFullMasthead ? '' : ' broadsheet-nav-compact'}`} aria-label="Primary">
-    <div class="broadsheet-nav-inner">
-      <div class="page-links">
-        {navLinks.map(link => (
-          <a
-            href={link.href}
-            class={pathname === link.href || pathname.startsWith(link.href + '/') ? 'active' : ''}
-            aria-current={pathname === link.href || pathname.startsWith(link.href + '/') ? 'page' : undefined}
-          >
-            {link.label}
-          </a>
-        ))}
-      </div>
-      {/*
-        The masthead contact row exists on the front page only. Everywhere else
-        the compact masthead drops it, because the footer already carries the
-        full set on every page and four icons twice per page was finding 4.2.
-        Here it is trimmed to GitHub + Email, per that finding's suggestion —
-        the two people actually reach for at the top of a page.
-      */}
-      {isFullMasthead && (
-        <div class="nav-contact">
-          <ContactLinks only={['github', 'email']} />
-        </div>
-      )}
-    </div>
-  </nav>
 
   <main>
     <slot />

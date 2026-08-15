@@ -15,9 +15,14 @@ interface Props {
 const [primary] = Astro.props.tags;
 ---
 
+{/*
+  The separator and the topic are ONE flex item, not two. As siblings they wrap
+  independently, so at 360px the "·" strands at the end of a line with the topic
+  below it, which reads as a typo rather than as punctuation.
+*/}
 {primary && (
-  <>
+  <span class="post-topic-item">
     <span class="meta-sep" aria-hidden="true">·</span>
     <a href={`/blog/tag/${primary}/`} class="post-topic">{tagLabel(primary)}</a>
-  </>
+  </span>
 )}

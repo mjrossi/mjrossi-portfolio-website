@@ -276,6 +276,22 @@ export function checkBuildArtifacts() {
   check('css: condensed masthead rules gone',
     !/\.masthead\.condensed|\.masthead-home-link|\.masthead-page-label/.test(css));
 
+  // The interior-page section label must stay scoped to a section's own
+  // heading. As a bare `.page h2` it reached every component rendered inside a
+  // .page: .post-entry-title lost to it outright (index titles at 0.88rem in
+  // accent small-caps), and .post-body h2 inherited the all-small-caps and
+  // smcp/c2sc it doesn't itself declare — which is the "headings styled as
+  // labels" of finding 1.1 and the "titles are the third thing you see" of 2.1,
+  // both surviving a change to the component rules because those rules never
+  // won. Nothing else in this suite can see it: it is a cascade outcome, not
+  // markup, so the live matrix reads exactly the same either way, and the
+  // symptom is a page that renders — just wrongly.
+  check(
+    'css: section-label rule is scoped to .page > section > h2',
+    css.includes('.page>section>h2{') && !/[^>]\.page h2\{/.test(css),
+    'a bare `.page h2` rule is back in the bundle — it will swallow post and entry headings',
+  );
+
   // The galley's styles must not reach the public CSS bundle. A processed
   // <style> in GalleyMargin.astro is hoisted into the /blog/[...slug] stylesheet
   // by the static module graph, NOT by the runtime condition that renders the

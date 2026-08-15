@@ -562,7 +562,21 @@ section {
   padding-top: 2.75rem;
 }
 
-.page h2 {
+/* The interior page's SECTION LABEL — /urban-mobility's "Civic Technology",
+   /privacy's "Anti-spam". Scoped to a section's own heading with `>` and not
+   left as a bare `.page h2`, which reached into every component rendered
+   inside a .page and is the actual mechanism behind two findings in the
+   August 2026 review:
+     - .post-entry-title (0,1,0) lost to it outright, so index titles rendered
+       at 0.88rem in accent small-caps — "titles are the third thing you see"
+       (2.1), and a rule bumping them to 1.3rem would never have applied.
+     - .post-body h2 won on the properties it declares but not on the two it
+       doesn't, so `font-variant-caps: all-small-caps` and the smcp/c2sc
+       feature settings leaked into post prose — headings "styled as labels,
+       not headings" (1.1), which the serif treatment alone did not fix.
+   Both legitimate call sites are `.page > section > h2`, so nothing that
+   should carry this style loses it. */
+.page > section > h2 {
   font-family: var(--font-serif);
   font-variant-caps: all-small-caps;
   font-feature-settings: 'smcp', 'c2sc';
@@ -859,10 +873,15 @@ em {
   padding-top: 0;
 }
 
+/* flex-wrap, matching .post-meta on the post page. Without it the items don't
+   wrap — the text inside each one does, so at 360px a three-item line breaks
+   into ragged columns with the separators orphaned between them. The topic
+   (finding 2.1) is the third item that made this visible. */
 .post-entry-meta {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.85rem;
   font-family: var(--font-ui);
   color: var(--muted);
   font-size: 0.78rem;
@@ -1542,7 +1561,14 @@ em {
   margin-bottom: 0.45rem;
 }
 
-/* Primary topic, inline in a meta line (findings 1.4 / 2.1). */
+/* Primary topic, inline in a meta line (findings 1.4 / 2.1). The separator
+   travels with it as one flex item so a wrap never leaves the "·" behind. */
+.post-topic-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
 .post-topic {
   color: var(--accent-tagline);
   text-decoration: none;

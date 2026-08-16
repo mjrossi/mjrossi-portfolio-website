@@ -746,21 +746,38 @@ em {
     padding-bottom: 0;
   }
 
+  /* The tagline row is the band that costs most and earns least on a phone.
+     It wraps to two lines at 360px, and with its flanking rules and top margin
+     it is ~64px of a 302px header — a header that was already 38% of an 800px
+     viewport, putting a post's own title past the halfway line before the
+     reader had scrolled. The claim it makes is in the About copy on the front
+     page and in every page's meta description, and it stays intact from 640px
+     up, where it fits one line and reads as part of the flag. */
+  .masthead-tagline-row {
+    display: none;
+  }
+
   .masthead-tagline {
     white-space: normal;
   }
 
+  /* The other half of the same saving. The nav is a third of the mobile header
+     on its own: five links wrap to two rows, and the generous desktop spacing
+     is what makes those rows tall. Only the vertical is tightened — the column
+     gap stays 0.9rem, because that horizontal breathing is what keeps the
+     labels reading as five separate links rather than one run of words, and
+     each link keeps its ~30px height. */
   .broadsheet-nav-inner {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.6rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.65rem;
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
   }
 
   .broadsheet-nav-inner .page-links {
     flex-wrap: wrap;
-    gap: 0.9rem;
+    gap: 0.4rem 0.9rem;
   }
 
   .nav-contact {

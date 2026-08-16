@@ -34,12 +34,17 @@ const fullTitle = title === 'Matthew Rossi' ? title : `${title} — Matthew Ross
 // between /blog and everything else. See src/lib/edition.js.
 const edition = issue();
 
+// `pinned` is a rendering hint for phone widths only: the nav becomes one
+// scrolling row there, and the pinned link stops scrolling with it. It is last
+// in this list and last in the DOM, so pinning changes nothing about reading
+// order, tab order, or the desktop row — see `.page-links a.nav-pinned` in
+// global.css for why the blog is the link that gets it.
 const navLinks = [
   { href: '/work', label: 'Work' },
   { href: '/projects', label: 'Projects' },
   { href: '/education', label: 'Education' },
   { href: '/urban-mobility', label: 'Urban Mobility' },
-  { href: '/blog', label: 'Blog' },
+  { href: '/blog', label: 'Blog', pinned: true },
 ];
 
 const isHome = pathname === '/';
@@ -102,15 +107,18 @@ const isHome = pathname === '/';
   <nav class="broadsheet-nav" aria-label="Primary">
     <div class="broadsheet-nav-inner">
       <div class="page-links">
-        {navLinks.map(link => (
-          <a
-            href={link.href}
-            class={pathname === link.href || pathname.startsWith(link.href + '/') ? 'active' : ''}
-            aria-current={pathname === link.href || pathname.startsWith(link.href + '/') ? 'page' : undefined}
-          >
-            {link.label}
-          </a>
-        ))}
+        {navLinks.map(link => {
+          const current = pathname === link.href || pathname.startsWith(link.href + '/');
+          return (
+            <a
+              href={link.href}
+              class:list={[{ active: current, 'nav-pinned': link.pinned }]}
+              aria-current={current ? 'page' : undefined}
+            >
+              {link.label}
+            </a>
+          );
+        })}
       </div>
       <div class="nav-contact">
         <ContactLinks />

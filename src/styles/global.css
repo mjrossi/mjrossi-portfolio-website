@@ -193,22 +193,6 @@ a.masthead-name-link:hover .surname {
 
 /* ── Broadsheet nav (page + contact links) ──────────── */
 
-/* The two ends of the mobile nav's fade mask, registered so they can be
-   INTERPOLATED — an unregistered custom property is an untyped token and a
-   keyframe between two of them snaps rather than ramps. Only the phone-width
-   scrolling nav uses them; see the mask under the 639px query. */
-@property --nav-fade-start {
-  syntax: '<length>';
-  inherits: false;
-  initial-value: 0px;
-}
-
-@property --nav-fade-end {
-  syntax: '<length>';
-  inherits: false;
-  initial-value: 0px;
-}
-
 .broadsheet-nav {
   background: var(--bg);
   border-bottom: 1px solid var(--border);
@@ -794,9 +778,8 @@ em {
      Keyboard users reach the far end by Tab, which scrolls it into view
      without any script.
 
-     The clipped last label was ALSO meant to be the affordance, and it is not
-     one — see the fade under .page-links below for what the measurements
-     actually showed. */
+     What must NOT be left to the scroll is the blog — see
+     `.page-links a.nav-pinned` below. */
   .broadsheet-nav-inner {
     flex-direction: column;
     align-items: flex-start;
@@ -811,85 +794,72 @@ em {
     gap: 1.1rem;
     /* The gutter moves onto the scroller so the row starts flush with the page
        and runs to the very edge — clipped mid-label rather than at an inset,
-       which is what makes "there is more" legible. */
-    padding: 0 var(--pad);
+       which is what makes "there is more" legible.
+       LEFT ONLY. The right gutter belongs to the pinned link below, which
+       carries it as its own padding so that its opaque background reaches the
+       screen edge; left here, the scrolling labels would show through the strip
+       between the pin and the edge. */
+    padding: 0 0 0 var(--pad);
     scroll-snap-type: x proximity;
     /* The gutter above is padding ON the scroller, so without this the snap
        engine aligns the first link against the padding box and rests at
-       scrollLeft: 20 — "Work" flush to the screen edge, and the start-of-row
-       fade below already lit while you are still at the start. Insetting the
-       snapport by the same gutter puts the resting position back at 0. */
-    scroll-padding-inline: var(--pad);
+       scrollLeft: 20 — "Work" flush to the screen edge rather than on the
+       page's margin. Insetting the snapport by the same gutter puts the resting
+       position back at 0. */
+    scroll-padding-inline-start: var(--pad);
     scrollbar-width: none;
-
-    /* THE EDGE SAYS "MORE", BECAUSE THE CUT DOES NOT.
-       The row above was built on the idea that the clipped last label is its
-       own affordance. Measured across the widths phones actually use, that
-       holds at 320 and 360 — "Urban Mobility" is cut mid-word — and fails at
-       exactly the two commonest ones: at 375 the row ends FLUSH after "Urban
-       Mobility" with "Blog" entirely off screen, and at 390 two pixels of
-       "Blog" survive. Both read as a complete row, and the item they hide is
-       the blog. So the edge has to carry the signal on its own rather than
-       depend on where the cut happens to land.
-
-       Driven by the scroll position itself, which a static gradient cannot
-       match on three counts:
-         - it is ABSENT when the row does not overflow. Between 480px and this
-           query's 639px ceiling all five links fit, and a scroll timeline with
-           nothing to scroll is inactive — the animation does not apply and the
-           base value below (both ends 0, i.e. no fade) stands. No width
-           threshold to guess at, and none to re-guess when a label is renamed.
-         - the right fade LIFTS at the end of the scroll, so the last label is
-           never left permanently dimmed.
-         - a left fade appears once scrolled, so "there is more back that way"
-           is legible too.
-       Browsers without scroll-driven animations (Safari < 26, Firefox < 144)
-       keep the base value, which is today's behaviour exactly — this can only
-       add the hint, never take one away. */
-    -webkit-mask-image: linear-gradient(to right,
-      transparent 0, #000 var(--nav-fade-start),
-      #000 calc(100% - var(--nav-fade-end)), transparent 100%);
-    mask-image: linear-gradient(to right,
-      transparent 0, #000 var(--nav-fade-start),
-      #000 calc(100% - var(--nav-fade-end)), transparent 100%);
-  }
-
-  @supports (animation-timeline: scroll()) {
-    .broadsheet-nav-inner .page-links {
-      animation-name: nav-scroll-edges;
-      animation-timing-function: linear;
-      animation-fill-mode: both;
-      /* Longhands, not the `animation` shorthand: the shorthand resets
-         animation-duration, and a scroll-driven animation needs `auto` to span
-         its timeline rather than the 0s a reset would leave behind. */
-      animation-duration: auto;
-      animation-timeline: scroll(self inline);
-    }
-
-    /* The ramps sit near the ends rather than spread across the scroll, so the
-       hint resolves as you actually arrive rather than dimming both edges
-       through the middle of a short row. */
-    @keyframes nav-scroll-edges {
-      0% {
-        --nav-fade-start: 0px;
-        --nav-fade-end: 2rem;
-      }
-
-      12%, 88% {
-        --nav-fade-start: 2rem;
-        --nav-fade-end: 2rem;
-      }
-
-      100% {
-        --nav-fade-start: 2rem;
-        --nav-fade-end: 0px;
-      }
-    }
   }
 
   .broadsheet-nav-inner .page-links a {
     flex: 0 0 auto;
     scroll-snap-align: start;
+  }
+
+  /* THE BLOG DOES NOT SCROLL AWAY.
+     Measured on the real page before this rule existed, "Blog" was 0px visible
+     at 320, 360, 375 AND 390 — every common phone width — and only 6px at 414.
+     It was reachable solely by scrolling a row that gave no sign it could
+     scroll.
+
+     What stood there instead was a 32px fade mask on the row's right edge,
+     driven by a scroll-timeline animation. Two things were wrong with it. It is
+     not an affordance: at 375 the row ends on the complete phrase "Urban
+     Mobility", so a dimmed final label reads as the end of the list rather than
+     as a cut. And it was engine-dependent in a way nothing here could see —
+     the fade computes correctly in Chrome (verified: 32px at rest) and is
+     absent in a Firefox render of the same page, which is where this was
+     reported from.
+
+     So the one link that must never be missed stops scrolling. `position:
+     sticky` inside the scroller holds it against the right edge while the other
+     four run underneath — and content visibly disappearing beneath a pinned
+     item is the affordance the fade was reaching for, drawn by layout rather
+     than by an animation. No width threshold: where the row does not overflow
+     (roughly 480px up to this query's ceiling) sticky simply has nothing to do
+     and the link sits in flow. */
+  .broadsheet-nav-inner .page-links a.nav-pinned {
+    position: sticky;
+    right: 0;
+    /* Sticky makes a stacking context; last-in-DOM would paint on top anyway,
+       but say so rather than depend on source order. */
+    z-index: 1;
+    /* Opaque, or the labels passing underneath show through. Matches
+       .broadsheet-nav's own background. */
+    background: var(--bg);
+    /* The row's right gutter, carried here — see the scroller's padding above. */
+    padding-right: var(--pad);
+    /* Reads as a divider between the section pages and the periodical at every
+       width, and as the edge things vanish behind while the row is scrolling. */
+    border-left: 1px solid var(--border);
+    /* Snapping the pinned link would let the scroller rest with it part-way off
+       screen, which is the whole failure being fixed. */
+    scroll-snap-align: none;
+  }
+
+  /* .active paints --bg2 and must keep winning over the opaque background
+     above — this is the /blog page's own nav entry. */
+  .broadsheet-nav-inner .page-links a.nav-pinned.active {
+    background: var(--bg2);
   }
 
   .broadsheet-nav-inner .page-links::-webkit-scrollbar {

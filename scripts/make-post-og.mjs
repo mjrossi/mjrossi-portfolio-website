@@ -91,7 +91,8 @@ const escapeXml = (s) =>
  * word over the card's right edge. The caller compensates by stepping the size
  * down until it fits, so the failure mode is a slightly small title.
  *
- * Returns null when even `maxLines` won't hold it at this size.
+ * Returns null when this size won't hold the text — either because it needs
+ * more than `maxLines` lines, or because one word is wider than a whole line.
  */
 function wrap(text, fontSize, maxWidth, maxLines) {
   const perChar = fontSize * 0.58;
@@ -100,6 +101,19 @@ function wrap(text, fontSize, maxWidth, maxLines) {
   let line = '';
 
   for (const word of text.split(/\s+/)) {
+    // A word that cannot fit a line on its own will overflow wherever it lands,
+    // so report failure and let the caller step the size down.
+    //
+    // This has to be checked BEFORE the line is assembled. Below, a word too
+    // long for the current line becomes the new line unmeasured — so a title
+    // whose longest word exceeds maxChars was returned as a "fitting" single
+    // line and fitTitle took it at the FIRST rung, 72px, where the ladder that
+    // exists to catch exactly this never ran at all. Any word of 26 characters
+    // or more did it (maxChars is 25 at 72px), and the result was a valid PNG
+    // with the title running off the right edge — which nothing downstream can
+    // see, since smoke asserts the card exists and is over 1KB.
+    if (word.length > maxChars) return null;
+
     const candidate = line ? `${line} ${word}` : word;
     if (candidate.length <= maxChars) {
       line = candidate;

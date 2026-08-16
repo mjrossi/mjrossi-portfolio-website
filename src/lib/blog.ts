@@ -120,18 +120,18 @@ export async function getTagCounts(opts: PostQuery = {}): Promise<{ tag: string;
  * one — named for the reader's direction of travel through the archive, not for
  * the array's.
  *
- * Both can be null, and the caller renders that as a filled cell rather than a
- * gap; a post that is its own neighbour is impossible because a slug appears
- * once. A post the query cannot see (a draft, on production) yields two nulls
- * rather than throwing — the route rendering it has already decided the reader
- * may be there.
+ * Either can be null, and the caller renders that end as nothing at all — see
+ * PostNav.astro for why a placeholder cell was worse than the gap. A post that
+ * is its own neighbour is impossible because a slug appears once. A post the
+ * query cannot see (a draft, on production) yields two nulls rather than
+ * throwing — the route rendering it has already decided the reader may be there.
  *
  * The fixture is excluded for the same reason getLatestPosts excludes it: dated
  * 2099, it is the newest entry wherever scheduled posts are visible, so on a
  * preview host the newest real post's "Next →" pointed at "Scheduled-post
  * fixture (not a real post)". A consequence worth naming: on the fixture's OWN
- * page this returns two nulls, so its nav reads "Oldest post" / "Newest post".
- * That page is a test artifact and its neighbours are not a thing anyone needs.
+ * page this returns two nulls, so it renders no previous/next nav at all. That
+ * page is a test artifact and its neighbours are not a thing anyone needs.
  */
 export async function getAdjacentPosts(
   id: string,

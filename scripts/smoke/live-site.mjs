@@ -91,6 +91,23 @@ export async function checkRoutes() {
     assertSharedChrome(`blog post ${postSlug}`, post.res, post.html, '/blog');
     check(`blog post ${postSlug}: back link to /blog`, /href="\/blog"/.test(post.html));
     checkPostFurniture(postSlug, post.html);
+    // The index is newest-first, so postSlug is the newest published post and
+    // therefore the one post with no "next" neighbour. That end of the nav must
+    // render NOTHING — it used to carry a dead "Newest post" cell, which under
+    // the NEXT → key reads as the next post's title in a cell that links
+    // everywhere else, i.e. as a broken link. This is the only place smoke knows
+    // which post is at an end of the archive, so it is the only place the
+    // absence can be asserted; PostNav's other branch is covered by the
+    // furniture check above, which pins the nav being present at all.
+    const navStart = post.html.indexOf('class="post-nav"');
+    const nav = navStart < 0 ? '' : post.html.slice(navStart, post.html.indexOf('</nav>', navStart));
+    check(
+      `blog post ${postSlug}: newest post has no "next" cell`,
+      nav.length > 0 && !nav.includes('rel="next"') && !/Newest post|Oldest post/.test(nav),
+      navStart < 0
+        ? 'no .post-nav at all on the newest post'
+        : 'a next cell or an end-of-archive placeholder is back on the newest post',
+    );
     await checkOgCardServed(postSlug);
   }
 

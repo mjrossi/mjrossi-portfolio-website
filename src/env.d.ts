@@ -87,6 +87,19 @@ declare namespace App {
   }
 }
 
+/**
+ * Epoch ms at which this bundle was built, inlined as a literal by Vite's
+ * `define` (see astro.config.mjs). Not an env var and deliberately not on
+ * ImportMetaEnv — it is a fact about the artifact, not about the environment
+ * running it.
+ *
+ * The one consumer is src/layouts/BlogPost.astro, deciding whether
+ * scripts/make-post-og.mjs generated a card for a post. Anything asking "is
+ * this post live?" wants `isPublished(pubDate)` with the real clock instead —
+ * this value is frozen at the deploy and answers a different question.
+ */
+declare const __BUILD_TIME__: number;
+
 interface ImportMetaEnv {
   readonly PUBLIC_TURNSTILE_SITE_KEY: string;
 }

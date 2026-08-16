@@ -1,5 +1,5 @@
-// Submit handler for the newsletter form on /blog. Served as a static asset
-// via Cloudflare's ASSETS binding so it loads as an external module under a
+// Submit handler for the newsletter form. Served as a static asset via
+// Cloudflare's ASSETS binding so it loads as an external module under a
 // strict `script-src 'self' https://challenges.cloudflare.com` CSP — no
 // 'unsafe-inline' needed.
 //
@@ -8,16 +8,31 @@
 // on-demand routes. Shipping the file as a static asset under public/ avoids
 // that uncertainty — what we write is what gets served.
 //
-// This file is the only client JavaScript on the site. Do not import it
-// outside src/components/NewsletterSignup.astro (which is only rendered on
-// /blog). Smoke asserts the form is present on /blog and absent on / as a
-// regression guard against accidental lifts into shared chrome.
+// Do not import it outside src/components/Subscribe.astro, which renders on
+// /blog (variant="line") and at the foot of every published post
+// (variant="card"). Smoke asserts the form is present on /blog and absent on /
+// as a regression guard against accidental lifts into shared chrome.
+//
+// THE STATUS LINE AND THE WIDGET ARE SIBLINGS OF THE FORM, NOT CHILDREN. Both
+// sit beside <form> inside the component's <aside> so the form stays a single
+// flex row and so `form.replaceWith(...)` on success doesn't take the status
+// line with it. Everything below therefore resolves them from that <aside>,
+// not from the form — `form.querySelector('.newsletter-msg')` returns null and
+// the first `msg.` access throws after preventDefault has already fired, which
+// is a form that silently does nothing at all. There is no browser in the test
+// suite to catch that, so scripts/smoke/static.mjs guards the selector.
 
 (() => {
   const form = document.getElementById('newsletter-form');
   if (!form) return;
 
-  const msg = form.querySelector('.newsletter-msg');
+  const root = form.closest('aside') ?? document;
+  // A detached fallback rather than a bail-out. Returning early would leave the
+  // form doing a NATIVE submit — a GET to the current URL that puts the
+  // subscriber's address in their history and in our access logs — and throwing
+  // is the bug this file just had. A detached <p> renders nowhere, so a missing
+  // status line costs the message and nothing else.
+  const msg = root.querySelector('.newsletter-msg') ?? document.createElement('p');
   const btn = form.querySelector('button[type=submit]');
   const emailInput = form.querySelector('input[name=email]');
   const hpInput = form.querySelector('input[name=company]');
@@ -60,6 +75,13 @@
         const success = document.createElement('p');
         success.className = 'newsletter-success';
         success.textContent = 'Check your inbox to confirm your subscription.';
+        // Clear the siblings before swapping the form out. The widget and the
+        // status line used to live inside <form>, so replaceWith took them with
+        // it; now it doesn't, and a rendered Turnstile checkbox sitting under
+        // "check your inbox" reads as a subscription that didn't finish.
+        root.querySelector('.cf-turnstile')?.replaceChildren();
+        msg.classList.remove('is-error');
+        msg.textContent = '';
         form.replaceWith(success);
         return;
       }

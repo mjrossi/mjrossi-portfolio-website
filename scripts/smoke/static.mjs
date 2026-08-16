@@ -8,10 +8,10 @@
 //
 // `checkBuildArtifacts` reads dist/client — assets, the generated _headers, and
 // the CSS bundle.
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { check, stripComments } from './check.mjs';
-import { DIST, GALLEY_WRITE_QUOTA } from './config.mjs';
+import { DIST, FIXTURE_SLUG, GALLEY_WRITE_QUOTA, PUBLISHED_SLUG } from './config.mjs';
 
 /** Read and comment-strip a source file, or return '' if it isn't there. */
 function source(path) {
@@ -91,6 +91,7 @@ export function checkSourceGuards() {
     !/previewReviewer/.test(blogLibSource),
     'previewReviewer leaked into blog.ts — a review link could reach the index/tags/RSS',
   );
+
   if (existsSync(rssRoutePath)) {
     check(
       'rss route: previewReviewer does NOT reach the feed',
@@ -98,6 +99,19 @@ export function checkSourceGuards() {
       'previewReviewer leaked into the RSS route — a review link could trigger the subscriber email',
     );
   }
+
+  // blog.ts names the fixture slug too, so getLatestPosts can skip it when a
+  // surface features ONE post (the fixture is dated 2099 and therefore newest
+  // wherever scheduled posts are visible). It cannot import this suite's copy —
+  // astro:content doesn't load under bare node — so the two are pinned here,
+  // the same way preview.js's WORKER_NAME is pinned against wrangler.jsonc.
+  // Drift would be silent: the teaser would quietly go back to featuring the
+  // fixture on preview deploys and production would look fine.
+  check(
+    'src/lib/blog.ts FIXTURE_SLUG matches the smoke fixture',
+    new RegExp(`FIXTURE_SLUG\\s*=\\s*['"]${FIXTURE_SLUG}['"]`).test(blogLibSource),
+    `blog.ts does not declare FIXTURE_SLUG = '${FIXTURE_SLUG}'`,
+  );
 
   // The galley's client JS is the site's SECOND carve-out from the no-client-JS
   // rule, and the narrower of the two: it may only ship on a response that
@@ -117,6 +131,56 @@ export function checkSourceGuards() {
       'BlogPost.astro: galley gate also matches the post slug',
       /previewSlug\s*===\s*post\.id/.test(layoutSource),
       'the galley gate no longer compares previewSlug to the rendered post',
+    );
+
+    // og:image is gated on the BUILD's clock, not the request's, and the two
+    // are not interchangeable. scripts/make-post-og.mjs writes a card only for
+    // a post that was published when it ran; a post that goes live by its
+    // pubDate passing — with no deploy behind it, which is the whole scheduled-
+    // publishing mechanism — would otherwise start advertising a card nobody
+    // generated, 404ing for every scraper during the manual syndication window.
+    //
+    // Nothing else can see this. At build time `scheduled` and `hasCard` agree
+    // by construction, so the built HTML is identical and every artifact check
+    // passes; the divergence only opens hours later, in production.
+    check(
+      'BlogPost.astro: og:image is gated on the build clock',
+      /isPublished\(\s*pubDate\s*,\s*__BUILD_TIME__\s*\)/.test(layoutSource) &&
+        /ogImage=\{hasCard\s*\?/.test(layoutSource),
+      'the og:image gate no longer asks whether make-post-og.mjs generated a card — ' +
+        'a post publishing between deploys would link an /og/<slug>.png that does not exist',
+    );
+  }
+
+  // THE NEWSLETTER'S STATUS LINE IS A SIBLING OF THE FORM, NOT A CHILD, AND
+  // public/scripts/newsletter.js MUST LOOK IT UP ACCORDINGLY.
+  //
+  // Subscribe.astro renders <form>, the Turnstile mount and <p class=
+  // "newsletter-msg"> as three children of one <aside>, so the form stays a
+  // single flex row and replaceWith() on success doesn't take the status line
+  // with it. When the msg lookup was still `form.querySelector(...)` it
+  // returned null, and the first `msg.` access threw — after preventDefault, so
+  // the form did nothing at all: no request, no message, no disabled button, on
+  // /blog and at the foot of every published post.
+  //
+  // Nothing else in this suite could see it. There is no browser here, the HTML
+  // is unchanged by the bug, and the endpoint it never called is tested
+  // directly. Both halves are needed: a script searching from the form, or a
+  // component that stopped rendering the element, break it the same way.
+  const subscribeSource = source(resolve('src/components/Subscribe.astro'));
+  const newsletterClient = source(resolve('public/scripts/newsletter.js'));
+  if (subscribeSource && newsletterClient) {
+    check(
+      'Subscribe.astro: renders the .newsletter-msg status line',
+      /class="newsletter-msg"/.test(subscribeSource),
+      'the status line is gone from Subscribe.astro — newsletter.js writes every message into it',
+    );
+    check(
+      'newsletter.js: resolves .newsletter-msg from the component root, not the form',
+      /closest\(\s*['"]aside['"]\s*\)/.test(newsletterClient) &&
+        !/form\.querySelector\(\s*['"]\.newsletter-msg/.test(newsletterClient),
+      'newsletter.js scopes the status-line lookup to the <form>, where the element is not — ' +
+        'the handler throws after preventDefault and the form silently does nothing',
     );
   }
 
@@ -197,6 +261,35 @@ export function checkBuildArtifacts() {
     check(`asset: ${asset}`, existsSync(resolve(DIST, asset)));
   }
 
+  // THE PER-POST OG CARDS, IN BOTH DIRECTIONS. BlogPost.astro advertises
+  // /og/<slug>.png for any post published as of __BUILD_TIME__; this is the only
+  // thing that looks at whether scripts/make-post-og.mjs actually wrote one.
+  //
+  // The source guard above pins the GATE — that the layout still asks the build
+  // clock rather than the request's — and live-site.mjs pins the meta TAG. Both
+  // are satisfied by a build that emitted no cards at all: make-post-og.mjs
+  // resolves its paths from cwd, so a moved content directory or a glob change
+  // makes listPostSlugs() return [], and the script logs "wrote 0 card(s)",
+  // exits 0, and lets `&&` chain on to a successful build in which every
+  // published post links an image that 404s for every scraper.
+  const publishedCard = resolve(DIST, 'og', `${PUBLISHED_SLUG}.png`);
+  check(
+    `og card: ${PUBLISHED_SLUG}.png was generated`,
+    existsSync(publishedCard) && statSync(publishedCard).size > 1024,
+    'no per-post OG card in dist/client/og — every post advertises an og:image that does not exist',
+  );
+  // The other direction is a disclosure, not a 404: a card carries the post's
+  // TITLE, and /og/<slug>.png is a guessable URL with no token in front of it.
+  // Generating one for a scheduled draft hands that draft's title to anyone who
+  // guesses the slug — which is the one thing scheduled publishing exists to
+  // prevent, and unlike a cover image (hash-named by astro:assets) this path is
+  // derived from the slug and therefore trivially reachable.
+  check(
+    'og card: the scheduled fixture has NO card',
+    !existsSync(resolve(DIST, 'og', `${FIXTURE_SLUG}.png`)),
+    "a scheduled draft's OG card is on disk — its title is readable at a guessable URL",
+  );
+
   // THE SITEMAP MUST NOT NAME THE DESK. /admin is 404ed without an Access JWT,
   // so an entry would not hand anyone the page — but the per-post URLs under it
   // are built from slugs, and every scheduled draft has one. Publishing that
@@ -275,6 +368,32 @@ export function checkBuildArtifacts() {
   // from the old design could ship unnoticed.
   check('css: condensed masthead rules gone',
     !/\.masthead\.condensed|\.masthead-home-link|\.masthead-page-label/.test(css));
+
+  // The interior-page section label must stay scoped to a section's own
+  // heading. As a bare `.page h2` it reached every component rendered inside a
+  // .page: .post-entry-title lost to it outright (index titles at 0.88rem in
+  // accent small-caps), and .post-body h2 inherited the all-small-caps and
+  // smcp/c2sc it doesn't itself declare — which is the "headings styled as
+  // labels" of finding 1.1 and the "titles are the third thing you see" of 2.1,
+  // both surviving a change to the component rules because those rules never
+  // won. Nothing else in this suite can see it: it is a cascade outcome, not
+  // markup, so the live matrix reads exactly the same either way, and the
+  // symptom is a page that renders — just wrongly.
+  //
+  // BOTH HALVES MATCH A SELECTOR LIST, NOT JUST A LONE SELECTOR. Lightning CSS
+  // merges rules that share a declaration block, so the bare rule can come back
+  // as `.page h2,.something{` — no brace directly after the `h2`, which the
+  // old `\{` anchor did not match, so the guard read green with the rule live.
+  // Same reason the positive half is a regex now: merged into a list it would
+  // have failed, which is the safe direction but still a red for the wrong
+  // reason. The `(^|[^>])` is what keeps `.page>section>h2` from matching the
+  // negative pattern; the alternation covers offset 0, where `[^>]` alone
+  // cannot match because there is no preceding character.
+  check(
+    'css: section-label rule is scoped to .page > section > h2',
+    /\.page>section>h2[,{]/.test(css) && !/(^|[^>])\.page h2[,{]/.test(css),
+    'a bare `.page h2` rule is back in the bundle — it will swallow post and entry headings',
+  );
 
   // The galley's styles must not reach the public CSS bundle. A processed
   // <style> in GalleyMargin.astro is hoisted into the /blog/[...slug] stylesheet

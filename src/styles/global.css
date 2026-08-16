@@ -16,6 +16,9 @@
   --font: var(--font-source-serif), Georgia, 'Times New Roman', serif;
   --font-serif: var(--font-fraunces), Georgia, serif;
   --font-ui: var(--font-inter), system-ui, -apple-system, sans-serif;
+  /* System stack, no webfont — inline code runs at 0.82em inside running
+     prose, which is not a size worth a network request. */
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
   --max: 1100px;
   --pad: clamp(1.25rem, 4vw, 2.5rem);
@@ -298,6 +301,18 @@ main {
   margin-bottom: 1rem;
 }
 
+/* Dateline under a section label (finding 3.3). Pulled up into the label's
+   own bottom margin so the pair reads as one unit rather than as a stray
+   line of body copy. */
+.section-updated {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: -0.75rem 0 0.75rem;
+}
+
 .broadsheet-body p {
   font-family: var(--font);
   font-size: 1rem;
@@ -322,6 +337,78 @@ main {
   color: var(--accent);
   font-optical-sizing: auto;
   font-variation-settings: 'opsz' 144;
+}
+
+/* "From the Lexicon" — the home page's one pointer at the periodical
+   (finding 4.3). Sits under the About/Now grid, inside the same --max wrapper,
+   closed above by the rule that the grid's gutter implies. */
+.lexicon-teaser {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 1.75rem var(--pad) 2.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.lexicon-teaser-item + .lexicon-teaser-item {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.lexicon-teaser-title {
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  color: var(--text);
+  margin: 0 0 0.35rem;
+}
+
+.lexicon-teaser-title a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.lexicon-teaser-title a:hover {
+  color: var(--accent);
+}
+
+.lexicon-teaser-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+.lexicon-teaser-excerpt {
+  font-family: var(--font);
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--muted);
+  max-width: 580px;
+  margin: 0;
+}
+
+.lexicon-teaser-more {
+  display: inline-block;
+  margin-top: 1.25rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.lexicon-teaser-more:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .avatar {
@@ -420,7 +507,21 @@ section {
   padding-top: 2.75rem;
 }
 
-.page h2 {
+/* The interior page's SECTION LABEL — /urban-mobility's "Civic Technology",
+   /privacy's "Anti-spam". Scoped to a section's own heading with `>` and not
+   left as a bare `.page h2`, which reached into every component rendered
+   inside a .page and is the actual mechanism behind two findings in the
+   August 2026 review:
+     - .post-entry-title (0,1,0) lost to it outright, so index titles rendered
+       at 0.88rem in accent small-caps — "titles are the third thing you see"
+       (2.1), and a rule bumping them to 1.3rem would never have applied.
+     - .post-body h2 won on the properties it declares but not on the two it
+       doesn't, so `font-variant-caps: all-small-caps` and the smcp/c2sc
+       feature settings leaked into post prose — headings "styled as labels,
+       not headings" (1.1), which the serif treatment alone did not fix.
+   Both legitimate call sites are `.page > section > h2`, so nothing that
+   should carry this style loses it. */
+.page > section > h2 {
   font-family: var(--font-serif);
   font-variant-caps: all-small-caps;
   font-feature-settings: 'smcp', 'c2sc';
@@ -645,21 +746,124 @@ em {
     padding-bottom: 0;
   }
 
-  .masthead-tagline {
-    white-space: normal;
+  /* The tagline stays, at a size that fits ONE line. It used to wrap to two and
+     cost ~64px of a 302px header; the expensive part was the wrapping, not the
+     sentence. Kept on every page rather than the front page only, even though
+     repeating it is the weaker editorial call: the tagline sits above the nav,
+     so showing it on one page and not another would put home's nav ~64px below
+     every other page's. Same y on every page is worth more than the repetition
+     costs. */
+  .masthead-tagline-row {
+    margin-top: 0.5rem;
   }
 
+  /* The flanking rules go, not the text: at this width they would take the
+     horizontal room the sentence needs to stay on one line. */
+  .masthead-rule {
+    display: none;
+  }
+
+  .masthead-tagline {
+    font-size: 0.6rem;
+    white-space: nowrap;
+  }
+
+  /* ONE LINE THAT SCROLLS — a section bar, not a wrapped row.
+     Five links wrapped differently at every width: 3+2 at 320 and 360, 4+1 at
+     390 and 414, which strands "Blog" alone on the iPhone widths and reads as
+     an accident rather than a decision. A single scrolling row cannot wrap at
+     all, and it halves the nav (81px → 45px) on the way.
+     It is also the rule this codebase already applies to anything too wide for
+     a phone — see .post-diagram: the box scrolls, the page body never does.
+     Keyboard users reach the far end by Tab, which scrolls it into view
+     without any script.
+
+     What must NOT be left to the scroll is the blog — see
+     `.page-links a.nav-pinned` below. */
   .broadsheet-nav-inner {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.6rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.65rem;
+    padding: 0.45rem 0;
   }
 
   .broadsheet-nav-inner .page-links {
-    flex-wrap: wrap;
-    gap: 0.9rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    width: 100%;
+    gap: 1.1rem;
+    /* The gutter moves onto the scroller so the row starts flush with the page
+       and runs to the very edge — clipped mid-label rather than at an inset,
+       which is what makes "there is more" legible.
+       LEFT ONLY. The right gutter belongs to the pinned link below, which
+       carries it as its own padding so that its opaque background reaches the
+       screen edge; left here, the scrolling labels would show through the strip
+       between the pin and the edge. */
+    padding: 0 0 0 var(--pad);
+    scroll-snap-type: x proximity;
+    /* The gutter above is padding ON the scroller, so without this the snap
+       engine aligns the first link against the padding box and rests at
+       scrollLeft: 20 — "Work" flush to the screen edge rather than on the
+       page's margin. Insetting the snapport by the same gutter puts the resting
+       position back at 0. */
+    scroll-padding-inline-start: var(--pad);
+    scrollbar-width: none;
+  }
+
+  .broadsheet-nav-inner .page-links a {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  /* THE BLOG DOES NOT SCROLL AWAY.
+     Measured on the real page before this rule existed, "Blog" was 0px visible
+     at 320, 360, 375 AND 390 — every common phone width — and only 6px at 414.
+     It was reachable solely by scrolling a row that gave no sign it could
+     scroll.
+
+     What stood there instead was a 32px fade mask on the row's right edge,
+     driven by a scroll-timeline animation. Two things were wrong with it. It is
+     not an affordance: at 375 the row ends on the complete phrase "Urban
+     Mobility", so a dimmed final label reads as the end of the list rather than
+     as a cut. And it was engine-dependent in a way nothing here could see —
+     the fade computes correctly in Chrome (verified: 32px at rest) and is
+     absent in a Firefox render of the same page, which is where this was
+     reported from.
+
+     So the one link that must never be missed stops scrolling. `position:
+     sticky` inside the scroller holds it against the right edge while the other
+     four run underneath — and content visibly disappearing beneath a pinned
+     item is the affordance the fade was reaching for, drawn by layout rather
+     than by an animation. No width threshold: where the row does not overflow
+     (roughly 480px up to this query's ceiling) sticky simply has nothing to do
+     and the link sits in flow. */
+  .broadsheet-nav-inner .page-links a.nav-pinned {
+    position: sticky;
+    right: 0;
+    /* Sticky makes a stacking context; last-in-DOM would paint on top anyway,
+       but say so rather than depend on source order. */
+    z-index: 1;
+    /* Opaque, or the labels passing underneath show through. Matches
+       .broadsheet-nav's own background. */
+    background: var(--bg);
+    /* The row's right gutter, carried here — see the scroller's padding above. */
+    padding-right: var(--pad);
+    /* Reads as a divider between the section pages and the periodical at every
+       width, and as the edge things vanish behind while the row is scrolling. */
+    border-left: 1px solid var(--border);
+    /* Snapping the pinned link would let the scroller rest with it part-way off
+       screen, which is the whole failure being fixed. */
+    scroll-snap-align: none;
+  }
+
+  /* .active paints --bg2 and must keep winning over the opaque background
+     above — this is the /blog page's own nav entry. */
+  .broadsheet-nav-inner .page-links a.nav-pinned.active {
+    background: var(--bg2);
+  }
+
+  .broadsheet-nav-inner .page-links::-webkit-scrollbar {
+    display: none;
   }
 
   .nav-contact {
@@ -711,10 +915,15 @@ em {
   padding-top: 0;
 }
 
+/* flex-wrap, matching .post-meta on the post page. Without it the items don't
+   wrap — the text inside each one does, so at 360px a three-item line breaks
+   into ragged columns with the separators orphaned between them. The topic
+   (finding 2.1) is the third item that made this visible. */
 .post-entry-meta {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.85rem;
   font-family: var(--font-ui);
   color: var(--muted);
   font-size: 0.78rem;
@@ -741,9 +950,12 @@ em {
   padding: 0.05rem 0.4rem;
 }
 
+/* Up 8% from 1.2rem, and the chip row is gone from the entry (finding 2.1) —
+   between them the title is the first thing the eye lands on rather than the
+   third. */
 .post-entry-title {
   font-family: var(--font-serif);
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.3;
@@ -766,15 +978,18 @@ em {
   background-size: 100% 1px;
 }
 
+/* Source Serif, not Inter (finding 4.6) — the excerpt is a preview of the
+   writing, not UI copy. The bottom margin goes with the chips it used to sit
+   above; the excerpt now closes the entry. */
 .post-entry-description {
+  font-family: var(--font);
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: 0.92rem;
   line-height: 1.75;
   max-width: 580px;
-  margin: 0 0 0.85rem;
+  margin: 0;
 }
 
-.post-entry-tags,
 .post-tags {
   margin: 0;
   display: flex;
@@ -802,13 +1017,9 @@ em {
   color: var(--accent);
 }
 
-.post-count {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-family: var(--font-ui);
-  letter-spacing: 0.02em;
-  margin: 1.5rem 0 0;
-}
+/* The "N posts" line is gone from the index (finding 4.1) — at six it read as
+   an apology, and the Topics pill now does the job it was standing in for.
+   Reinstate a count only once a total is genuinely informative. */
 
 .rss-link {
   display: inline-flex;
@@ -852,6 +1063,61 @@ em {
   margin: 0;
 }
 
+.blog-header-links {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Blog: topic index (/blog/tags) ─────────────────── */
+
+.topic-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 520px;
+}
+
+.topic-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.topic-row a {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.topic-row a:hover {
+  color: var(--accent);
+}
+
+.topic-row .topic-count {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Sibling topics under a tag page's header — the lateral move a reader who
+   landed on one topic could not previously make (finding 2.3). */
+.topic-siblings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0;
+}
+
 /* ── Blog: single post ──────────────────────────────── */
 
 .page.post {
@@ -892,10 +1158,6 @@ em {
   font-style: italic;
 }
 
-.post-header .post-tags {
-  margin-top: 1rem;
-}
-
 .post-cover {
   margin: 1.75rem 0 0;
 }
@@ -918,24 +1180,51 @@ em {
   margin-top: 1.15rem;
 }
 
+/* Post section headings (finding 1.1).
+ *
+ * Sentence-case Fraunces with a short accent rule above it as a kicker. The
+ * kicker is what keeps this feeling broadsheet rather than blog-default, and
+ * it is also how the two levels stay apart: h3 deliberately gets none.
+ *
+ * Sizes are the spec's RATIOS against body copy (h2 1.15×, h3 1×, mobile h2
+ * 1.08×), not its raw rem values — the spec assumed a 1rem body and .post-body
+ * sets 1.05rem, so the literal numbers would have put h3 *below* the prose it
+ * introduces, which is the inversion the finding exists to fix.
+ */
 .post-body h2 {
   font-family: var(--font-serif);
-  font-size: 1.45rem;
+  font-size: 1.2rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text);
-  margin-top: 2.5rem;
+  letter-spacing: -0.015em;
   line-height: 1.25;
+  color: var(--text);
+  text-wrap: pretty;
+  margin: 2.5rem 0 0.7rem;
+}
+
+.post-body h2::before {
+  content: '';
+  display: block;
+  width: 1.8rem;
+  border-top: 2px solid var(--accent-rule);
+  margin-bottom: 0.7rem;
+}
+
+/* A post that opens straight into a section (rather than on the standfirst the
+   house convention now asks for) must not start with 2.5rem of air. */
+.post-body h2:first-child {
+  margin-top: 0;
 }
 
 .post-body h3 {
   font-family: var(--font-serif);
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: var(--text);
-  margin-top: 2rem;
   line-height: 1.3;
+  color: var(--text);
+  text-wrap: pretty;
+  margin: 1.75rem 0 0.5rem;
 }
 
 .post-body h4 {
@@ -948,6 +1237,15 @@ em {
   margin-top: 1.75rem;
 }
 
+/* Drop cap on the post's opening paragraph (finding 1.2).
+ *
+ * `:first-of-type`, not `:first-child` — a post that opens on an h2 (or on an
+ * MDX import, which renders nothing but still counts) has no first-child
+ * paragraph at all, and the cap simply never fired.
+ *
+ * The house convention this pairs with: open each post on a one-paragraph
+ * standfirst, before the first h2. That gives the cap something to land on and
+ * orients the reader before the sectioning starts. */
 .post-body > p:first-of-type::first-letter {
   font-family: var(--font-serif);
   font-weight: 600;
@@ -956,6 +1254,13 @@ em {
   line-height: 0.85;
   padding: 0.35rem 0.4rem 0 0;
   color: var(--accent-surname);
+}
+
+/* …but not when a figure opens the post. `:first-of-type` finds the first
+   paragraph wherever it is, which for an image-led post is somewhere down the
+   page — a drop cap mid-article reads as a rendering fault. */
+.post-body > figure:first-child ~ p:first-of-type::first-letter {
+  all: unset;
 }
 
 .post-body a {
@@ -969,39 +1274,108 @@ em {
   font-style: italic;
 }
 
+/* Lists (finding 1.3). Posts lean on bold-lead-in bullets, which browser
+   defaults set as disc markers at a default indent against 1.05rem serif — the
+   marker ends up louder and further out than the prose it belongs to. Markers
+   are drawn here instead: an accent dot for ul, a small Inter numeral for ol,
+   both pulled into the gutter so the text edge stays flush with the paragraph
+   above. `list-style: none` is what makes room for them. */
 .post-body ul,
 .post-body ol {
-  padding-left: 1.5rem;
+  font-family: var(--font);
+  line-height: 1.8;
+  color: var(--text);
+  margin: 0 0 1.1rem;
+  padding-left: 1.1rem;
+  list-style: none;
 }
 
-.post-body li + li {
-  margin-top: 0.35rem;
+.post-body li {
+  position: relative;
+  margin-bottom: 0.55rem;
 }
 
-.post-body code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.92em;
+.post-body ul li::before {
+  content: '';
+  position: absolute;
+  left: -0.9rem;
+  top: 0.62em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-rule);
+}
+
+.post-body ol {
+  counter-reset: li;
+}
+
+.post-body ol li {
+  counter-increment: li;
+}
+
+.post-body ol li::before {
+  content: counter(li) '.';
+  position: absolute;
+  left: -1.1rem;
+  top: 0.3em;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent-tagline);
+}
+
+/* Bold lead-ins stay in the prose face — they are the sentence, not a label. */
+.post-body li > strong {
+  font-weight: 600;
+}
+
+/* Multi-paragraph list items: the first paragraph is the item, the rest are
+   continuations and must not re-open the list's own vertical rhythm. */
+.post-body li p {
+  margin: 0.4rem 0 0;
+}
+
+/* Nested lists sit inside their parent item's rhythm rather than starting a
+   fresh block. */
+.post-body li > ul,
+.post-body li > ol {
+  margin: 0.4rem 0 0;
+}
+
+/* Inline code (finding 1.3). `:not(pre) >` is load-bearing: without it Shiki's
+   block output inherits the tint, the border and the nowrap, which boxes every
+   line of a code block individually. */
+.post-body :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
   background: var(--bg2);
-  padding: 0.08em 0.35em;
-  border-radius: 3px;
   border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.05em 0.3em;
+  color: var(--accent-tagline);
+  white-space: nowrap;
 }
 
 .post-body pre {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.88rem;
-  line-height: 1.55;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.65;
   background: var(--bg2);
   border: 1px solid var(--border);
-  padding: 1rem 1.1rem;
+  border-radius: 4px;
+  padding: 0.9rem 1rem;
   overflow-x: auto;
+  margin: 0 0 1.1rem;
 }
 
 .post-body pre code {
   background: none;
-  border: none;
+  border: 0;
   padding: 0;
-  font-size: inherit;
+  font-size: 1em;
+  color: inherit;
+  white-space: pre;
 }
 
 .post-body img {
@@ -1011,27 +1385,33 @@ em {
   border: 1px solid var(--border);
 }
 
-.post-body .post-figure {
+/* Figures (findings 1.3 / 4.5). Photographs and screenshots are a recurring
+   element now, and an unframed image bleeding to the column edge doesn't read
+   as part of the broadsheet grid. Hairline border on the image, hairline rule
+   above the caption, caption in the prose face rather than the UI one — it is
+   the writer talking, not chrome. */
+.post-body figure {
   margin: 1.75rem 0;
 }
 
-.post-body .post-figure img {
-  max-width: 100%;
-  height: auto;
+.post-body figure img {
   display: block;
-  margin: 0 auto;
+  width: 100%;
+  height: auto;
   border: 1px solid var(--border);
+  border-radius: 2px;
 }
 
 .post-cover figcaption,
-.post-body .post-figure figcaption {
-  margin-top: 0.5rem;
-  font-family: var(--font-ui);
-  font-size: 0.85rem;
-  line-height: 1.45;
-  color: var(--muted);
-  text-align: center;
+.post-body figure figcaption {
+  font-family: var(--font);
   font-style: italic;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--muted);
+  margin-top: 0.55rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
 }
 
 /* Inline-SVG diagrams in posts (src/components/diagrams/*.astro). The site
@@ -1196,19 +1576,154 @@ em {
   color: var(--accent-tagline);
 }
 
+/* The post's foot: "Filed under" + the full chip set, then the subscribe card,
+   then previous/next, then a quiet centred way back to the index. A column
+   rather than the old two-up row, because there are four things here now and
+   they are read in order. */
 .post-footer {
   margin-top: 3rem;
   padding-top: 2rem;
   border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
 }
 
 .post-footer .post-tags {
   margin: 0;
+}
+
+/* Uses the site's uppercase label style — that treatment is for structural
+   chrome, which is exactly what this is (finding 1.1 moved post headings off
+   it for the opposite reason). */
+.post-tags-label {
+  font-family: var(--font-ui);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.45rem;
+}
+
+/* Transparent by default: the topic items stay direct flex items of whichever
+   meta line they were dropped into (.post-entry-meta or .post-meta), which is
+   what lets them wrap independently of each other. The wrapper earns its keep
+   only at phone widths — see the 639px query. */
+.post-topics {
+  display: contents;
+}
+
+/* Primary topic, inline in a meta line (findings 1.4 / 2.1). The separator
+   travels with it as one flex item so a wrap never leaves the "·" behind. */
+.post-topic-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.post-topic {
+  color: var(--accent-tagline);
+  text-decoration: none;
+}
+
+.post-topic:hover {
+  color: var(--accent);
+}
+
+/* On a phone the two topics take a line of their own, together.
+   Measured at the widths phones use: date + read time is 198px, the two topics
+   are 241px, and the usable width is 280px at 320px rising to 350px at 390px.
+   So each of those rows fits everywhere — but all four items on one line is
+   470px and fits nowhere, 120px over at 390px and 190px over at 320px.
+   The wrap is therefore not avoidable at any type size worth reading, and it
+   was never the problem. WHERE it fell was: the break landed BETWEEN the two
+   topics, orphaning the second one on a line of its own under the date, opening
+   it with a "·" that divided it from nothing. Breaking before the pair instead
+   keeps them together and makes the second row read as the subject line. */
+@media (max-width: 639px) {
+  .post-topics {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    /* The break itself: an item that wants a full line cannot share one, so the
+       pair moves down together and nothing can wrap between them. */
+    flex-basis: 100%;
+  }
+
+  /* Leads the row, so its separator would divide the topics from the left
+     margin. The one BETWEEN the two topics stays — that one still separates. */
+  .post-topics .post-topic-item:first-child .meta-sep {
+    display: none;
+  }
+}
+
+/* Previous / next (finding 1.5). One-pixel gap over a --border background is
+   what draws the divider between the two cells without a second border. */
+.post-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 1.25rem;
+}
+
+.post-nav > * {
+  background: var(--bg);
+  padding: 0.7rem 0.85rem;
+  text-decoration: none;
+}
+
+.post-nav .k {
+  font-family: var(--font-ui);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.post-nav .t {
+  font-family: var(--font-serif);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--accent);
+}
+
+.post-nav a:hover .t {
+  color: var(--accent-hover);
+}
+
+.post-nav .next {
+  text-align: right;
+}
+
+.post-nav .empty .t {
+  color: var(--muted);
+}
+
+.post-back-all {
+  display: block;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 1rem;
+}
+
+.post-back-all:hover {
+  color: var(--accent);
+}
+
+@media (max-width: 639px) {
+  .post-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .post-nav .next {
+    text-align: left;
+  }
 }
 
 .post-back {
@@ -1248,9 +1763,11 @@ em {
   }
 }
 
-@media (max-width: 520px) {
-  .post-title {
-    font-size: 1.7rem;
+@media (max-width: 639px) {
+  /* Headings step down with the measure (finding 1.1). */
+  .post-body h2 {
+    font-size: 1.13rem;
+    margin-top: 2rem;
   }
 
   .post-body > p:first-of-type::first-letter {
@@ -1258,9 +1775,18 @@ em {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 520px) {
+  .post-title {
+    font-size: 1.7rem;
+  }
+}
+
+/* Below 400px a drop cap eats too much of the measure to be worth it — the
+   first line ends up two or three words long. Drop the rule rather than
+   shrinking it further. */
+@media (max-width: 399px) {
   .post-body > p:first-of-type::first-letter {
-    font-size: 2.6rem;
+    all: unset;
   }
 }
 
@@ -1268,15 +1794,17 @@ em {
    aside (and named without "newsletter" / "subscribe" / "signup" / "email"
    / "form" substrings) so it survives ad-block filter lists that hide the
    signup card. Reads as a quiet editor's note in italics. */
+/* Left-aligned, small and quiet. Centred italic at 0.92rem it read as a second
+   subscribe row under the band, which undercut the one-line justification for
+   putting the band at the top in the first place. It is a fallback, and it
+   should look like one. */
 .blog-follow-note {
-  font-family: var(--font);
-  font-style: italic;
-  font-size: 0.92rem;
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  line-height: 1.6;
   color: var(--muted);
-  text-align: center;
-  margin: 1.5rem auto 0;
-  max-width: 32rem;
-  letter-spacing: 0.01em;
+  margin: 0.5rem 0 0;
+  letter-spacing: 0.02em;
 }
 
 .blog-follow-note a {

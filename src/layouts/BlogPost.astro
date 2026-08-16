@@ -2,8 +2,11 @@
 import { Image } from 'astro:assets';
 import Base from './Base.astro';
 import PostTags from '../components/PostTags.astro';
+import PostTopics from '../components/PostTopics.astro';
+import PostNav from '../components/PostNav.astro';
+import Subscribe from '../components/Subscribe.astro';
 import GalleyMargin from '../components/GalleyMargin.astro';
-import { dateFormatter, isoDate, postReadingTime, type Post } from '../lib/blog.ts';
+import { dateFormatter, getAdjacentPosts, isoDate, postReadingTime, type Post } from '../lib/blog.ts';
 import { isPublished } from '../lib/schedule.js';
 import { revisionOf } from '../lib/post-source.ts';
 
@@ -15,8 +18,23 @@ const { post } = Astro.props;
 const { title, description, pubDate, updatedDate, tags, cover } = post.data;
 const readLabel = postReadingTime(post);
 
+const { previous, next } = await getAdjacentPosts(post.id, {
+  showScheduled: Astro.locals.showScheduled,
+});
+
 // See BlogPostEntry.astro — keyed off the pubDate, not the preview flag.
 const scheduled = !isPublished(pubDate);
+
+// Whether /og/<slug>.png exists, which is NOT the same question as `scheduled`.
+// scripts/make-post-og.mjs writes a card only for a post that was published when
+// it ran (a card carries the title, and the URL is guessable, so generating one
+// for a draft would publish that draft's title). `scheduled` is evaluated per
+// request, so a post that goes live by its date passing — with no deploy behind
+// it, which is the documented scheduled-publishing mechanism — would start
+// pointing og:image at a card that was never generated and 404s until the next
+// build. __BUILD_TIME__ is inlined by Vite (see astro.config.mjs) and asks the
+// question the generator actually answered.
+const hasCard = isPublished(pubDate, __BUILD_TIME__);
 
 // The galley renders only for a signed preview link that named a reviewer, only
 // on the post that link authorises, and only while that post is still a draft.
@@ -53,12 +71,21 @@ const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
 <Base
   title={title}
   description={description}
+  ogImage={hasCard ? `/og/${post.id}.png` : undefined}
+  ogImageAlt={hasCard ? title : undefined}
 >
   <article class="page post">
     <a href="/blog" class="post-back post-back-top">← Blog</a>
 
     <header class="post-header">
       <h1 class="post-title">{title}</h1>
+      {/*
+        Up to two topics in the meta line, not the full chip row (finding 1.4).
+        Six chips used to stack between the title and the first word of prose —
+        the loudest coloured thing on the page, doing discovery work at the
+        moment the reader wants to start reading. The full set is in the
+        footer under "Filed under", where discovery belongs.
+      */}
       <p class="post-meta">
         {scheduled && (
           <span class="post-scheduled">Scheduled</span>
@@ -74,8 +101,8 @@ const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
             </span>
           </>
         )}
+        <PostTopics tags={tags} />
       </p>
-      <PostTags tags={tags} />
       {cover && (
         <figure class="post-cover">
           <Image src={cover.src} alt={cover.alt} loading="eager" />
@@ -89,8 +116,43 @@ const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
     </div>
 
     <footer class="post-footer">
-      {tags.length > 0 ? <PostTags tags={tags} /> : <span></span>}
-      <a href="/blog" class="post-back post-back-bottom">← All posts</a>
+      <PostTags tags={tags} label="Filed under" />
+
+      {/*
+        Placement D, then the chronological neighbours (§5, finding 1.5). Order
+        matters: the subscribe card is tonal precisely so it does not outshout
+        the next post below it.
+
+        Both are skipped while a post is still a draft. A galley reader is here
+        to review prose, not to be sold a subscription, and a draft's neighbours
+        are whatever the archive happens to hold — the post itself is not in it
+        yet, so "previous/next" would be answering about a different sequence
+        than the one the published post will land in.
+      */}
+      {!scheduled && (
+        <>
+          <Subscribe variant="card" />
+          {/*
+            The card's blocker fallback, and it must stay OUT here rather than
+            inside Subscribe.astro for two reasons: the component renders the
+            <aside> an ad-block filter list hides, and it renders nothing at all
+            when PUBLIC_TURNSTILE_SITE_KEY is missing — which is precisely when
+            a way to subscribe matters most.
+
+            This one DOES keep RSS, unlike the index's. There is no RSS pill in
+            a post's header, and the card's own RSS link is inside the aside a
+            blocker would hide — so drop it here and a blocked card leaves the
+            page with no feed route at all.
+          */}
+          <p class="blog-follow-note">
+            Or follow by <a href="/blog/rss.xml">RSS</a> · <a href="/api/contact">email me</a> to be added by hand
+          </p>
+          <PostNav previous={previous} next={next} />
+          <a href="/blog" class="post-back post-back-all">All posts</a>
+        </>
+      )}
+
+      {scheduled && <a href="/blog" class="post-back post-back-bottom">← All posts</a>}
     </footer>
   </article>
 

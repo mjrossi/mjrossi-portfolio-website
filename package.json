@@ -24,9 +24,9 @@
     "@astrojs/sitemap": "^3.7.3",
     "astro": "^7.1.6",
     "js-yaml": "4.3.0",
-    "sharp": "0.35.2"
+    "sharp": "0.35.3"
   },
   "devDependencies": {
-    "wrangler": "4.118.0"
+    "wrangler": "4.123.0"
   }
 }

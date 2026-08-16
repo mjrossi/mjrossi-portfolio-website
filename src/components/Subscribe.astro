@@ -352,7 +352,24 @@ const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
      actually shown. */
   :global(.cf-turnstile:not(:empty)) {
     margin: 0.35rem 0 0;
-    flex-basis: 100%;
+
+    /* Full width in BOTH of the band's directions. This was `flex-basis: 100%`,
+       which reads as a width only while the band is a row — at phone widths it
+       becomes a column, where flex-basis is the BLOCK axis, so the rule
+       silently meant "100% of the band's height" there. `width` means the same
+       thing in both, and still wraps the widget onto its own line on desktop
+       (flex-basis: auto takes its base size from the width). */
+    width: 100%;
+
+    /* Turnstile's `flexible` size has a 300px floor and this band's content box
+       is under that on a small phone — 256px at a 320px viewport, which put
+       33px of widget past the band's edge and 13px of horizontal scroll on the
+       PAGE. Same rule this codebase applies everywhere else something is too
+       wide for a phone (see .post-diagram, and the nav strip in global.css):
+       the box scrolls, the page body never does.
+       Only reachable when a challenge is actually drawn — the band runs
+       interaction-only — which is exactly why it went unnoticed. */
+    overflow-x: auto;
   }
 
   /* .newsletter-success is created at runtime by public/scripts/newsletter.js

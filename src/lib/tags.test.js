@@ -1,30 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
 
+import { listPostSlugs, readPost } from '../../scripts/content.mjs';
 import { RETIRED, retiredTarget, tagLabel } from './tags.js';
 
-const BLOG_DIR = new URL('../content/blog/', import.meta.url).pathname;
-
-/** Every tag in frontmatter across the collection. Deliberately a crude scan —
- *  `node --test` cannot load astro:content, and the shape being asserted is
- *  exactly the one line this reads. */
+/**
+ * Every tag in frontmatter across the collection.
+ *
+ * ENUMERATED THROUGH scripts/content.mjs, WHICH IS THE COPY THAT MIRRORS THE
+ * LOADER. `node --test` cannot load astro:content, so this has to walk the
+ * directory itself — and the walk is the part that rots. This used to be a
+ * local scan that handled top-level `*.mdx` and `<dir>/index.mdx` only, which
+ * is the exact shape 152e806 had just fixed one file over in listPostSlugs:
+ * the glob is `**\/*.{md,mdx}`, so a `.md` post or one nested a directory
+ * deeper is a real post that the scan could not see.
+ *
+ * That gap mattered more here than it did there. A post this missed got no OG
+ * card — bad, and visible to a scraper. A post this misses is invisible to the
+ * two assertions below, which are the ONLY enforcement of the working
+ * vocabulary: a brand-new tag, or one the consolidation retired, would ride
+ * into the collection in a `.md` post with the suite green and `RETIRED`
+ * silently pointing at a live slug again. "A new tag fails that test" is the
+ * documented contract, and it was true only for one of the loader's shapes.
+ *
+ * readPost parses with js-yaml rather than a regex over the raw `tags:` line,
+ * so a block-style list counts too, and it throws on frontmatter that will not
+ * parse instead of skipping the file — the right direction for a test.
+ *
+ * Cwd-relative, via content.mjs's CONTENT_DIR. `npm test` runs from the package
+ * root, as does everything else that imports that module.
+ */
 function frontmatterTags() {
-  const files = [];
-  for (const entry of readdirSync(BLOG_DIR)) {
-    const path = join(BLOG_DIR, entry);
-    if (statSync(path).isDirectory()) files.push(join(path, 'index.mdx'));
-    else if (entry.endsWith('.mdx')) files.push(path);
-  }
   const tags = new Set();
-  for (const file of files) {
-    const line = /^tags:\s*\[(.*)\]\s*$/m.exec(readFileSync(file, 'utf8'));
-    if (!line) continue;
-    for (const raw of line[1].split(',')) {
-      const tag = raw.trim().replace(/^["']|["']$/g, '');
-      if (tag) tags.add(tag);
-    }
+  for (const slug of listPostSlugs()) {
+    const post = readPost(slug);
+    for (const tag of post?.data?.tags ?? []) tags.add(tag);
   }
   return tags;
 }

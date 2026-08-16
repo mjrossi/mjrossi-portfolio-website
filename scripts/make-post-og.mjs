@@ -39,7 +39,7 @@
 // Run by `npm run build`, after `astro build` (it writes into dist/client).
 import sharp from 'sharp';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 import { listPostSlugs, readPost } from './content.mjs';
 import { issue } from '../src/lib/edition.js';
@@ -186,7 +186,18 @@ for (const slug of listPostSlugs()) {
   });
 
   const png = await sharp(Buffer.from(svg)).png({ compressionLevel: 9, palette: false }).toBuffer();
-  writeFileSync(resolve(OUT_DIR, `${slug}.png`), png);
+  // A slug can contain a `/` — the loader's glob is `**`, so `a/b.mdx` is the
+  // post `a/b` and its card is `og/a/b.png`. The mkdirSync above only makes
+  // OUT_DIR itself, so the intermediate directory has to be made here or the
+  // write throws ENOENT. 152e806 made listPostSlugs walk recursively for
+  // exactly this shape and stopped one step short of writing it.
+  //
+  // Nested posts and BlogPost.astro's og:image URL agree without escaping: an
+  // id is `/`-separated and the card path is built from the same string, so the
+  // link and the file take the same shape.
+  const target = resolve(OUT_DIR, `${slug}.png`);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, png);
   written++;
 }
 

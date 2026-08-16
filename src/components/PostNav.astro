@@ -4,10 +4,21 @@
 // A finished post used to end on "← All posts" and nothing else. Chronological
 // neighbours are the cheapest exit available and need no related-post logic.
 //
-// When there is no neighbour the cell is still rendered — "Newest post" /
-// "Oldest post" in muted type — rather than collapsing the grid. A one-column
-// nav on a two-column layout reads as a broken cell; a filled one tells the
-// reader where they are in the archive.
+// A missing neighbour renders NOTHING — no cell, no placeholder. It used to
+// render "Newest post" / "Oldest post" in muted type, on the argument that a
+// one-column nav on a two-column layout reads as a broken cell. That argument
+// was wrong in practice and the placeholder was worse than the gap it filled:
+// under the "NEXT →" key, "Newest post" reads as the *title of the next post*,
+// and the cell that carries a link everywhere else is suddenly dead. A reader's
+// first conclusion is a broken link, not "you are at the end of the archive".
+//
+// The layout half is handled in CSS instead: `.post-nav` is `grid-auto-flow:
+// column` over `grid-auto-columns: 1fr`, so one child fills the row and two
+// split it. There is no half-empty cell to look broken.
+//
+// Both neighbours missing means no nav at all — that is the fixture post and a
+// single-post archive, neither of which has anywhere to go but "All posts",
+// which the layout renders directly below this.
 import type { Post } from '../lib/blog.ts';
 
 interface Props {
@@ -18,28 +29,20 @@ interface Props {
 const { previous, next } = Astro.props;
 ---
 
-<nav class="post-nav" aria-label="More posts">
-  {previous ? (
-    <a class="prev" href={`/blog/${previous.id}/`} rel="prev">
-      <div class="k">← Previous</div>
-      <div class="t">{previous.data.title}</div>
-    </a>
-  ) : (
-    <div class="prev empty">
-      <div class="k">← Previous</div>
-      <div class="t">Oldest post</div>
-    </div>
-  )}
+{(previous || next) && (
+  <nav class="post-nav" aria-label="More posts">
+    {previous && (
+      <a class="prev" href={`/blog/${previous.id}/`} rel="prev">
+        <div class="k">← Previous</div>
+        <div class="t">{previous.data.title}</div>
+      </a>
+    )}
 
-  {next ? (
-    <a class="next" href={`/blog/${next.id}/`} rel="next">
-      <div class="k">Next →</div>
-      <div class="t">{next.data.title}</div>
-    </a>
-  ) : (
-    <div class="next empty">
-      <div class="k">Next →</div>
-      <div class="t">Newest post</div>
-    </div>
-  )}
-</nav>
+    {next && (
+      <a class="next" href={`/blog/${next.id}/`} rel="next">
+        <div class="k">Next →</div>
+        <div class="t">{next.data.title}</div>
+      </a>
+    )}
+  </nav>
+)}

@@ -746,38 +746,64 @@ em {
     padding-bottom: 0;
   }
 
-  /* The tagline row is the band that costs most and earns least on a phone.
-     It wraps to two lines at 360px, and with its flanking rules and top margin
-     it is ~64px of a 302px header — a header that was already 38% of an 800px
-     viewport, putting a post's own title past the halfway line before the
-     reader had scrolled. The claim it makes is in the About copy on the front
-     page and in every page's meta description, and it stays intact from 640px
-     up, where it fits one line and reads as part of the flag. */
+  /* The tagline stays, at a size that fits ONE line. It used to wrap to two and
+     cost ~64px of a 302px header; the expensive part was the wrapping, not the
+     sentence. Kept on every page rather than the front page only, even though
+     repeating it is the weaker editorial call: the tagline sits above the nav,
+     so showing it on one page and not another would put home's nav ~64px below
+     every other page's. Same y on every page is worth more than the repetition
+     costs. */
   .masthead-tagline-row {
+    margin-top: 0.5rem;
+  }
+
+  /* The flanking rules go, not the text: at this width they would take the
+     horizontal room the sentence needs to stay on one line. */
+  .masthead-rule {
     display: none;
   }
 
   .masthead-tagline {
-    white-space: normal;
+    font-size: 0.6rem;
+    white-space: nowrap;
   }
 
-  /* The other half of the same saving. The nav is a third of the mobile header
-     on its own: five links wrap to two rows, and the generous desktop spacing
-     is what makes those rows tall. Only the vertical is tightened — the column
-     gap stays 0.9rem, because that horizontal breathing is what keeps the
-     labels reading as five separate links rather than one run of words, and
-     each link keeps its ~30px height. */
+  /* ONE LINE THAT SCROLLS — a section bar, not a wrapped row.
+     Five links wrapped differently at every width: 3+2 at 320 and 360, 4+1 at
+     390 and 414, which strands "Blog" alone on the iPhone widths and reads as
+     an accident rather than a decision. A single scrolling row cannot wrap at
+     all, and it halves the nav (81px → 45px) on the way.
+     It is also the rule this codebase already applies to anything too wide for
+     a phone — see .post-diagram: the box scrolls, the page body never does.
+     The clipped last label IS the affordance; keyboard users reach it by Tab,
+     which scrolls it into view without any script. */
   .broadsheet-nav-inner {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.6rem;
-    padding-top: 0.45rem;
-    padding-bottom: 0.45rem;
+    padding: 0.45rem 0;
   }
 
   .broadsheet-nav-inner .page-links {
-    flex-wrap: wrap;
-    gap: 0.4rem 0.9rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    width: 100%;
+    gap: 1.1rem;
+    /* The gutter moves onto the scroller so the row starts flush with the page
+       and runs to the very edge — clipped mid-label rather than at an inset,
+       which is what makes "there is more" legible. */
+    padding: 0 var(--pad);
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .broadsheet-nav-inner .page-links a {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .broadsheet-nav-inner .page-links::-webkit-scrollbar {
+    display: none;
   }
 
   .nav-contact {

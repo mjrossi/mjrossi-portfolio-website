@@ -193,6 +193,22 @@ a.masthead-name-link:hover .surname {
 
 /* ── Broadsheet nav (page + contact links) ──────────── */
 
+/* The two ends of the mobile nav's fade mask, registered so they can be
+   INTERPOLATED — an unregistered custom property is an untyped token and a
+   keyframe between two of them snaps rather than ramps. Only the phone-width
+   scrolling nav uses them; see the mask under the 639px query. */
+@property --nav-fade-start {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --nav-fade-end {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
 .broadsheet-nav {
   background: var(--bg);
   border-bottom: 1px solid var(--border);
@@ -775,8 +791,12 @@ em {
      all, and it halves the nav (81px → 45px) on the way.
      It is also the rule this codebase already applies to anything too wide for
      a phone — see .post-diagram: the box scrolls, the page body never does.
-     The clipped last label IS the affordance; keyboard users reach it by Tab,
-     which scrolls it into view without any script. */
+     Keyboard users reach the far end by Tab, which scrolls it into view
+     without any script.
+
+     The clipped last label was ALSO meant to be the affordance, and it is not
+     one — see the fade under .page-links below for what the measurements
+     actually showed. */
   .broadsheet-nav-inner {
     flex-direction: column;
     align-items: flex-start;
@@ -794,7 +814,77 @@ em {
        which is what makes "there is more" legible. */
     padding: 0 var(--pad);
     scroll-snap-type: x proximity;
+    /* The gutter above is padding ON the scroller, so without this the snap
+       engine aligns the first link against the padding box and rests at
+       scrollLeft: 20 — "Work" flush to the screen edge, and the start-of-row
+       fade below already lit while you are still at the start. Insetting the
+       snapport by the same gutter puts the resting position back at 0. */
+    scroll-padding-inline: var(--pad);
     scrollbar-width: none;
+
+    /* THE EDGE SAYS "MORE", BECAUSE THE CUT DOES NOT.
+       The row above was built on the idea that the clipped last label is its
+       own affordance. Measured across the widths phones actually use, that
+       holds at 320 and 360 — "Urban Mobility" is cut mid-word — and fails at
+       exactly the two commonest ones: at 375 the row ends FLUSH after "Urban
+       Mobility" with "Blog" entirely off screen, and at 390 two pixels of
+       "Blog" survive. Both read as a complete row, and the item they hide is
+       the blog. So the edge has to carry the signal on its own rather than
+       depend on where the cut happens to land.
+
+       Driven by the scroll position itself, which a static gradient cannot
+       match on three counts:
+         - it is ABSENT when the row does not overflow. Between 480px and this
+           query's 639px ceiling all five links fit, and a scroll timeline with
+           nothing to scroll is inactive — the animation does not apply and the
+           base value below (both ends 0, i.e. no fade) stands. No width
+           threshold to guess at, and none to re-guess when a label is renamed.
+         - the right fade LIFTS at the end of the scroll, so the last label is
+           never left permanently dimmed.
+         - a left fade appears once scrolled, so "there is more back that way"
+           is legible too.
+       Browsers without scroll-driven animations (Safari < 26, Firefox < 144)
+       keep the base value, which is today's behaviour exactly — this can only
+       add the hint, never take one away. */
+    -webkit-mask-image: linear-gradient(to right,
+      transparent 0, #000 var(--nav-fade-start),
+      #000 calc(100% - var(--nav-fade-end)), transparent 100%);
+    mask-image: linear-gradient(to right,
+      transparent 0, #000 var(--nav-fade-start),
+      #000 calc(100% - var(--nav-fade-end)), transparent 100%);
+  }
+
+  @supports (animation-timeline: scroll()) {
+    .broadsheet-nav-inner .page-links {
+      animation-name: nav-scroll-edges;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      /* Longhands, not the `animation` shorthand: the shorthand resets
+         animation-duration, and a scroll-driven animation needs `auto` to span
+         its timeline rather than the 0s a reset would leave behind. */
+      animation-duration: auto;
+      animation-timeline: scroll(self inline);
+    }
+
+    /* The ramps sit near the ends rather than spread across the scroll, so the
+       hint resolves as you actually arrive rather than dimming both edges
+       through the middle of a short row. */
+    @keyframes nav-scroll-edges {
+      0% {
+        --nav-fade-start: 0px;
+        --nav-fade-end: 2rem;
+      }
+
+      12%, 88% {
+        --nav-fade-start: 2rem;
+        --nav-fade-end: 2rem;
+      }
+
+      100% {
+        --nav-fade-start: 2rem;
+        --nav-fade-end: 0px;
+      }
+    }
   }
 
   .broadsheet-nav-inner .page-links a {

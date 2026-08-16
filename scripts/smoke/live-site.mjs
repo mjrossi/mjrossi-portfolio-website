@@ -84,6 +84,7 @@ export async function checkRoutes() {
     assertSharedChrome(`blog post ${postSlug}`, post.res, post.html, '/blog');
     check(`blog post ${postSlug}: back link to /blog`, /href="\/blog"/.test(post.html));
     checkPostFurniture(postSlug, post.html);
+    await checkOgCardServed(postSlug);
   }
 
   assertSharedChrome('blog topics', topics.res, topics.html, '/blog');
@@ -181,6 +182,36 @@ function checkPostFurniture(slug, html) {
     new RegExp(`property="og:image" content="[^"]*/og/${slug}\\.png"`).test(html),
     'og:image still points at the generic /og.png',
   );
+}
+
+/**
+ * The card the post advertises has to be REACHABLE, not merely written. The
+ * artifact check in static.mjs proves make-post-og.mjs put a file on disk;
+ * this proves the deployed worker hands it back, which is the half that turns
+ * on the ASSETS binding and public/.assetsignore rather than on the generator.
+ *
+ * A scraper is the only consumer, and it never reports a failure to us — a
+ * broken og:image is visible as a missing preview card on someone else's
+ * timeline, days after the fact, during the manual syndication window.
+ */
+async function checkOgCardServed(slug) {
+  const res = await fetch(`${BASE}/og/${slug}.png`);
+  // Drain it. An unread body leaves wrangler dev's ProxyWorker holding a stream
+  // nobody consumes, which is what kills the runtime mid-run — see CLAUDE.md.
+  await res.arrayBuffer();
+  checkStatus(
+    `blog post ${slug}: /og/${slug}.png is served`,
+    res, 200,
+    'the advertised og:image 404s — every social preview falls back to nothing',
+  );
+  // The content type is the half that catches a MISS specifically. An ASSETS
+  // miss falls through to the worker, which answers with the 404 PAGE — 200 is
+  // gone but a body-size floor here would not be: that HTML is comfortably
+  // larger than the 1KB an empty PNG would trip, so it reads green while the
+  // card is missing. Measured: with the file moved aside, status and this both
+  // fail and a byteLength > 1024 check passed. Assert the disk size in
+  // static.mjs, where the bytes are the file's own, and the type here.
+  checkHeader(`blog post ${slug}: og card is a PNG`, res, 'content-type', 'image/png');
 }
 
 /**

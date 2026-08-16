@@ -8,10 +8,10 @@
 //
 // `checkBuildArtifacts` reads dist/client — assets, the generated _headers, and
 // the CSS bundle.
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { check, stripComments } from './check.mjs';
-import { DIST, FIXTURE_SLUG, GALLEY_WRITE_QUOTA } from './config.mjs';
+import { DIST, FIXTURE_SLUG, GALLEY_WRITE_QUOTA, PUBLISHED_SLUG } from './config.mjs';
 
 /** Read and comment-strip a source file, or return '' if it isn't there. */
 function source(path) {
@@ -260,6 +260,35 @@ export function checkBuildArtifacts() {
   ]) {
     check(`asset: ${asset}`, existsSync(resolve(DIST, asset)));
   }
+
+  // THE PER-POST OG CARDS, IN BOTH DIRECTIONS. BlogPost.astro advertises
+  // /og/<slug>.png for any post published as of __BUILD_TIME__; this is the only
+  // thing that looks at whether scripts/make-post-og.mjs actually wrote one.
+  //
+  // The source guard above pins the GATE — that the layout still asks the build
+  // clock rather than the request's — and live-site.mjs pins the meta TAG. Both
+  // are satisfied by a build that emitted no cards at all: make-post-og.mjs
+  // resolves its paths from cwd, so a moved content directory or a glob change
+  // makes listPostSlugs() return [], and the script logs "wrote 0 card(s)",
+  // exits 0, and lets `&&` chain on to a successful build in which every
+  // published post links an image that 404s for every scraper.
+  const publishedCard = resolve(DIST, 'og', `${PUBLISHED_SLUG}.png`);
+  check(
+    `og card: ${PUBLISHED_SLUG}.png was generated`,
+    existsSync(publishedCard) && statSync(publishedCard).size > 1024,
+    'no per-post OG card in dist/client/og — every post advertises an og:image that does not exist',
+  );
+  // The other direction is a disclosure, not a 404: a card carries the post's
+  // TITLE, and /og/<slug>.png is a guessable URL with no token in front of it.
+  // Generating one for a scheduled draft hands that draft's title to anyone who
+  // guesses the slug — which is the one thing scheduled publishing exists to
+  // prevent, and unlike a cover image (hash-named by astro:assets) this path is
+  // derived from the slug and therefore trivially reachable.
+  check(
+    'og card: the scheduled fixture has NO card',
+    !existsSync(resolve(DIST, 'og', `${FIXTURE_SLUG}.png`)),
+    "a scheduled draft's OG card is on disk — its title is readable at a guessable URL",
+  );
 
   // THE SITEMAP MUST NOT NAME THE DESK. /admin is 404ed without an Access JWT,
   // so an entry would not hand anyone the page — but the per-post URLs under it

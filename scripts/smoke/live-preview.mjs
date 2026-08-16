@@ -215,6 +215,32 @@ async function checkGalleyMatrix(fixtureExp, viewToken, post) {
     'the galley shipped for a link that never granted review rights',
   );
 
+  // THE SUBSCRIBE CARD MUST NOT REACH A DRAFT, AND ONE `!scheduled` IS ALL THAT
+  // STOPS IT. A galley reader is here to review prose, not to be sold a
+  // subscription — and placement D otherwise puts Turnstile plus
+  // /scripts/newsletter.js on the page, which is the wider of the two JS
+  // carve-outs landing on a no-store page that exists to be read once.
+  //
+  // Nothing else could see this. The card is gated in BlogPost.astro, not in
+  // Subscribe.astro, so the component renders identically wherever it is
+  // called; drop the gate and every published-post assertion in live-site.mjs
+  // stays green while every reviewer gets a signup form on the draft.
+  //
+  // Both halves are needed. They are not the same gate seen twice: the markup
+  // check catches the `!scheduled` around <Subscribe> going away, and the
+  // script check catches the loader being lifted out of the component into the
+  // layout — where it would ship on a draft with no <aside> to give it away.
+  check(
+    'galley: no subscribe card on a draft',
+    !galleyHtml.includes('class="subscribe-card"'),
+    'the subscribe card rendered on a post under review — BlogPost.astro lost its !scheduled gate',
+  );
+  check(
+    'galley: no newsletter JS on a draft',
+    !galleyHtml.includes('/scripts/newsletter.js'),
+    'the newsletter carve-out reached a draft — Turnstile and the form handler on a no-store page',
+  );
+
   // The second carve-out must stay off every public page. /blog is the one
   // that already carries client JS, which is exactly why it is worth pinning.
   const [homeGalley, blogGalley] = await Promise.all([

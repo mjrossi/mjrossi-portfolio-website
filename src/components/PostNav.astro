@@ -1,0 +1,45 @@
+---
+// Previous / next, below the tag footer and the subscribe card (finding 1.5).
+//
+// A finished post used to end on "← All posts" and nothing else. Chronological
+// neighbours are the cheapest exit available and need no related-post logic.
+//
+// When there is no neighbour the cell is still rendered — "Newest post" /
+// "Oldest post" in muted type — rather than collapsing the grid. A one-column
+// nav on a two-column layout reads as a broken cell; a filled one tells the
+// reader where they are in the archive.
+import type { Post } from '../lib/blog.ts';
+
+interface Props {
+  previous: Post | null;
+  next: Post | null;
+}
+
+const { previous, next } = Astro.props;
+---
+
+<nav class="post-nav" aria-label="More posts">
+  {previous ? (
+    <a class="prev" href={`/blog/${previous.id}/`} rel="prev">
+      <div class="k">← Previous</div>
+      <div class="t">{previous.data.title}</div>
+    </a>
+  ) : (
+    <div class="prev empty">
+      <div class="k">← Previous</div>
+      <div class="t">Oldest post</div>
+    </div>
+  )}
+
+  {next ? (
+    <a class="next" href={`/blog/${next.id}/`} rel="next">
+      <div class="k">Next →</div>
+      <div class="t">{next.data.title}</div>
+    </a>
+  ) : (
+    <div class="next empty">
+      <div class="k">Next →</div>
+      <div class="t">Newest post</div>
+    </div>
+  )}
+</nav>

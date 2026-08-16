@@ -215,6 +215,32 @@ async function checkGalleyMatrix(fixtureExp, viewToken, post) {
     'the galley shipped for a link that never granted review rights',
   );
 
+  // THE SUBSCRIBE CARD MUST NOT REACH A DRAFT, AND ONE `!scheduled` IS ALL THAT
+  // STOPS IT. A galley reader is here to review prose, not to be sold a
+  // subscription — and placement D otherwise puts Turnstile plus
+  // /scripts/newsletter.js on the page, which is the wider of the two JS
+  // carve-outs landing on a no-store page that exists to be read once.
+  //
+  // Nothing else could see this. The card is gated in BlogPost.astro, not in
+  // Subscribe.astro, so the component renders identically wherever it is
+  // called; drop the gate and every published-post assertion in live-site.mjs
+  // stays green while every reviewer gets a signup form on the draft.
+  //
+  // Both halves are needed. They are not the same gate seen twice: the markup
+  // check catches the `!scheduled` around <Subscribe> going away, and the
+  // script check catches the loader being lifted out of the component into the
+  // layout — where it would ship on a draft with no <aside> to give it away.
+  check(
+    'galley: no subscribe card on a draft',
+    !galleyHtml.includes('class="subscribe-card"'),
+    'the subscribe card rendered on a post under review — BlogPost.astro lost its !scheduled gate',
+  );
+  check(
+    'galley: no newsletter JS on a draft',
+    !galleyHtml.includes('/scripts/newsletter.js'),
+    'the newsletter carve-out reached a draft — Turnstile and the form handler on a no-store page',
+  );
+
   // The second carve-out must stay off every public page. /blog is the one
   // that already carries client JS, which is exactly why it is worth pinning.
   const [homeGalley, blogGalley] = await Promise.all([
@@ -675,6 +701,64 @@ export async function checkHostUnlock() {
     'the host unlock is meant to widen RSS too (unlike a signed link)',
   );
   checkHeader('preview host: RSS is no-store', previewRss, 'cache-control', 'no-store');
+
+  // The fixture belongs in the LISTINGS (that is what the three checks above
+  // are for) but never in a slot that features ONE post: dated 2099, it is the
+  // newest post there is wherever scheduled posts are visible, so a plain
+  // newest-first pick made the home page's "From the Lexicon" block read
+  // "Scheduled-post fixture (not a real post)" on every preview deploy.
+  //
+  // Only reachable here. In production the fixture is filtered by date long
+  // before the teaser sees it, so the front page's own assertions in
+  // live-site.mjs would stay green through this.
+  const previewHome = await asHost('/', PREVIEW_HOST);
+  const previewHomeHtml = await previewHome.text();
+  // indexOf returns -1 when the marker is gone, and slice(-1) is the document's
+  // LAST CHARACTER — which is non-empty and contains no slug, so the assertion
+  // below passed on a home page that had lost the teaser entirely. Find the
+  // offset first and assert on it, so a missing block fails loudly here rather
+  // than reading as a passing check for something no longer on the page.
+  const teaserAt = previewHomeHtml.indexOf('class="lexicon-teaser"');
+  check(
+    'preview host: the home page still renders a "From the Lexicon" block',
+    teaserAt >= 0,
+    'no .lexicon-teaser on / — the assertion below would be vacuous',
+  );
+  check(
+    'preview host: "From the Lexicon" features a real post, not the fixture',
+    teaserAt >= 0 && !previewHomeHtml.slice(teaserAt, teaserAt + 800).includes(FIXTURE_SLUG),
+    'the home page featured the smoke fixture — getLatestPosts stopped skipping it',
+  );
+
+  // Same shape one surface over: previous/next is the other slot that names a
+  // specific post, so the newest real post's "Next →" pointed at the fixture.
+  //
+  // The subject is discovered rather than named — the index is newest-first and
+  // reveals the fixture on this host, so the first non-fixture post link is the
+  // newest real post, which is precisely the one whose neighbour the fixture
+  // would be. Naming a slug here would rot the day a post's date moved.
+  const previewIndexHtml = await previewIndex.text();
+  const newestRealSlug = [...previewIndexHtml.matchAll(/href="\/blog\/(?!tag\/|tags|rss)([^"/]+)\//g)]
+    .map((m) => m[1])
+    .find((slug) => slug !== FIXTURE_SLUG);
+  check(
+    'preview host: the index still lists a real post to check',
+    !!newestRealSlug,
+    'no non-fixture post link on /blog — the assertion below would be vacuous',
+  );
+  if (newestRealSlug) {
+    const previewNewest = await asHost(`/blog/${newestRealSlug}/`, PREVIEW_HOST);
+    const newestHtml = await previewNewest.text();
+    const navStart = newestHtml.indexOf('class="post-nav"');
+    const nav = navStart > 0 ? newestHtml.slice(navStart, newestHtml.indexOf('</nav>', navStart)) : '';
+    check(
+      `preview host: ${newestRealSlug} previous/next does not link the fixture`,
+      nav.length > 0 && !nav.includes(FIXTURE_SLUG),
+      navStart > 0
+        ? 'the fixture is a neighbour again — getAdjacentPosts stopped filtering it'
+        : 'no .post-nav on the newest post — previous/next is missing entirely',
+    );
+  }
 
   // The negative twin: the Worker's OWN workers.dev alias serves production on
   // a hostname anyone can derive from this repo, so it must NOT unlock. Only

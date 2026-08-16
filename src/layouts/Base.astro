@@ -2,33 +2,49 @@
 import { Font } from 'astro:assets';
 import '../styles/global.css';
 import ContactLinks from '../components/ContactLinks.astro';
-import { editionLine } from '../lib/edition';
+import { issue } from '../lib/edition.js';
 
 interface Props {
   title: string;
   description?: string;
   noindex?: boolean;
+  /** Absolute path to a per-page OG card; defaults to the site-level one. */
+  ogImage?: string;
+  /** Alt text for that card. Defaults to the site description. */
+  ogImageAlt?: string;
 }
+
+const SITE_ALT = 'Matthew Rossi — software engineer turning toward sustainable urban mobility.';
 
 const {
   title,
   description = 'Matthew Rossi — software engineer turning toward sustainable urban mobility.',
   noindex = false,
+  ogImage: ogImagePath = '/og.png',
+  ogImageAlt = SITE_ALT,
 } = Astro.props;
 
 const pathname = Astro.url.pathname;
 const canonical = new URL(pathname, Astro.site).href;
-const ogImage = new URL('/og.png', Astro.site).href;
+const ogImage = new URL(ogImagePath, Astro.site).href;
 const fullTitle = title === 'Matthew Rossi' ? title : `${title} — Matthew Rossi`;
 
-const editionLineStr = editionLine();
+// ONE call, per render, for the one masthead every page carries. Nothing may
+// derive an issue of its own — that divergence is what finding 3.1 caught
+// between /blog and everything else. See src/lib/edition.js.
+const edition = issue();
 
+// `pinned` is a rendering hint for phone widths only: the nav becomes one
+// scrolling row there, and the pinned link stops scrolling with it. It is last
+// in this list and last in the DOM, so pinning changes nothing about reading
+// order, tab order, or the desktop row — see `.page-links a.nav-pinned` in
+// global.css for why the blog is the link that gets it.
 const navLinks = [
   { href: '/work', label: 'Work' },
   { href: '/projects', label: 'Projects' },
   { href: '/education', label: 'Education' },
   { href: '/urban-mobility', label: 'Urban Mobility' },
-  { href: '/blog', label: 'Blog' },
+  { href: '/blog', label: 'Blog', pinned: true },
 ];
 
 const isHome = pathname === '/';
@@ -53,13 +69,13 @@ const isHome = pathname === '/';
   <meta property="og:image" content={ogImage}>
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Matthew Rossi — software engineer turning toward sustainable urban mobility.">
+  <meta property="og:image:alt" content={ogImageAlt}>
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content={fullTitle}>
   <meta name="twitter:description" content={description}>
   <meta name="twitter:image" content={ogImage}>
-  <meta name="twitter:image:alt" content="Matthew Rossi — software engineer turning toward sustainable urban mobility.">
+  <meta name="twitter:image:alt" content={ogImageAlt}>
 
   <Font cssVariable="--font-inter" preload />
   <Font cssVariable="--font-fraunces" preload />
@@ -77,7 +93,7 @@ const isHome = pathname === '/';
         )}
         <div class="masthead-meta">
           <span class="masthead-meta-loc">Lisbon, Portugal</span>
-          <span class="masthead-meta-edition">{editionLineStr}</span>
+          <span class="masthead-meta-edition">{edition.label}</span>
         </div>
       </div>
       <div class="masthead-tagline-row">
@@ -91,15 +107,18 @@ const isHome = pathname === '/';
   <nav class="broadsheet-nav" aria-label="Primary">
     <div class="broadsheet-nav-inner">
       <div class="page-links">
-        {navLinks.map(link => (
-          <a
-            href={link.href}
-            class={pathname === link.href || pathname.startsWith(link.href + '/') ? 'active' : ''}
-            aria-current={pathname === link.href || pathname.startsWith(link.href + '/') ? 'page' : undefined}
-          >
-            {link.label}
-          </a>
-        ))}
+        {navLinks.map(link => {
+          const current = pathname === link.href || pathname.startsWith(link.href + '/');
+          return (
+            <a
+              href={link.href}
+              class:list={[{ active: current, 'nav-pinned': link.pinned }]}
+              aria-current={current ? 'page' : undefined}
+            >
+              {link.label}
+            </a>
+          );
+        })}
       </div>
       <div class="nav-contact">
         <ContactLinks />

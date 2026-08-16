@@ -1,0 +1,47 @@
+---
+// The post's topics, inline in a meta line (findings 1.4 / 2.1).
+//
+// UP TO TWO, in frontmatter order. One was the original spec and it under-
+// described: the Netherlands post is cycling *and* infrastructure *and*
+// personal, and "Cycling" alone is true but thin. Two is what finding 2.1
+// actually recommends ("cap the index at two or three tags per entry") and it
+// keeps the win the finding was after — the old row of five or six saturated
+// chips is still gone, and the title still leads the entry.
+//
+// Order is editorial and it carries a second job beyond specificity: it is what
+// makes a series read as a series. All three Atlas posts lead `urbanist-atlas`
+// so they share a first topic; leading each with its own most-specific tag had
+// parts 1 and 3 reading "Artificial Intelligence" and part 2 "Urbanist Atlas",
+// which is exactly backwards for the thing a reader most needs to see.
+//
+// Each topic travels with its own separator as ONE flex item, so a wrap at
+// 360px never strands a "·" at the end of a line — and so two topics can break
+// across lines independently rather than as a single wide block.
+import { tagLabel } from '../lib/tags.js';
+
+interface Props {
+  tags: string[];
+}
+
+/** The cap. Smoke pins it, so raising it is a decision rather than a drift. */
+const TOPIC_LIMIT = 2;
+
+const topics = Astro.props.tags.slice(0, TOPIC_LIMIT);
+---
+
+{/*
+  The wrapper exists for the phone layout only, where the topics leave the
+  running meta line and become a right-aligned column of their own. Above that
+  width it is `display: contents`, so the topic items stay direct flex items of
+  the meta line and keep the independent-wrapping behaviour described above —
+  the element is in the markup but not in the layout. See .post-topics in
+  global.css.
+*/}
+<span class="post-topics">
+  {topics.map((tag) => (
+    <span class="post-topic-item">
+      <span class="meta-sep" aria-hidden="true">·</span>
+      <a href={`/blog/tag/${tag}/`} class="post-topic">{tagLabel(tag)}</a>
+    </span>
+  ))}
+</span>

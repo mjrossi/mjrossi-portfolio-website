@@ -1,15 +1,22 @@
 ---
+import { tagLabel } from '../lib/tags.js';
+
 interface Props {
   tags: string[];
+  /** Renders the "Filed under" label above the chips (post footer only). */
+  label?: string;
 }
 
-const { tags } = Astro.props;
+const { tags, label } = Astro.props;
 ---
 
 {tags.length > 0 && (
-  <p class="post-tags">
-    {tags.map((tag) => (
-      <a href={`/blog/tag/${tag}/`} class="tag-chip">{tag}</a>
-    ))}
-  </p>
+  <div class="post-tags-block">
+    {label && <div class="post-tags-label">{label}</div>}
+    <p class="post-tags">
+      {tags.map((tag) => (
+        <a href={`/blog/tag/${tag}/`} class="tag-chip">{tagLabel(tag)}</a>
+      ))}
+    </p>
+  </div>
 )}

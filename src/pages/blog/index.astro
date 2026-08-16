@@ -1,11 +1,10 @@
 ---
 import Base from '../../layouts/Base.astro';
 import BlogPostEntry from '../../components/BlogPostEntry.astro';
-import NewsletterSignup from '../../components/NewsletterSignup.astro';
+import Subscribe from '../../components/Subscribe.astro';
 import { getPublishedPosts } from '../../lib/blog.ts';
 
 const posts = await getPublishedPosts({ showScheduled: Astro.locals.showScheduled });
-const postCountLabel = `${posts.length} post${posts.length === 1 ? '' : 's'}`;
 ---
 
 <Base
@@ -16,32 +15,53 @@ const postCountLabel = `${posts.length} post${posts.length === 1 ? '' : 's'}`;
     <div class="page-header">
       <div class="blog-header">
         <h1>The Urbanist Lexicon</h1>
-        <a class="rss-link" href="/blog/rss.xml" aria-label="Subscribe via RSS">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19.01 7.38 20 6.18 20C4.98 20 4 19.01 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1z" />
-          </svg>
-          <span>RSS</span>
-        </a>
+        <div class="blog-header-links">
+          <a class="rss-link" href="/blog/tags">
+            <span>Topics</span>
+          </a>
+          <a class="rss-link" href="/blog/rss.xml" aria-label="Subscribe via RSS">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19.01 7.38 20 6.18 20C4.98 20 4 19.01 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1z" />
+            </svg>
+            <span>RSS</span>
+          </a>
+        </div>
       </div>
       <p>A record of systems, movement, and the transition from bits to bricks.</p>
     </div>
 
+    {/*
+      Placement A: the subscription line sits directly under the header, where a
+      newspaper puts it — always in view however long the archive gets, and one
+      row of vertical space. It replaces the block that used to sit below the
+      last entry (finding 2.2), which outweighed the archive it belonged to and
+      sank further down the page with every post.
+    */}
+    <Subscribe variant="line" />
+
+    {/*
+      Deliberately OUTSIDE the subscribe aside, and named without a
+      "newsletter" / "subscribe" / "signup" / "email" / "form" substring, so an
+      ad-block filter list that hides the band above cannot take this with it.
+      §5 of the design review moved the hand-add offer to /privacy; a reader
+      whose blocker ate the form never gets to /privacy to find it, so it is
+      here as well as there.
+
+      RSS is NOT repeated here, unlike on a post: the Topics/RSS pills in the
+      header above are outside the aside too, so a blocked band still leaves an
+      RSS route on this page. Saying it twice inside 200px was the second of
+      two subscribe rows on an index whose band is justified by being one line.
+    */}
+    <p class="blog-follow-note">
+      Or <a href="/api/contact">email me</a> to be added by hand
+    </p>
+
     {posts.length === 0 ? (
       <p class="post-empty">No posts yet. Check back soon.</p>
     ) : (
-      <>
-        <section aria-label="Blog posts">
-          {posts.map((post) => <BlogPostEntry post={post} />)}
-        </section>
-        <p class="post-count">{postCountLabel}</p>
-      </>
+      <section aria-label="Blog posts">
+        {posts.map((post) => <BlogPostEntry post={post} />)}
+      </section>
     )}
-
-    <NewsletterSignup />
-
-    <p class="blog-follow-note">
-      Or follow by <a href="/blog/rss.xml">RSS</a> ·
-      <a href="/api/contact">email me</a> to be added by hand
-    </p>
   </div>
 </Base>

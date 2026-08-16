@@ -1,0 +1,43 @@
+---
+// The topic index (finding 2.3). Chips have always linked to /blog/tag/<slug>,
+// and nothing listed those pages — a reader who landed on one could only go
+// back. This is the list.
+//
+// Deliberately not an archive: a year-grouped list of every post is a
+// different page and is worth having only once the index runs past one screen.
+import Base from '../../layouts/Base.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import { getTagCounts } from '../../lib/blog.ts';
+import { tagLabel } from '../../lib/tags.js';
+
+const topics = await getTagCounts({ showScheduled: Astro.locals.showScheduled });
+---
+
+<Base
+  title="Topics"
+  description="Every topic in The Urbanist Lexicon, by post count."
+>
+  <div class="page blog-page">
+    <PageHeader
+      title="Topics"
+      description="Every topic in The Urbanist Lexicon, most-written first."
+    >
+      <p class="page-meta">
+        <span><span class="page-meta-label">Back</span> <a href="/blog">All posts</a></span>
+      </p>
+    </PageHeader>
+
+    {topics.length === 0 ? (
+      <p class="post-empty">No topics yet.</p>
+    ) : (
+      <ul class="topic-list">
+        {topics.map(({ tag, count }) => (
+          <li class="topic-row">
+            <a href={`/blog/tag/${tag}/`}>{tagLabel(tag)}</a>
+            <span class="topic-count">{count} {count === 1 ? 'post' : 'posts'}</span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</Base>

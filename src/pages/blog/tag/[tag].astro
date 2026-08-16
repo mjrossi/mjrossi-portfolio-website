@@ -3,31 +3,55 @@ import Base from '../../../layouts/Base.astro';
 import BlogPostEntry from '../../../components/BlogPostEntry.astro';
 import PageHeader from '../../../components/PageHeader.astro';
 import { getAllTags, getPostsByTag } from '../../../lib/blog.ts';
+import { retiredTarget, tagLabel } from '../../../lib/tags.js';
 
 const { tag } = Astro.params;
 const query = { showScheduled: Astro.locals.showScheduled };
 const tags = await getAllTags(query);
+
+// A tag retired by the August 2026 consolidation redirects rather than 404s —
+// those URLs were linked from chips on every post that carried them and may
+// already have been shared. Checked BEFORE the membership test, because a
+// retired slug is by definition no longer in `tags`. 301: the move is
+// permanent, and the target is a real page (asserted in src/lib/tags.test.js).
+if (tag) {
+  const moved = retiredTarget(tag);
+  if (moved) {
+    return Astro.redirect(`${moved}/`, 301);
+  }
+}
 
 if (!tag || !tags.includes(tag)) {
   return new Response('Not Found', { status: 404 });
 }
 
 const posts = await getPostsByTag(tag, query);
+const label = tagLabel(tag);
+// Sibling topics: the lateral move a tag page could not previously offer.
+const siblings = tags.filter((t) => t !== tag);
 ---
 
 <Base
-  title={`Tag: ${tag}`}
-  description={`Posts tagged "${tag}" on mjrossi.com.`}
+  title={`Topic: ${label}`}
+  description={`Posts on ${label} in The Urbanist Lexicon.`}
 >
   <div class="page blog-page">
-    <PageHeader title={`Tag: ${tag}`}>
-      <p>{posts.length} {posts.length === 1 ? 'post' : 'posts'} tagged <em>{tag}</em>.</p>
+    <PageHeader title={label}>
+      <p>{posts.length} {posts.length === 1 ? 'post' : 'posts'} on <em>{label}</em>.</p>
       <p class="page-meta">
         <span><span class="page-meta-label">Back</span> <a href="/blog">All posts</a></span>
+        <span><span class="page-meta-label">Index</span> <a href="/blog/tags">All topics</a></span>
       </p>
+      {siblings.length > 0 && (
+        <p class="topic-siblings">
+          {siblings.map((sibling) => (
+            <a href={`/blog/tag/${sibling}/`} class="tag-chip">{tagLabel(sibling)}</a>
+          ))}
+        </p>
+      )}
     </PageHeader>
 
-    <section aria-label={`Posts tagged ${tag}`}>
+    <section aria-label={`Posts on ${label}`}>
       {posts.map((post) => <BlogPostEntry post={post} />)}
     </section>
   </div>

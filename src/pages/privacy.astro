@@ -11,8 +11,8 @@ import PageHeader from '../components/PageHeader.astro';
     <section aria-labelledby="newsletter-heading">
       <h2 id="newsletter-heading">Newsletter</h2>
       <p>
-        If you subscribe via the form at the bottom of <a href="/blog">/blog</a>, your email
-        address is sent to <a href="https://buttondown.com" rel="noopener">Buttondown</a>,
+        If you subscribe via the form on <a href="/blog">/blog</a> or at the end of a post,
+        your email address is sent to <a href="https://buttondown.com" rel="noopener">Buttondown</a>,
         which stores it and delivers new posts to you by email. I don't run my own
         mailing infrastructure. Buttondown sends a confirmation email before adding you
         to the list (double opt-in), and every email it sends includes a one-click
@@ -23,6 +23,12 @@ import PageHeader from '../components/PageHeader.astro';
         To delete your address, use the unsubscribe link in any email or write to
         <a href="/api/contact">hello@mjrossi.com</a> and I'll remove you.
       </p>
+      <p>
+        You don't have to use the form at all. <a href="/blog/rss.xml">RSS</a> reaches the
+        same posts and tells me nothing about you, and if you'd rather not hand your
+        address to a third party, email <a href="/api/contact">hello@mjrossi.com</a> and
+        I'll add you to the list by hand.
+      </p>
     </section>
 
     <section aria-labelledby="turnstile-heading">
@@ -31,7 +37,9 @@ import PageHeader from '../components/PageHeader.astro';
         The signup form uses <a href="https://www.cloudflare.com/products/turnstile/" rel="noopener">Cloudflare Turnstile</a>
         to block automated submissions. Turnstile is a CAPTCHA replacement that doesn't
         set tracking cookies and is designed not to require user-identifying signals.
-        It runs only on the blog page where the form lives.
+        It runs only where that form is rendered — the blog index and the foot of each
+        post — and nowhere else on the site. This is the disclosure the form's own fine
+        print used to carry; it lives here now, and the form links to this page.
       </p>
     </section>
 

@@ -60,6 +60,24 @@ export default defineConfig({
     },
   ],
   vite: {
+    // The instant this bundle was built, inlined as a literal.
+    //
+    // src/layouts/BlogPost.astro needs it to answer a question `new Date()`
+    // cannot: not "is this post published?" (which changes between deploys —
+    // that is the whole scheduled-publishing feature) but "was it published
+    // when scripts/make-post-og.mjs ran?", which is exactly the set of posts
+    // that have a card at /og/<slug>.png. A post that publishes by its pubDate
+    // passing, with no redeploy behind it, would otherwise start advertising a
+    // card nobody generated — a 404'd social image during the manual
+    // syndication window, which is the one hour it matters.
+    //
+    // The two clocks cannot disagree in the dangerous direction: `npm run
+    // build` runs make-post-og AFTER astro build, so its `now` is strictly
+    // later, so {advertised} ⊆ {written}. The worst case is a post that went
+    // live mid-build getting a card it doesn't link yet.
+    define: {
+      __BUILD_TIME__: JSON.stringify(Date.now()),
+    },
     build: {
       rollupOptions: {
         output: {

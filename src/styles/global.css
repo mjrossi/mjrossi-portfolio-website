@@ -1656,10 +1656,18 @@ em {
 }
 
 /* Previous / next (finding 1.5). One-pixel gap over a --border background is
-   what draws the divider between the two cells without a second border. */
+   what draws the divider between the two cells without a second border.
+
+   Auto-flow columns rather than a fixed `1fr 1fr`, because a post at either end
+   of the archive renders ONE cell — see PostNav.astro, which no longer fills
+   the missing end with a placeholder. Fixed tracks would leave that cell in the
+   left half with a bare --border panel beside it, which is the "broken cell"
+   the placeholder was there to avoid; auto-columns give the lone cell the whole
+   row and two cells an even split, with no modifier class to keep in sync. */
 .post-nav {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 1px;
   background: var(--border);
   border: 1px solid var(--border);
@@ -1696,12 +1704,11 @@ em {
   color: var(--accent-hover);
 }
 
+/* Right-aligned even when it is the only cell — the arrow's direction is the
+   whole point of the alignment, and it does not depend on there being a
+   neighbour to sit opposite. */
 .post-nav .next {
   text-align: right;
-}
-
-.post-nav .empty .t {
-  color: var(--muted);
 }
 
 .post-back-all {
@@ -1718,7 +1725,7 @@ em {
 
 @media (max-width: 639px) {
   .post-nav {
-    grid-template-columns: 1fr;
+    grid-auto-flow: row;
   }
 
   .post-nav .next {

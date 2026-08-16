@@ -379,9 +379,19 @@ export function checkBuildArtifacts() {
   // won. Nothing else in this suite can see it: it is a cascade outcome, not
   // markup, so the live matrix reads exactly the same either way, and the
   // symptom is a page that renders — just wrongly.
+  //
+  // BOTH HALVES MATCH A SELECTOR LIST, NOT JUST A LONE SELECTOR. Lightning CSS
+  // merges rules that share a declaration block, so the bare rule can come back
+  // as `.page h2,.something{` — no brace directly after the `h2`, which the
+  // old `\{` anchor did not match, so the guard read green with the rule live.
+  // Same reason the positive half is a regex now: merged into a list it would
+  // have failed, which is the safe direction but still a red for the wrong
+  // reason. The `(^|[^>])` is what keeps `.page>section>h2` from matching the
+  // negative pattern; the alternation covers offset 0, where `[^>]` alone
+  // cannot match because there is no preceding character.
   check(
     'css: section-label rule is scoped to .page > section > h2',
-    css.includes('.page>section>h2{') && !/[^>]\.page h2\{/.test(css),
+    /\.page>section>h2[,{]/.test(css) && !/(^|[^>])\.page h2[,{]/.test(css),
     'a bare `.page h2` rule is back in the bundle — it will swallow post and entry headings',
   );
 

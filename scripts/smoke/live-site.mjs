@@ -166,7 +166,13 @@ function checkPostFurniture(slug, html) {
   // Same blocker fallback as the index, and for the same reason: the card lives
   // in an <aside class="subscribe-card"> that a filter list will hide, so the
   // way out has to sit outside it.
-  const cardCloseIdx = html.indexOf('</aside>');
+  // Anchored on the CARD's own </aside>, not the document's first one. The two
+  // are the same element today, which is exactly the problem: any <aside> added
+  // earlier in a post — a pull quote, an editor's note — silently turns this
+  // into "the follow note comes after some other aside", which is true of
+  // almost any placement including the broken one.
+  const cardIdx = html.indexOf('class="subscribe-card"');
+  const cardCloseIdx = cardIdx < 0 ? -1 : html.indexOf('</aside>', cardIdx);
   const postNoteIdx = html.indexOf('class="blog-follow-note"');
   check(
     `blog post ${slug}: hand-add fallback outside the subscribe card`,

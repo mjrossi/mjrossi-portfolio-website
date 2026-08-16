@@ -49,6 +49,29 @@ updates:
     # on, or set `persistState: false` on the adapter in astro.config.mjs so the
     # build writes no local state at all (nothing here needs it — there are no
     # stateful bindings, and the auto-provisioned SESSION KV store is unused).
+    ignore:
+      # js-yaml is Astro's parser before it is ours, and the whole point of the
+      # direct dependency is that scripts/content.mjs and src/lib/pubdate.test.js
+      # read frontmatter through the SAME library the build does. astro (through
+      # 7.2.2) depends on `js-yaml: ^4.3.0`, so a major here does not upgrade the
+      # build — it forks it. npm stops deduping, nests astro's own 4.x, and leaves
+      # our scripts alone on 5.x.
+      #
+      # That fork is not academic. js-yaml 5 splits `timestampTag` out of its
+      # default schema, so an unquoted `pubDate: 2026-05-10T14:00:00` comes back a
+      # STRING rather than a Date — which coercePubDate then refuses with "remove
+      # the quotes" on a line carrying none, while astro's nested 4.x still reads
+      # the same literal as a Date. `YAML11_SCHEMA` puts timestamps back but turns
+      # `yes` into true, `012` into 10 and `1:30` into 90, so there is no v5 schema
+      # that reproduces v4's default. Either way the minting scripts and the build
+      # disagree about when a post publishes, which is the one thing this
+      # dependency is declared to prevent. PR #74 failed exactly this way.
+      #
+      # Lift this when astro's own dependency moves to js-yaml 5, and move the pin
+      # in package.json onto its new range in the same commit.
+      - dependency-name: js-yaml
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: /

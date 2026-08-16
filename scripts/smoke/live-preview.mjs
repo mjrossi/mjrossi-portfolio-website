@@ -687,10 +687,20 @@ export async function checkHostUnlock() {
   // live-site.mjs would stay green through this.
   const previewHome = await asHost('/', PREVIEW_HOST);
   const previewHomeHtml = await previewHome.text();
-  const teaser = previewHomeHtml.slice(previewHomeHtml.indexOf('class="lexicon-teaser"'));
+  // indexOf returns -1 when the marker is gone, and slice(-1) is the document's
+  // LAST CHARACTER — which is non-empty and contains no slug, so the assertion
+  // below passed on a home page that had lost the teaser entirely. Find the
+  // offset first and assert on it, so a missing block fails loudly here rather
+  // than reading as a passing check for something no longer on the page.
+  const teaserAt = previewHomeHtml.indexOf('class="lexicon-teaser"');
+  check(
+    'preview host: the home page still renders a "From the Lexicon" block',
+    teaserAt >= 0,
+    'no .lexicon-teaser on / — the assertion below would be vacuous',
+  );
   check(
     'preview host: "From the Lexicon" features a real post, not the fixture',
-    teaser.length > 0 && !teaser.slice(0, 800).includes(FIXTURE_SLUG),
+    teaserAt >= 0 && !previewHomeHtml.slice(teaserAt, teaserAt + 800).includes(FIXTURE_SLUG),
     'the home page featured the smoke fixture — getLatestPosts stopped skipping it',
   );
 

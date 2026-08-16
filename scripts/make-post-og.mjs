@@ -23,6 +23,15 @@
 // publication, which the authoring workflow produces anyway: step 5 sets the
 // real date in a commit.
 //
+// THE LAYOUT ASKS THE SAME QUESTION AT THE SAME INSTANT, and that pairing is
+// what makes the fallback above real rather than aspirational. BlogPost.astro
+// links a card only when `isPublished(pubDate, __BUILD_TIME__)` — the build's
+// own clock, inlined by Vite — because a post can go live between deploys with
+// nothing regenerating this directory, and a per-request `isPublished` would
+// then advertise a card that 404s. `npm run build` runs this script AFTER astro
+// build, so this `now` is the later of the two and the advertised set can only
+// be a subset of what gets written here.
+//
 // Fonts: this runs in Node, where the site's webfonts aren't installed. Same
 // fallback as scripts/make-og.mjs — Georgia for serif, system-ui for sans, which
 // is close enough at card sizes.

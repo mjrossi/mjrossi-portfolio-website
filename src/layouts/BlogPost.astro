@@ -25,6 +25,17 @@ const { previous, next } = await getAdjacentPosts(post.id, {
 // See BlogPostEntry.astro — keyed off the pubDate, not the preview flag.
 const scheduled = !isPublished(pubDate);
 
+// Whether /og/<slug>.png exists, which is NOT the same question as `scheduled`.
+// scripts/make-post-og.mjs writes a card only for a post that was published when
+// it ran (a card carries the title, and the URL is guessable, so generating one
+// for a draft would publish that draft's title). `scheduled` is evaluated per
+// request, so a post that goes live by its date passing — with no deploy behind
+// it, which is the documented scheduled-publishing mechanism — would start
+// pointing og:image at a card that was never generated and 404s until the next
+// build. __BUILD_TIME__ is inlined by Vite (see astro.config.mjs) and asks the
+// question the generator actually answered.
+const hasCard = isPublished(pubDate, __BUILD_TIME__);
+
 // The galley renders only for a signed preview link that named a reviewer, only
 // on the post that link authorises, and only while that post is still a draft.
 // All three matter: previewReviewer alone would put the review chrome on every
@@ -60,8 +71,8 @@ const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
 <Base
   title={title}
   description={description}
-  ogImage={scheduled ? undefined : `/og/${post.id}.png`}
-  ogImageAlt={scheduled ? undefined : title}
+  ogImage={hasCard ? `/og/${post.id}.png` : undefined}
+  ogImageAlt={hasCard ? title : undefined}
 >
   <article class="page post">
     <a href="/blog" class="post-back post-back-top">← Blog</a>

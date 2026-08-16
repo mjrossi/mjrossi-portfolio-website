@@ -132,6 +132,56 @@ export function checkSourceGuards() {
       /previewSlug\s*===\s*post\.id/.test(layoutSource),
       'the galley gate no longer compares previewSlug to the rendered post',
     );
+
+    // og:image is gated on the BUILD's clock, not the request's, and the two
+    // are not interchangeable. scripts/make-post-og.mjs writes a card only for
+    // a post that was published when it ran; a post that goes live by its
+    // pubDate passing — with no deploy behind it, which is the whole scheduled-
+    // publishing mechanism — would otherwise start advertising a card nobody
+    // generated, 404ing for every scraper during the manual syndication window.
+    //
+    // Nothing else can see this. At build time `scheduled` and `hasCard` agree
+    // by construction, so the built HTML is identical and every artifact check
+    // passes; the divergence only opens hours later, in production.
+    check(
+      'BlogPost.astro: og:image is gated on the build clock',
+      /isPublished\(\s*pubDate\s*,\s*__BUILD_TIME__\s*\)/.test(layoutSource) &&
+        /ogImage=\{hasCard\s*\?/.test(layoutSource),
+      'the og:image gate no longer asks whether make-post-og.mjs generated a card — ' +
+        'a post publishing between deploys would link an /og/<slug>.png that does not exist',
+    );
+  }
+
+  // THE NEWSLETTER'S STATUS LINE IS A SIBLING OF THE FORM, NOT A CHILD, AND
+  // public/scripts/newsletter.js MUST LOOK IT UP ACCORDINGLY.
+  //
+  // Subscribe.astro renders <form>, the Turnstile mount and <p class=
+  // "newsletter-msg"> as three children of one <aside>, so the form stays a
+  // single flex row and replaceWith() on success doesn't take the status line
+  // with it. When the msg lookup was still `form.querySelector(...)` it
+  // returned null, and the first `msg.` access threw — after preventDefault, so
+  // the form did nothing at all: no request, no message, no disabled button, on
+  // /blog and at the foot of every published post.
+  //
+  // Nothing else in this suite could see it. There is no browser here, the HTML
+  // is unchanged by the bug, and the endpoint it never called is tested
+  // directly. Both halves are needed: a script searching from the form, or a
+  // component that stopped rendering the element, break it the same way.
+  const subscribeSource = source(resolve('src/components/Subscribe.astro'));
+  const newsletterClient = source(resolve('public/scripts/newsletter.js'));
+  if (subscribeSource && newsletterClient) {
+    check(
+      'Subscribe.astro: renders the .newsletter-msg status line',
+      /class="newsletter-msg"/.test(subscribeSource),
+      'the status line is gone from Subscribe.astro — newsletter.js writes every message into it',
+    );
+    check(
+      'newsletter.js: resolves .newsletter-msg from the component root, not the form',
+      /closest\(\s*['"]aside['"]\s*\)/.test(newsletterClient) &&
+        !/form\.querySelector\(\s*['"]\.newsletter-msg/.test(newsletterClient),
+      'newsletter.js scopes the status-line lookup to the <form>, where the element is not — ' +
+        'the handler throws after preventDefault and the form silently does nothing',
+    );
   }
 
   // The write quota must stay ONE statement. A check-then-insert pair passes

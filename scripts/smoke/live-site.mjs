@@ -128,8 +128,8 @@ export async function checkRoutes() {
 }
 
 /**
- * What the August 2026 review moved around a post: one topic in the meta line
- * rather than a chip row above the prose, the full set under "Filed under", the
+ * What the August 2026 review moved around a post: up to two topics in the meta
+ * line rather than a chip row above the prose, the full set under "Filed under", the
  * subscribe card, and the previous/next pair.
  */
 function checkPostFurniture(slug, html) {

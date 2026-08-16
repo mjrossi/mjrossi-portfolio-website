@@ -315,7 +315,15 @@ const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
 
   /* Status line. Empty until the handler writes to it, so it takes no space
      until it has something to say — in the band that matters, since the whole
-     placement is one row tall. */
+     placement is one row tall.
+
+     VISUALLY HIDDEN WHEN EMPTY, NOT `display: none`. This is an aria-live
+     region, and a live region has to be in the accessibility tree BEFORE the
+     text lands in it for the announcement to be reliable — `display: none`
+     takes it out, so the first error a screen-reader user hits may never be
+     read out. The clip-path idiom (same as .subscribe-sr) keeps it in the tree
+     the whole time, and `position: absolute` keeps it out of the band's flex
+     flow so it still costs no row and no gap. */
   .newsletter-msg {
     font-family: var(--font-ui);
     font-size: 0.75rem;
@@ -325,7 +333,12 @@ const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
   }
 
   .newsletter-msg:empty {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .newsletter-msg.is-error {

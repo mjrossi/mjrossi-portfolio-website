@@ -5,8 +5,16 @@
 // review found home, /projects and a post reading `No. VIII · August 2026`
 // while /blog read `No. VII · July 2026` — a masthead whose date went backwards
 // as the reader clicked, on the one element whose entire job is to look
-// authoritative. Nothing may compute an issue from a page, a route, or a
-// content date; if a surface needs the issue, it takes it from here.
+// authoritative. Nothing in a page's CHROME may compute an issue from a page, a
+// route, or a content date; if a surface needs the issue, it takes it from here.
+//
+// One exception, and it is a different claim rather than a loosening:
+// scripts/make-post-og.mjs calls issue(pubDate) for a post's OG card, which
+// says the issue the post RAN IN, not the issue it is now. A build-time
+// artifact that dates itself is allowed to do that — and it is the safer input
+// besides, since pubDate is fixed and the card therefore regenerates
+// identically forever. issue(now) on a cached social card would go stale the
+// following month with nothing to notice it.
 //
 // The number counts MONTHS SINCE LAUNCH, not the calendar month. The old rule
 // (`No.` = calendar month, volume = calendar years since 2024) had the two
@@ -46,10 +54,12 @@ export function toRoman(n) {
 /**
  * The issue for an instant.
  *
- * `short` is the compact masthead's half of this — the interior pages carry
- * `Vol. I · No. V` without the month, because the month is already in every
- * dateline below it. Both come from the same call so the two mastheads cannot
- * drift the way the pages did.
+ * `short` is `Vol. I · No. V` without the month. It was written for the compact
+ * interior masthead, which no longer exists — 8083a77 reverted the header to
+ * one masthead on the author's call — and its one consumer today is the per-post
+ * OG card in scripts/make-post-og.mjs, which drops the month for the same reason
+ * the interior pages did: the post's own dateline is already on the card, and
+ * printing the month twice on a 1200×630 image reads as a template fault.
  *
  * Dates before the epoch clamp to issue 1 rather than running negative. That is
  * unreachable in production (the site cannot be served before it launched) but

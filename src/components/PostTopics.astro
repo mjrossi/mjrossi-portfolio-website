@@ -29,9 +29,19 @@ const TOPIC_LIMIT = 2;
 const topics = Astro.props.tags.slice(0, TOPIC_LIMIT);
 ---
 
-{topics.map((tag) => (
-  <span class="post-topic-item">
-    <span class="meta-sep" aria-hidden="true">·</span>
-    <a href={`/blog/tag/${tag}/`} class="post-topic">{tagLabel(tag)}</a>
-  </span>
-))}
+{/*
+  The wrapper exists for the phone layout only, where the topics leave the
+  running meta line and become a right-aligned column of their own. Above that
+  width it is `display: contents`, so the topic items stay direct flex items of
+  the meta line and keep the independent-wrapping behaviour described above —
+  the element is in the markup but not in the layout. See .post-topics in
+  global.css.
+*/}
+<span class="post-topics">
+  {topics.map((tag) => (
+    <span class="post-topic-item">
+      <span class="meta-sep" aria-hidden="true">·</span>
+      <a href={`/blog/tag/${tag}/`} class="post-topic">{tagLabel(tag)}</a>
+    </span>
+  ))}
+</span>

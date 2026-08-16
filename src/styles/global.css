@@ -1633,6 +1633,14 @@ em {
   margin-bottom: 0.45rem;
 }
 
+/* Transparent by default: the topic items stay direct flex items of whichever
+   meta line they were dropped into (.post-entry-meta or .post-meta), which is
+   what lets them wrap independently of each other. The wrapper earns its keep
+   only at phone widths — see the 639px query. */
+.post-topics {
+  display: contents;
+}
+
 /* Primary topic, inline in a meta line (findings 1.4 / 2.1). The separator
    travels with it as one flex item so a wrap never leaves the "·" behind. */
 .post-topic-item {
@@ -1648,6 +1656,33 @@ em {
 
 .post-topic:hover {
   color: var(--accent);
+}
+
+/* On a phone the two topics take a line of their own, together.
+   Measured at the widths phones use: date + read time is 198px, the two topics
+   are 241px, and the usable width is 280px at 320px rising to 350px at 390px.
+   So each of those rows fits everywhere — but all four items on one line is
+   470px and fits nowhere, 120px over at 390px and 190px over at 320px.
+   The wrap is therefore not avoidable at any type size worth reading, and it
+   was never the problem. WHERE it fell was: the break landed BETWEEN the two
+   topics, orphaning the second one on a line of its own under the date, opening
+   it with a "·" that divided it from nothing. Breaking before the pair instead
+   keeps them together and makes the second row read as the subject line. */
+@media (max-width: 639px) {
+  .post-topics {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    /* The break itself: an item that wants a full line cannot share one, so the
+       pair moves down together and nothing can wrap between them. */
+    flex-basis: 100%;
+  }
+
+  /* Leads the row, so its separator would divide the topics from the left
+     margin. The one BETWEEN the two topics stays — that one still separates. */
+  .post-topics .post-topic-item:first-child .meta-sep {
+    display: none;
+  }
 }
 
 /* Previous / next (finding 1.5). One-pixel gap over a --border background is

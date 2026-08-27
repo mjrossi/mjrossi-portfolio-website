@@ -83,6 +83,7 @@ test('the working vocabulary is the consolidated set', () => {
     'artificial-intelligence',
     'career',
     'cycling',
+    'governance',
     'infrastructure',
     'personal',
     'smoke-fixture',

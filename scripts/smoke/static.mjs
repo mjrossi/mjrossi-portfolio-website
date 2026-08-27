@@ -100,17 +100,21 @@ export function checkSourceGuards() {
     );
   }
 
-  // blog.ts names the fixture slug too, so getLatestPosts can skip it when a
-  // surface features ONE post (the fixture is dated 2099 and therefore newest
-  // wherever scheduled posts are visible). It cannot import this suite's copy —
-  // astro:content doesn't load under bare node — so the two are pinned here,
-  // the same way preview.js's WORKER_NAME is pinned against wrangler.jsonc.
-  // Drift would be silent: the teaser would quietly go back to featuring the
-  // fixture on preview deploys and production would look fine.
+  // The fixture slug used to be declared twice — here and in blog.ts — and was
+  // pinned by a grep at this spot, the way preview.js's WORKER_NAME is pinned
+  // against wrangler.jsonc. It is now declared once, in src/lib/archive.js, and
+  // both sides import it: config.mjs can, because that module is plain JS and
+  // holds no astro:content import. There is nothing left here to drift.
+  //
+  // What blog.ts must still do is CALL the rule, the same shape as the
+  // getPublishedPosts/isPublished check below — archive.test.js proves the
+  // fixture is skipped, and would stay green if nothing asked it to be.
   check(
-    'src/lib/blog.ts FIXTURE_SLUG matches the smoke fixture',
-    new RegExp(`FIXTURE_SLUG\\s*=\\s*['"]${FIXTURE_SLUG}['"]`).test(blogLibSource),
-    `blog.ts does not declare FIXTURE_SLUG = '${FIXTURE_SLUG}'`,
+    'blog.ts features and neighbours posts through archive.js',
+    /from '\.\/archive\.js'/.test(blogLibSource)
+      && /\blatestIn\(/.test(blogLibSource)
+      && /\badjacentIn\(/.test(blogLibSource),
+    'blog.ts stopped calling latestIn/adjacentIn — the fixture-skip is unit-tested but no longer wired',
   );
 
   // The galley's client JS is the site's SECOND carve-out from the no-client-JS

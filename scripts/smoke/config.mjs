@@ -4,6 +4,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { FIXTURE_SLUG } from '../../src/lib/archive.js';
 import { isPublished } from '../../src/lib/schedule.js';
 import { CONTENT_DIR, readPubDate, resolvePostSource } from '../content.mjs';
 import { readDevVar } from '../dev-vars.mjs';
@@ -15,8 +16,13 @@ export const READY_TIMEOUT_MS = 30_000;
 
 // ── the posts the matrices key off ─────────────────
 
-// The permanently-future-dated post in src/content/blog/.
-export const FIXTURE_SLUG = 'smoke-scheduled-fixture';
+// The permanently-future-dated post in src/content/blog/. Re-exported rather
+// than re-declared: src/lib/archive.js is plain JS and loads under bare node,
+// so the suite and the site now read one owner. It used to be a second copy of
+// the string, pinned to blog.ts's by a source grep in static.mjs — a check that
+// could only ever say the two spellings matched, never that either was the slug
+// on disk. That last question is what the live matrix asks by 404ing the post.
+export { FIXTURE_SLUG };
 export const FIXTURE_TAG = 'smoke-fixture';
 // Names no real post: a token minted for another draft must not open or write
 // to the fixture.

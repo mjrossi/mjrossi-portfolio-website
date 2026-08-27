@@ -1,0 +1,72 @@
+---
+title: "A Normalized Database of Citizens"
+description: "What establishing residency in Portugal taught a software engineer about identity as a data model — and how differently the US answers the same questions."
+pubDate: 2026-09-07T09:00:00+01:00
+tags: ["governance", "personal"]
+---
+
+I've never been someone who likes to sit too long on bureaucractic tasks. When I moved to Chicago in 2013, I went the next available buisness day to the Illinois Secretary of State to exchange my driver license. I did the same in 2019, walking over to the nearest Department of Motor Vehicles (DMV) office in Brooklyn.
+
+Thus, upon moving to Portugal, I jumped on all the paperwork immediately. What I found immediately was that this system felt more like my identity exists in a normalized database. 
+
+## The Hodgepodge of the US Identity System
+
+As an engineer, I recently worked on an identity and authorization system. From day 1, I knew I would need two key pieces right off the bat: a canonical record and a single source of truth.
+
+Thus, when you look at the way the US records your identity, in which there is neither a single source of truth or a simple canonical record, it's actually quite stark to experience a system that has something a bit closer to that -- albeit far from perfect. In the US, a driver's license here, a lease there, a utility bill as a proxy for "this person exists at this address", is accepted as common place.
+
+### The Driver License
+
+The Driver License is an interesting case study to the start of this piece: for many Americans, it is their sole piece of identification, and the one most likely to tie together their identity and residency. Since the ability to drive is effectively required to function in society in the majority of the US, most people have one. Since many Americans don't travel outside of the country, they don't bother to acquire a passport. There isn't the concept of a Federally issued ID outside of a few cases (Passport, Passport Card, Green Card, etc.). But for a US-born citizen, the Driver License (or less often, a State ID) becomes a piviotal document.
+
+This falls apart very quickly though. Many people move, but keep their old state driver license until it expires. Rarely is an address on a driver license in a state like New York (where people move apartments quite often) their actual current address.
+
+Thus, the question of "who you are" is usually answered by the license; but "where you live" may not be anymore.
+
+### The Social Security Number
+
+More than anything else, the Social Security number is likely the most unique identifier you have. The problem? It was never designed for how it's currently used. Clearly there is a value in having a unique identifier for your individual person at a federal level, and the Social Secutity number is one of the only options that exists. 
+
+There isn't any sort of easily accessible way for someone to validate that a social security number is being used by the individual whose number it is. There isn't a database that a bank can connect to to verify it. State databases have it, but don't make it accessible. This means institutions have to validate it somehow themselves, poking at credit reports, background checks, identity verification systems, etc.
+
+### Where You Live
+
+There isn't a single, authoritative source that answers "where you live". As previously mentioned, Driver Licenses can fall apart on that question even if, at least upon issuance, it's usually the most authoritative (as it is often a requirement to prove where you live to obtain one).
+
+Each individual institution you work with; banks, the Internal Revenue Service (IRS), the Social Security Agency, among many others ask you for an address, but there isn't one place to "point" that validates it.
+
+## Comparison with the EU
+
+Even before relocating to Portugal, I learned fairly quickly that the EU as a whole, operates on a much different layer for answering these identity questions. Just by virtue of being an Italian citzen that "identity documents" and unique citizen identifiers were more rigid than the US. Once I acquired Italian citizenship, I was automatically registered in a system called Anagrafe Italiani residenti all'estero (A.I.R.E.) -- essentially, a registry for all Italian citizens living abroad. As an Italian citizen registered in A.I.R.E, I interact with the consular district residing over my residency for items such as passports, registering life events, voting, etc.
+
+There are also explicit identification documents, where that is the entire point of the document. For Italy, it is the "Carta di Identità Elettronica". This card has an NFC chip inside that I can use with an application on my phone to authenticate to government services quite easily, and with the physical card required, it is quite secure. The number on the card is 100% uniquely tied to me as a citizen, and anyone who needs to validate it can access the Italian government system.
+
+Broadly, items such as a driver license or health card, are explicitly issued for their specific purpose. All citizens, regardless of residency, can get these documents. They answer the "who I am" question unambigiously.
+
+## Relocating to Portugal as an Italian citizen
+
+For me, as an Italian citizen legally residing in an EU member state (Portugal) for studies, I couldn't just sign a lease and move in. It's required to register your precense with the municipality you're living in. This differs quite heavily from the US, where I could move to New York and unless I want a NY driver license, could go quite a long time without telling anyone I lived in New York -- until you have to file a NY tax return, of course.
+
+### The Certificado de Registo de Cidadão da União Europeia (CRUE)
+
+The Certificado de Registo de Cidadão da União Europeia (CRUE) is Portugal's implementation of the legal foundation allowing any EU citizen to reside in Protugal (specifically Directive 2004/38/EC, which establish the right of EU citizens and their family members to move and reside freely within the EU).
+
+In order to obtain this document, there is a specific list of documents required. I arrived at the office with my Italian Passport, proof of financial means, proof of enrollment in University, and proof of my residential address. I recevied the document immediately, and I saw all of the data registered in an accessible government system by anyone who needs to validate it. I can, myself, go to a website run my the Portuguese government and enter a public access code that is on the document (free to share) and validate that it's legigimate.
+
+### The Número de Identificação Fiscal (NIF)
+
+The Número de Identificação Fiscal (NIF) is a specific fiscal / taxpayer identification number. It is analagus to the US social security number, except this number isn't intended to be secret, and you can share it widely with anyone. I went to the pet store the afternoon we arrived, and they asked me for this number. I was so confused -- why would a store want this? I was thinking like my social security number this should be secret. Apparently not, and there are reasons.
+
+The number is linked to Finanças, the Portuguese tax authority. It has one purpose: act as a financial identifier to you. The number alone won't work for anything, so you can hand it out easily. It is a username only, whereas the Social Security number often has to act as both username and password. In Portugal, the password is your Cartão de Cidadão (for Portuguese citizens), or the CRUE (in my case).
+
+The US has no equivalent second credential that's universally trusted, so institutions started treating "knows the SSN" as good enough proof of identity. Over decades it got quietly promoted from identifier to de facto password. That's the actual flaw: one field doing two jobs it was never built for.
+
+## The Normalized Identity Database
+
+Ultimately, the takeaway that I found going through the registration was that the combination of my Italian identity document, the CRUE, and the NIF, all come together to form a normalized, easily accessible database of who I am to the government and the various systems that need to interact with it. It becomes a fairly straightforward "key -> value" pair that can answer the question "who am I, where do I live".
+
+Contrast with the US, where this collection of loosely-linked proxies acts as a substitute for this more rigid structure. Where the social security number, driver license, and often other one-off documents have to come together each time you have to answer this same question.
+
+The Portuguese system is far from perfect - the document list can be left up to interpretation, it doesn't cross EU borders so this is a process that has to be repeated. Each EU member state implements the directives differently, so while the core tenants are the same, the actual implementation differs. It's still not as connected as it could be across agencies and services (e.g. updating my address would still have to be done in multiple places).
+
+Still, as an engineer I found this system and structure to be fairly easy to wrap my head around and appreciate. Now that REAL ID in the US is actually being enforced, I will be curious if more of these systems start to do a better job of communicating with each other -- hopefully for the benefit of citizens and residents.

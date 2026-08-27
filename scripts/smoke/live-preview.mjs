@@ -733,32 +733,50 @@ export async function checkHostUnlock() {
   // Same shape one surface over: previous/next is the other slot that names a
   // specific post, so the newest real post's "Next →" pointed at the fixture.
   //
-  // The subject is discovered rather than named — the index is newest-first and
-  // reveals the fixture on this host, so the first non-fixture post link is the
-  // newest real post, which is precisely the one whose neighbour the fixture
-  // would be. Naming a slug here would rot the day a post's date moved.
+  // The RULE is not asserted here any more. It is a pure function over the
+  // sorted list — src/lib/archive.js, unit-tested in archive.test.js against
+  // `{ id }` stubs — so the two ends, the unknown post, and the fixture's
+  // exclusion are all stated exactly rather than inferred from whatever
+  // src/content/blog holds this month. What is left for HTTP is the wiring.
+  //
+  // This block used to pick one subject — the first non-fixture post link on
+  // this index, i.e. the newest real post — and require it to render a nav. The
+  // assumption underneath was that the newest real post is PUBLISHED, which was
+  // true only while the fixture was the sole scheduled post: BlogPost.astro
+  // drops previous/next (with the subscribe card) on a draft, so scheduling an
+  // ordinary post turned this red with the invariant untouched. Hence the shape
+  // below — every post is asked, and the floor is `some`, never `every`.
   const previewIndexHtml = await previewIndex.text();
-  const newestRealSlug = [...previewIndexHtml.matchAll(/href="\/blog\/(?!tag\/|tags|rss)([^"/]+)\//g)]
-    .map((m) => m[1])
-    .find((slug) => slug !== FIXTURE_SLUG);
+  const realSlugs = [...new Set(
+    [...previewIndexHtml.matchAll(/href="\/blog\/(?!tag\/|tags|rss)([^"/]+)\//g)].map((m) => m[1]),
+  )].filter((slug) => slug !== FIXTURE_SLUG);
   check(
-    'preview host: the index still lists a real post to check',
-    !!newestRealSlug,
-    'no non-fixture post link on /blog — the assertion below would be vacuous',
+    'preview host: the index still lists real posts to check',
+    realSlugs.length > 0,
+    'no non-fixture post link on /blog — the assertions below would be vacuous',
   );
-  if (newestRealSlug) {
-    const previewNewest = await asHost(`/blog/${newestRealSlug}/`, PREVIEW_HOST);
-    const newestHtml = await previewNewest.text();
-    const navStart = newestHtml.indexOf('class="post-nav"');
-    const nav = navStart > 0 ? newestHtml.slice(navStart, newestHtml.indexOf('</nav>', navStart)) : '';
-    check(
-      `preview host: ${newestRealSlug} previous/next does not link the fixture`,
-      nav.length > 0 && !nav.includes(FIXTURE_SLUG),
-      navStart > 0
-        ? 'the fixture is a neighbour again — getAdjacentPosts stopped filtering it'
-        : 'no .post-nav on the newest post — previous/next is missing entirely',
-    );
-  }
+
+  const navs = await Promise.all(realSlugs.map(async (slug) => {
+    const html = await (await asHost(`/blog/${slug}/`, PREVIEW_HOST)).text();
+    const at = html.indexOf('class="post-nav"');
+    return { slug, nav: at < 0 ? '' : html.slice(at, html.indexOf('</nav>', at)) };
+  }));
+
+  // The floor. "No nav names the fixture" is vacuously true of a page with no
+  // nav, so a build that stopped rendering previous/next entirely would sail
+  // through the check below — the same false green the galley flood's
+  // "actually reached the endpoint" check exists to convert into a red.
+  check(
+    'preview host: at least one post still renders previous/next',
+    navs.some((entry) => entry.nav),
+    'no .post-nav on any post — PostNav is no longer wired, and the fixture check is vacuous',
+  );
+  const leaked = navs.find((entry) => entry.nav.includes(FIXTURE_SLUG));
+  check(
+    'preview host: no post\'s previous/next links the fixture',
+    !leaked,
+    `${leaked?.slug} has the fixture as a neighbour — adjacentIn's exclusion is no longer wired`,
+  );
 
   // The negative twin: the Worker's OWN workers.dev alias serves production on
   // a hostname anyone can derive from this repo, so it must NOT unlock. Only

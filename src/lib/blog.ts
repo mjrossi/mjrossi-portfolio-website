@@ -1,4 +1,5 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
+import { adjacentIn, latestIn } from './archive.js';
 import { readingTime } from './readingTime.js';
 import { isPublished } from './schedule.js';
 
@@ -63,33 +64,17 @@ export async function getPostsByTag(tag: string, opts: PostQuery = {}): Promise<
 }
 
 /**
- * The permanently future-dated test fixture in src/content/blog/.
- *
- * It is a real entry in the collection and belongs in the listings — the whole
- * point of it is that `/blog`, RSS and the host unlock can be asserted against
- * something scheduled. What it must never be is a post a surface picks
- * out to feature, because its `pubDate` of 2099 makes it the newest post there
- * is wherever scheduled posts are visible at all.
- *
- * `scripts/smoke/config.mjs` names the same slug (it can't import this module —
- * `astro:content` doesn't load under bare `node`), and smoke pins the two
- * against each other, the same way `WORKER_NAME` is pinned against
- * `wrangler.jsonc`.
+ * Re-exported so a call site reading the collection has one import, not two.
+ * Owned by archive.js — see there for why the slug is declared in plain JS.
  */
-export const FIXTURE_SLUG = 'smoke-scheduled-fixture';
+export { FIXTURE_SLUG } from './archive.js';
 
 /**
  * The posts a surface should feature — the newest ones that aren't the fixture.
- *
- * In production these are just the newest posts: the fixture is filtered out by
- * date long before it gets here. On a *.workers.dev preview host and in `astro
- * dev`, where scheduled posts ARE visible, the newest real drafts come first,
- * falling back to published posts when the fixture is the only scheduled one —
- * which is the case today.
+ * `latestIn` owns the rule and is unit-tested; this is the fetch in front of it.
  */
 export async function getLatestPosts(limit = 1, opts: PostQuery = {}): Promise<Post[]> {
-  const posts = await getPublishedPosts(opts);
-  return posts.filter((post) => post.id !== FIXTURE_SLUG).slice(0, limit);
+  return latestIn(await getPublishedPosts(opts), limit);
 }
 
 /**
@@ -114,34 +99,13 @@ export async function getTagCounts(opts: PostQuery = {}): Promise<{ tag: string;
 /**
  * The chronological neighbours of a post (finding 1.5).
  *
- * No related-post logic: with an archive this size, "the one before and the one
- * after" is honest and needs no algorithm. `getPublishedPosts` is newest-first,
- * so `previous` (older) is the NEXT index and `next` (newer) is the previous
- * one — named for the reader's direction of travel through the archive, not for
- * the array's.
- *
- * Either can be null, and the caller renders that end as nothing at all — see
- * PostNav.astro for why a placeholder cell was worse than the gap. A post that
- * is its own neighbour is impossible because a slug appears once. A post the
- * query cannot see (a draft, on production) yields two nulls rather than
- * throwing — the route rendering it has already decided the reader may be there.
- *
- * The fixture is excluded for the same reason getLatestPosts excludes it: dated
- * 2099, it is the newest entry wherever scheduled posts are visible, so on a
- * preview host the newest real post's "Next →" pointed at "Scheduled-post
- * fixture (not a real post)". A consequence worth naming: on the fixture's OWN
- * page this returns two nulls, so it renders no previous/next nav at all. That
- * page is a test artifact and its neighbours are not a thing anyone needs.
+ * `adjacentIn` owns the rule — the direction of `previous`/`next`, the two ends,
+ * a post the query cannot see, and the fixture's exclusion — and is unit-tested
+ * in archive.test.js. This is the fetch in front of it.
  */
 export async function getAdjacentPosts(
   id: string,
   opts: PostQuery = {},
 ): Promise<{ previous: Post | null; next: Post | null }> {
-  const posts = (await getPublishedPosts(opts)).filter((post) => post.id !== FIXTURE_SLUG);
-  const i = posts.findIndex((p) => p.id === id);
-  if (i === -1) return { previous: null, next: null };
-  return {
-    previous: posts[i + 1] ?? null,
-    next: posts[i - 1] ?? null,
-  };
+  return adjacentIn(await getPublishedPosts(opts), id);
 }

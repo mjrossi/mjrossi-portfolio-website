@@ -2,7 +2,7 @@
 title: "A Normalized Database of Citizens"
 description: "What establishing residency in Portugal taught me about identity as a data model — and how differently the US answers the same questions."
 pubDate: 2026-09-07T09:00:00+01:00
-tags: ["governance", "personal"]
+tags: ["governance", "software-engineering", "personal"]
 ---
 
 I've never been someone who likes to sit too long on bureaucratic tasks. When I moved to Chicago in 2013, I went the next available business day to the Illinois Secretary of State to exchange my driver's license. I did the same in 2019, walking over to the nearest Department of Motor Vehicles office in Brooklyn.
@@ -13,37 +13,13 @@ I had acquired Italian citizenship before the move, so I arrived in Portugal as 
 
 As an engineer, I recently worked on an identity and authorization system. From day one, I knew I would need two key pieces: a canonical record and a single source of truth.
 
-{/* PRECISION. ChatGPT flagged this as too categorical and I agree the claim is
-too broad — but do NOT hedge it. The US does have canonical records, and
-authoritative ones: SSA owns the SSN, State owns passports. The true absolute is
-that no US record is canonical for a PERSON — each is canonical for a PURPOSE,
-and a person has to be assembled by cross-referencing several. That is narrower,
-still declarative, and it is the same claim the closing section already makes.
-Getting the precision in this early is what stops the later absolutes (the "no
-document ... this is where I live" line) from having to carry it alone. */}
-
-The US has neither, and it was genuinely startling to move into a system that has something closer to both — albeit far from perfect. In the US, a driver's license here, a lease there, a utility bill standing in as proof that "this person exists at this address": all of it is accepted as commonplace.
-
-{/* STRUCTURAL, and the highest-value catch in the whole review — ChatGPT missed
-this one entirely.
-
-This line promises three questions: "who you are, what proves it, and where you
-live." The payoff paragraph in "The normalized identity database" delivers a
-DIFFERENT three: "who I am, where I live, what I owe." So the closing answers a
-question the essay never asked, and silently drops the one it spends the most
-words on — the entire "What proves it" section.
-
-Almost certainly a seam from the reorg in 441fa76. Pick one triad and make both
-places use it. This one is the better version: it is the section structure, and
-"what proves it" is where the strongest technical writing in the post lives. If
-"what I owe" earns a place in the closing, it has to be named as a fourth thing
-rather than swapped in. */}
+The US has neither for a person. Instead, it has authoritative records organized around purpose. It requires cross-referencing several items to get all the specifics for a person. It was genuinely startling to move into a system that has something closer to both at the definition of the individual person — albeit far from perfect. In the US, a driver's license here, a lease there, a utility bill standing in as proof that "this person exists at this address": all of it is accepted as commonplace.
 
 Strip the problem down, though, and there are only three questions any of this has to answer: who you are, what proves it, and where you live. Every document below is one country's answer to one of them.
 
 ## Who you are
 
-The Número de Identificação Fiscal (NIF) is a fiscal, or taxpayer, identification number. It is analogous to the US Social Security number, except that this number isn't meant to be secret and you can hand it to anyone. I went to the pet store the afternoon we arrived, and they asked me for it. I was so confused — why would a store want this? I assumed that, like my Social Security number, it should be kept secret.
+The Portuguese Número de Identificação Fiscal (NIF) is a fiscal, or taxpayer, identification number. It is analogous to the US Social Security number, except that this number isn't meant to be secret and you can hand it to anyone. I went to the pet store the afternoon we arrived, and they asked me for it. I was so confused — why would a store want this? I assumed that, like my Social Security number, it should be kept secret.
 
 Apparently not, and the reason turns out to be the thesis to this entire post. The number is linked to Finanças, the Portuguese tax authority, and giving it at the register attaches that receipt to my tax record through a system called e-fatura. Spending on things like restaurants, health, education, and general retail then feeds my income tax deductions automatically, with no shoebox of receipts to reconcile in the spring. The pet store was asking because *I* benefit.
 
@@ -55,60 +31,19 @@ The first Social Security numbers were issued in 1936. The API arrived eighty-fo
 
 So there is still no general-purpose lookup, just a handful of purpose-built ones — eCBSV for banks, SSNVS for employers reporting wages, SSOLV for states issuing driver's licenses. Everyone outside those lanes validates by inference instead: credit reports, background checks, commercial identity verification.
 
-{/* SEAM from the reorg. "Even before relocating to Portugal, I learned that the
-EU answers these questions very differently" is a country-organized transition
-sitting inside a question-organized section. The paragraph itself is good and
-belongs exactly here; it is only the hinge sentence that still reads like a
-join. */}
-
-Even before relocating to Portugal, I learned that the EU answers these questions very differently. Just by virtue of being an Italian citizen, I found that identity documents and citizen identifiers were far more formalized than in the US. My codice fiscale — the Italian equivalent of a Social Security number, issued by the Agenzia delle Entrate — identifies me permanently, and it is printed on my identity card without being issued by it.
+Years ago, I learned that the EU answers these questions very differently. Just by virtue of being an Italian citizen, I found that identity documents and citizen identifiers were far more formalized than in the US. My codice fiscale — the Italian equivalent of a Social Security number, issued by the Agenzia delle Entrate — identifies me permanently, and it is printed on my identity card without being issued by it.
 
 What makes the NIF and the codice fiscale safe to hand out is that the number alone won't get anyone anywhere. Each is a username and nothing more, whereas the Social Security number has to act as both username and password. The US has no equivalent second credential that's universally trusted, so institutions started treating "knows the SSN" as good enough proof of identity. Over decades it got quietly promoted from identifier to de facto password. That's the actual flaw: one field doing two jobs it was never built for.
 
 ## What proves it
 
-{/* SEAM, same family as the one in the previous section. This opens "What
-proves it" by restarting the essay's register — back to general exposition about
-Americans after the first-person thread that closed the section above. Worth a
-transition that carries the question forward instead of resetting to survey
-mode. */}
+For many Americans, the best answer to identity verification is a driver's license. This document is the one most likely to tie together their identity and their residency. Since the ability to drive is effectively required to function in most of the US, most people have one. There is no general concept of a federally issued ID outside of a few cases — a passport, a passport card, a military ID — and since many Americans don't travel outside the country, they don't bother to acquire a passport. For a US-born citizen, the driver's license (or less often, a state ID) becomes a pivotal document.
 
-For many Americans, the driver's license is their sole piece of identification, and the one most likely to tie together their identity and their residency. Since the ability to drive is effectively required to function in most of the US, most people have one. There is no general concept of a federally issued ID outside of a few cases — a passport, a passport card, a military ID — and since many Americans don't travel outside the country, they don't bother to acquire a passport. For a US-born citizen, the driver's license (or less often, a state ID) becomes a pivotal document.
+There are also explicit identification documents, where identity is the entire point — not health, not driving, not anything else. For Italy, that is the Carta d'Identità Elettronica (CIE). It is governed by two EU instruments: [Directive 2004/38/EC](https://eur-lex.europa.eu/eli/dir/2004/38/oj/eng) requires every member state to issue its nationals an identity card or a passport, and requires the other member states to accept it, but says nothing about what that document looks like. Uniformity came later, with [Regulation (EU) 2019/1157](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32019R1157), which defines common security standards and harmonization for national identity cards.
 
-{/* FACT CORRECTION — the causality on Regulation (EU) 2019/1157 is backwards.
+For Italy, the card carries my unique identifier — the codice fiscale — and an NFC chip that lets me authenticate to government services. Since the physical card has to be present, it satisfies the security requirement: the codice fiscale is my username, the CIE is my password, and both are required for accessing government services.
 
-The regulation strengthens the SECURITY STANDARDS for identity cards that member
-states already issue (Art. 1). It does not create the right to travel on one —
-that comes from Directive 2004/38/EC, which you already cite in "Where you live."
-Denmark and Ireland sit outside 1157 entirely.
-
-The fix strengthens this paragraph rather than weakening it: 2004/38 is why the
-card is ACCEPTED, and 2019/1157 is why it can be TRUSTED — a common floor on
-forgery resistance and biometrics. That is the same identifier/authenticator
-split the whole post is built on, one level up. */}
-
-There are also explicit identification documents, where identity is the entire point — not health, not driving, not anything else. For Italy, that is the Carta d'Identità Elettronica (CIE). The card has an NFC chip inside that I can use with an app on my phone to authenticate to government services easily, and because the physical card has to be present, it is secure. The number printed on it identifies the card rather than me — renew it and that number changes. And because the CIE conforms to [Regulation (EU) 2019/1157](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32019R1157) — a common security standard for the national identity cards member states issue — that proof travels across most EU borders.
-
-{/* FACT CORRECTION plus a balance problem.
-
-THE ERROR: "the Cartão de Cidadão for Portuguese citizens, and for the rest of us
-the Chave Móvel Digital" is a false dichotomy. Portuguese citizens use the CMD
-routinely — they activate it AGAINST their Cartão de Cidadão (or a permanent
-Bilhete de Identidade), by card reader, video call, or at a service desk. It is
-the credential layer on top, not the consolation prize underneath.
-
-The accurate version is better for you anyway: the CMD is the authenticator for
-everyone, and what differs is only what you bind it to — a Cartão de Cidadão for
-citizens, a passport or residence title for you. Same password, different
-enrollment. That parallels the CIE/codice fiscale split exactly, which is the
-point this paragraph is already trying to make.
-
-THE BALANCE PROBLEM: Italy's CIE gets a full paragraph of mechanism above, and
-Portugal's entire equivalent is a subordinate clause here. Portugal is the LIVED
-half of this essay and Italy is the EXPLAINED half, so that is backwards relative
-to the frame. Rewriting this is the natural place to even it up. */}
-
-So the codice fiscale is essentially my username, and the CIE is my password. Both are required. Portugal implements its own version of the same split — the Cartão de Cidadão for Portuguese citizens, and for the rest of us the [Chave Móvel Digital](https://www.autenticacao.gov.pt/a-chave-movel-digital), a state-certified credential tied to a phone number and to a passport or residence title — but the fundamental principle, and the underlying EU regulation, is the same.
+Portugal implements its own version of this. For citizens, they receive a Cartão de Cidadão. The rest of us use a passport or residence title tied to us. Regardless of identity card, the NIF acts as our username, the document verifies our identity, and then the password everyone authenticates against is the [Chave Móvel Digital](https://www.autenticacao.gov.pt/a-chave-movel-digital), a state-certified credential. The fundamental principle, and the underlying EU regulations, are the same.
 
 The US license has to do both jobs at once, and it falls apart very quickly on the second. Many people move but keep their old state driver's license until it expires. Often enough, the address on a driver's license in a state like New York — where people change apartments frequently — is no longer where that person lives. So the question of "who you are" is usually answered by the license, while "where you live" may not be anymore.
 
@@ -118,34 +53,9 @@ For me, as an Italian citizen legally residing in an EU member state (Portugal) 
 
 The document that records it is the Certificado de Registo de Cidadão da União Europeia (CRUE), Portugal's implementation of the legal foundation allowing any EU citizen to reside there (specifically [Directive 2004/38/EC](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32004L0038), which establishes the right of EU citizens and their family members to move and reside freely within the EU).
 
-{/* VERIFY — this is the one claim in the post I could not confirm. Portuguese
-certidões generally do carry an access code for online validation, so it is
-entirely plausible, but nothing I found documents a public validation portal for
-the CRUE specifically.
+Obtaining it requires a specific list of documents. I arrived at the office with my Italian passport, proof of financial means, proof of enrollment at university, and proof of my residential address. I received the certificate immediately, and I watched the data go into a government system accessible to anyone who needs to validate it. I can go to a [website](https://check.aima.gov.pt/doc/Verificacao.aspx) run by the Portuguese immigration authority Agência para a Integração, Migrações e Asilo (AIMA), enter the access code printed on the document (free to share), and confirm that it's legitimate.
 
-You have the document and you did this: confirm which site you actually used, and
-consider naming it. Being wrong here would be an unforced error in the exact
-paragraph where you are claiming the Portuguese system is verifiable. */}
-
-Obtaining it requires a specific list of documents. I arrived at the office with my Italian passport, proof of financial means, proof of enrollment at university, and proof of my residential address. I received the certificate immediately, and I watched the data go into a government system accessible to anyone who needs to validate it. I can go to a website run by the Portuguese government myself, enter a public access code printed on the document (free to share), and confirm that it's legitimate.
-
-That differs sharply from the US, where I could move to New York and, unless I wanted a New York driver's license, go a long time without telling anyone I lived there, right up until I had to file a New York tax return. There isn't a single, authoritative source that answers the question. As above, a driver's license falls apart on it — even though, at the moment it is issued, it is usually the most authoritative answer available, since proving your address is often a requirement to obtain one.
-
-{/* PRECISION — "There is no document in the US that definitively answers 'this
-is where I live'" is the weakest sentence in the post. A knowledgeable reader
-reaches straight for voter registration, or a state tax return, or Form 8822.
-
-Same fix as the "US has neither" note near the top: make it a claim about
-AUTHORITY rather than existence. The US produces many answers to "where do you
-live," each authoritative for one institution, and they are permitted to disagree
-with each other — which is why domicile is something you can be AUDITED over.
-Stronger, unarguable, and a better line than the one it replaces.
-
-Then check you are not saying it twice: the "no single, authoritative source"
-sentence in the paragraph above only survives if this one stops duplicating
-it. */}
-
-Each institution you deal with — banks, the Internal Revenue Service, the Social Security Administration, and many others — asks you for an address, but there is no single place to point at that validates it. There is no document in the US that definitively answers "this is where I live."
+That differs sharply from the US, where I could move to New York and, unless I wanted a New York driver's license, go a long time without telling anyone I lived there, right up until I had to file a New York tax return. The US produces many answers to the question "where do you live", and each individual one is authoritative to that institution. If you last filed a federal tax return living in Illinois, the Internal Revenue Service (IRS) has that address until you file again, or submit a specific IRS change of address request. The Social Security Administration may have a different address for you. All of these are authoritative, but there is no single source of truth.
 
 Italy keeps track even after you leave. Once I acquired Italian citizenship, I was automatically registered in a system called the Anagrafe degli Italiani Residenti all'Estero (AIRE) — a registry of every Italian citizen living abroad. As a citizen registered in AIRE, I deal with the consular district covering my residence for passports, registering life events, voting, and the rest.
 
@@ -153,88 +63,14 @@ Having just moved abroad myself, I can say there is no US equivalent to AIRE. Th
 
 ## The normalized identity database
 
-{/* THE MAIN REWRITE.
+Ultimately, the takeaway from the whole process of registering in Portugal was seeing the shape of it. My Italian identity document, the CRUE, and the NIF are not three separate copies of me across multiple databases. They are three tables — one answering who I am, one proving it, and one recording where I live. That's what normalization means in a database: you don't duplicate a fact, you point at the one place it lives, so there is never a second copy to go quietly out of date. How close a country gets to that is the real difference between the three systems in this piece.
 
-This paragraph claims each fact has "exactly one authoritative home" — and the
-Portugal paragraph two below admits you would still update your address in
-several places. As written, that reads as a walk-back four lines after the
-payoff. It should be the pivot instead.
+Italy comes closest of the three. The register is the ANPR (Anagrafe Nazionale della Popolazione Residente), owned by the Ministry of the Interior. A change of residence is *one* write — online through the ANPR portal — and it propagates automatically to Agenzia delle Entrate, INPS, INAIL, ISTAT and the Motorizzazione. Those agencies still keep their own records, so this is replication rather than a true foreign key. What matters is that every copy is fed from one authoritative write, so none of them can drift. It is a first step toward what the EU calls the "once-only principle": you tell the state something once, and the state carries it from there.
 
-Your hunch about Italy was right, and it is better than either of us assumed:
+Portugal comes close in that the data is the right shape. The NIF acts as a stable join key, and there is one authoritative owner per fact (Finanças for tax, the câmara for residence, AIMA for immigration, and so on), but those systems don't share a common canonical record. It's essentially a normalized schema where the foreign keys aren't entirely connected. Updating my address, for instance, would still have to be done in several places. It falls short in other ways too: the document list can be left up to interpretation, and none of it crosses EU borders, so the process has to be repeated. Each member state implements the directive differently, so while the core tenets are the same, the actual implementation differs. The upside is that at least the key and the authentication mechanism are consistent.
 
-ITALY HAS THE NORMALIZED TABLE. ANPR (Anagrafe Nazionale della Popolazione
-Residente), Ministry of the Interior. A change of residence is ONE write — online
-through the ANPR portal, nationwide now the pilot has ended — and it propagates
-automatically to Agenzia delle Entrate, INPS, INAIL, ISTAT and the
-Motorizzazione, which hold agreements rather than copies. The EU's own name for
-this is the "once-only principle." Source:
-innovazione.gov.it/progetti/anagrafe-nazionale-della-popolazione-residente/
+The US system is entirely denormalized. My address is *copied* into the DMV, the IRS, the Social Security Administration, my bank, and my utility company — each an independent write, with nothing propagating between them. Copies drift. The stale address on that New York driver's license isn't an administrative failure; it's an update anomaly, the exact thing normalization exists to prevent. So a loose collection of proxies stands in for the structure, and the Social Security number, the driver's license, and often some one-off document have to be assembled together every time you answer the same question.
 
-PORTUGAL DOES NOT. There is no operational ANPR-equivalent. A foreign citizen
-without a Cartão de Cidadão changes their tax address through the Portal das
-Finanças, separately from the câmara that holds the CRUE. (Portugal's "Base de
-Dados de População Residente" is an INE STATISTICAL integration of administrative
-sources, not a registry of record — do not mistake it for the equivalent.)
+Still, as an engineer, I found the European approach easy to wrap my head around and easy to appreciate. [REAL ID](https://www.tsa.gov/real-id) has been enforced in the US since May 2025, and it is a genuine step — to issue a compliant license, a state now has to verify the applicant's Social Security number against the SSA's records rather than take the card at face value. But it standardizes how the states issue their own documents. It doesn't build the thing underneath them. Even within this, looking at the Transportation Security Administration (TSA) as an example, travelers who don't have a compliant ID can pay $45 to go through a separate "TSA ConfirmID" process. With no canonical record to check, the federal response was to build a paid, inference-based verification lane.
 
-So the section wants three tiers, not a binary:
-
-  Italy    - normalized. One row; everything else holds a reference and reads
-             it. Foreign keys wired up.
-  Portugal - the right SHAPE without the propagation. A stable join key (NIF)
-             and one authoritative owner per fact (Finanças owns tax, the câmara
-             owns residence), but nothing propagating between them. A normalized
-             schema whose foreign keys were never connected.
-  US       - neither. No safe join key, so every institution re-collects and
-             stores its own copy of every attribute.
-
-AND THE JOIN KEY IS THE DIFFERENTIATOR. This is what finally makes the Social
-Security section pay off. The NIF and the codice fiscale are safe to circulate,
-so systems can REFERENCE you. The SSN is not — it is doing username and password
-at once — so every US system has to re-collect your attributes instead. The US is
-denormalized not because nobody built the propagation, but because the identifier
-that would have carried it is the one thing you cannot hand out. The pet store
-scene and the username/password paragraph are both already pointing here.
-
-Also fix the triad in this paragraph — see the note under "Strip the problem
-down" near the top of the post. */}
-
-Ultimately, the takeaway from the whole registration was that my Italian identity document, the CRUE, and the NIF are not three copies of me. They are three tables. Each fact about my existence has exactly one authoritative home — who I am, where I live, what I owe — and everything else holds a reference and looks it up. That's what normalization means in a database: you don't duplicate a fact, you point at the one place it lives, so there is never a second copy to go quietly out of date.
-
-The US system is the denormalized one. My address is *copied* into the DMV, the IRS, the Social Security Administration, my bank, and my utility company — each an independent write, with nothing propagating between them. Copies drift. The stale address on that New York driver's license isn't an administrative failure; it's an update anomaly, the exact thing normalization exists to prevent. So a loose collection of proxies stands in for the structure, and the Social Security number, the driver's license, and often some one-off document have to be assembled together every time you answer the same question.
-
-{/* Under the rewrite above, this paragraph stops being a retreat and becomes the
-middle tier — the evidence for "right shape, foreign keys never connected." The
-"updating my address, for instance, would still have to be done in several
-places" clause is the load-bearing one, and it is currently doing the opposite of
-the job it should be doing. */}
-
-The Portuguese system is far from perfect. The document list can be left up to interpretation, and it doesn't cross EU borders, so this is a process that has to be repeated. Each EU member state implements the directive differently, so while the core tenets are the same, the actual implementation differs. It's still not as connected as it could be across agencies and services — updating my address, for instance, would still have to be done in several places.
-
-{/* REAL ID — accurate but STALE for a post publishing 7 September 2026, and the
-update is directly on thesis.
-
-Enforcement did begin 7 May 2025, as written. But since 1 FEBRUARY 2026,
-travelers without a compliant ID pay a $45 fee and go through "TSA ConfirmID,"
-with TSA warning of 30+ minute delays. That is your argument in miniature and it
-postdates the draft: faced with no canonical record to check, the federal
-response was to build a paid, inference-based verification lane. Same move as
-"everyone outside those lanes validates by inference instead" in the Social
-Security section — credit reports, background checks — now with a price list.
-
-The rest of the paragraph is correct and worth keeping: a state does have to
-verify the applicant's SSN against SSA records to issue a compliant licence, and
-REAL ID does standardise state issuance rather than building anything underneath
-it.
-
-OPTIONAL, only if it does not crowd the ending: the EU has a formal policy term
-for exactly what this post describes — the "once-only principle," Single Digital
-Gateway Regulation (EU) 2018/1724. One clause would show this is not your
-metaphor imposed on a system; it is the system's own stated design goal, which
-you recognised from the schema.
-
-Keep the "50 mini countries under a trenchcoat" line above — it is the one moment
-of personality in an otherwise analytical stretch and it earns its place. The
-only decision there is whether you want to signal it as a borrowed joke
-format. */}
-
-Still, as an engineer, I found this system easy to wrap my head around and easy to appreciate. [REAL ID](https://www.tsa.gov/real-id) has been enforced in the US since May 2025, and it is a genuine step — to issue a compliant license, a state now has to verify the applicant's Social Security number against the SSA's records rather than take the card at face value. But it standardizes how the states issue their own documents. It doesn't build the thing underneath them. I'll be curious whether these systems start communicating with each other in earnest — hopefully for the benefit of citizens and residents, and not only for the institutions checking up on them.
+I'll be curious whether these systems start communicating with each other in earnest — hopefully for the benefit of citizens and residents, and not only for the institutions checking up on them.

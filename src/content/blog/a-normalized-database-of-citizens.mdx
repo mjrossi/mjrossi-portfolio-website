@@ -1,6 +1,6 @@
 ---
 title: "A Normalized Database of Citizens"
-description: "What establishing residency in Portugal taught me about identity as a data model — and how differently the US answers the same questions."
+description: "Moving to Portugal as an Italian citizen turned identity into a schema problem — what Italy, Portugal, and the US each do with the same three facts about a person."
 pubDate: 2026-09-07T09:00:00+01:00
 tags: ["governance", "software-engineering", "personal"]
 ---
@@ -71,6 +71,6 @@ Portugal comes close in that the data is the right shape. The NIF acts as a stab
 
 The US system is entirely denormalized. My address is *copied* into the DMV, the IRS, the Social Security Administration, my bank, and my utility company — each an independent write, with nothing propagating between them. Copies drift. The stale address on that New York driver's license isn't an administrative failure; it's an update anomaly, the exact thing normalization exists to prevent. So a loose collection of proxies stands in for the structure, and the Social Security number, the driver's license, and often some one-off document have to be assembled together every time you answer the same question.
 
-Still, as an engineer, I found the European approach easy to wrap my head around and easy to appreciate. [REAL ID](https://www.tsa.gov/real-id) has been enforced in the US since May 2025, and it is a genuine step — to issue a compliant license, a state now has to verify the applicant's Social Security number against the SSA's records rather than take the card at face value. But it standardizes how the states issue their own documents. It doesn't build the thing underneath them. Even within this, looking at the Transportation Security Administration (TSA) as an example, travelers who don't have a compliant ID can pay $45 to go through a separate "TSA ConfirmID" process. With no canonical record to check, the federal response was to build a paid, inference-based verification lane.
+Still, as an engineer, I found the European approach easy to wrap my head around and easy to appreciate. [REAL ID](https://www.tsa.gov/real-id) has been enforced in the US since May 2025, and it is a genuine step — to issue a compliant license, a state now has to verify the applicant's Social Security number against the SSA's records rather than take the card at face value. But it standardizes how the states issue their own documents. It doesn't build the thing underneath them. Even within this, looking at the Transportation Security Administration (TSA) as an example, travelers who don't have a compliant ID have been able since February 2026 to pay $45 for a process called "TSA ConfirmID." The fee buys a ten-day window rather than a single trip, and TSA is careful to say it cannot promise the check will succeed. With no canonical record to check against, the federal response was a paid, inference-based verification lane that may still not produce an answer.
 
 I'll be curious whether these systems start communicating with each other in earnest — hopefully for the benefit of citizens and residents, and not only for the institutions checking up on them.

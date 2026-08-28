@@ -12,6 +12,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { check, stripComments } from './check.mjs';
 import { DIST, FIXTURE_SLUG, GALLEY_WRITE_QUOTA, PUBLISHED_SLUG } from './config.mjs';
+import { SET_IN, TAGLINE } from '../../src/lib/identity.js';
 
 /** Read and comment-strip a source file, or return '' if it isn't there. */
 function source(path) {
@@ -171,6 +172,69 @@ export function checkSourceGuards() {
   // is unchanged by the bug, and the endpoint it never called is tested
   // directly. Both halves are needed: a script searching from the form, or a
   // component that stopped rendering the element, break it the same way.
+  // THE SITE-LEVEL OG CARD CARRIES IDENTITY ONLY, NEVER A FACT ABOUT TODAY.
+  //
+  // Social scrapers cache by image URL and effectively never re-fetch, so a
+  // card asserting where I live is wrong the moment that moves AND the
+  // correction cannot reach the caches already holding it. This shipped: the
+  // card read "Brooklyn, New York" for months after the masthead said Lisbon,
+  // because scripts/make-og.mjs is a manual `just og` step rather than a build
+  // step and nothing compared the two.
+  //
+  // Nothing else here can see it. checkBuildArtifacts asserts og.png EXISTS and
+  // live-site.mjs asserts the meta tag POINTS at it; neither reads a pixel, and
+  // no test in this repo can read text out of a PNG. So the invariant is
+  // enforced on the generator's source instead — a diagnostic, per this file's
+  // header, but it is the only thing standing here at all.
+  //
+  // `source()` strips comments first, so the prose above explaining WHY the
+  // location is absent cannot trip the check asserting it is absent.
+  const ogGenSource = source(resolve('scripts/make-og.mjs'));
+  if (ogGenSource) {
+    check(
+      'make-og.mjs: the site card states no fact about the present',
+      !/meta-loc|Brooklyn/.test(ogGenSource),
+      'scripts/make-og.mjs emits a location again — the site-level card must carry ' +
+        'identity only (avatar, name, tagline, domain). A per-post card may carry a ' +
+        'date because that is a fact about the POST, pinned to a pubDate that never ' +
+        'moves; anything on this card is a fact about today, and a stale one cannot ' +
+        'be recalled from the scrapers that cached it',
+    );
+  }
+
+  // THE MASTHEAD SENTENCES ARE SAID IN TWO ENGINES AND SPELLED IN ONE PLACE.
+  //
+  // Base.astro renders the tagline and colophon as HTML; make-og.mjs renders
+  // them into the SVG behind public/og.png. src/lib/identity.js is the single
+  // spelling. Inlining either string back into either renderer restores the
+  // drift that put "Brooklyn, New York" on the card for months — and on the
+  // card side it is invisible, because that generator is a manual `just og`
+  // step and no test in this repo can read text out of a PNG.
+  //
+  // Checked as "the literal does not appear" rather than "the import does",
+  // because an import that is present but unused is exactly what a re-inlining
+  // leaves behind.
+  //
+  // `&amp;` is folded back to `&` first, or the colophon half slips through:
+  // identity.js stores plain text (escaping is the renderer's job), so a
+  // re-inlined "Set in Fraunces &amp; Source Serif" in markup does not contain
+  // the constant as written. Caught by fault injection — without the fold, that
+  // exact regression left this check green.
+  for (const [label, path] of [
+    ['make-og.mjs', 'scripts/make-og.mjs'],
+    ['Base.astro', 'src/layouts/Base.astro'],
+  ]) {
+    const src = source(resolve(path)).replaceAll('&amp;', '&');
+    if (!src) continue;
+    check(
+      `${label}: masthead sentences come from src/lib/identity.js`,
+      src.includes('identity.js') && !src.includes(TAGLINE) && !src.includes(SET_IN),
+      `${path} spells the tagline or colophon itself instead of importing it — ` +
+        'the page and the OG card then drift independently, and the card is the ' +
+        'half that drifts silently',
+    );
+  }
+
   const subscribeSource = source(resolve('src/components/Subscribe.astro'));
   const newsletterClient = source(resolve('public/scripts/newsletter.js'));
   if (subscribeSource && newsletterClient) {
@@ -264,6 +328,31 @@ export function checkBuildArtifacts() {
   ]) {
     check(`asset: ${asset}`, existsSync(resolve(DIST, asset)));
   }
+
+  // THE ogImage DEFAULT AND THE FILE ON DISK, PINNED TOGETHER.
+  //
+  // Base.astro's default carries a `?v=` cache-bust (see the comment there), so
+  // the string in the layout is no longer literally a path. That query is also
+  // what would hide a rename: bump the filename without regenerating, and every
+  // non-post page advertises a card that 404s for every scraper, while the
+  // `asset: og.png` check above stays green against the OLD file still sitting
+  // in public/. This is the half that does not rot — it resolves whatever the
+  // layout actually says, query stripped, and requires it to be on disk.
+  //
+  // A scraper is the only consumer and it never reports a failure to us; a
+  // broken og:image shows up as a missing preview on someone else's timeline,
+  // days later, during the manual syndication window.
+  const ogDefault = source(resolve('src/layouts/Base.astro')).match(
+    /ogImage:\s*ogImagePath\s*=\s*['"]([^'"]+)['"]/,
+  );
+  check(
+    'Base.astro: the default og:image names a card that exists',
+    Boolean(ogDefault) && existsSync(resolve(DIST, ogDefault[1].split('?')[0].replace(/^\//, ''))),
+    ogDefault
+      ? `Base.astro defaults og:image to ${ogDefault[1]}, which is not in dist/client — ` +
+        'every non-post page advertises a card no scraper can fetch'
+      : 'could not find the ogImage default in src/layouts/Base.astro — this check is blind',
+  );
 
   // THE PER-POST OG CARDS, IN BOTH DIRECTIONS. BlogPost.astro advertises
   // /og/<slug>.png for any post published as of __BUILD_TIME__; this is the only

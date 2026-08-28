@@ -3,6 +3,7 @@ import { Font } from 'astro:assets';
 import '../styles/global.css';
 import ContactLinks from '../components/ContactLinks.astro';
 import { issue } from '../lib/edition.js';
+import { TAGLINE, SET_IN, BUILT_WITH, SITE_DESCRIPTION } from '../lib/identity.js';
 
 interface Props {
   title: string;
@@ -14,14 +15,18 @@ interface Props {
   ogImageAlt?: string;
 }
 
-const SITE_ALT = 'Matthew Rossi — software engineer turning toward sustainable urban mobility.';
-
 const {
   title,
-  description = 'Matthew Rossi — software engineer turning toward sustainable urban mobility.',
+  description = SITE_DESCRIPTION,
   noindex = false,
-  ogImage: ogImagePath = '/og.png',
-  ogImageAlt = SITE_ALT,
+  // `?v=` is the cache-bust knob, and it is the only one there is: social
+  // scrapers key their stored copy on the full image URL and effectively never
+  // re-fetch, so a corrected /og.png does not reach LinkedIn, Facebook, Slack
+  // or Bluesky on its own. Bump this whenever public/og.png changes. Keeping
+  // the FILENAME stable is what makes it safe — a scraper that strips the
+  // query still lands on the current card rather than a 404.
+  ogImage: ogImagePath = '/og.png?v=2',
+  ogImageAlt = SITE_DESCRIPTION,
 } = Astro.props;
 
 const pathname = Astro.url.pathname;
@@ -98,7 +103,7 @@ const isHome = pathname === '/';
       </div>
       <div class="masthead-tagline-row">
         <span class="masthead-rule" aria-hidden="true"></span>
-        <span class="masthead-tagline">Software engineer turning toward sustainable urban mobility</span>
+        <span class="masthead-tagline">{TAGLINE}</span>
         <span class="masthead-rule" aria-hidden="true"></span>
       </div>
     </div>
@@ -135,7 +140,7 @@ const isHome = pathname === '/';
       <div class="footer-contact">
         <ContactLinks />
       </div>
-      <span class="broadsheet-colophon">Set in Fraunces &amp; Source Serif · Built in Astro, served from the edge</span>
+      <span class="broadsheet-colophon">{SET_IN} · {BUILT_WITH}</span>
       <div class="broadsheet-footer-row">
         <span class="footer-left">mjrossi.com</span>
         <span class="footer-right">Lisbon, Portugal</span>

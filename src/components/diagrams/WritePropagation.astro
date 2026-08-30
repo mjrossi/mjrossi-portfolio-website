@@ -1,0 +1,211 @@
+---
+// Hand-authored inline SVG: what one change of address costs in each of the
+// three systems the post ranks, and what propagates afterwards. Inline for the
+// same reasons as ThreeQuestions.astro — see that file's header.
+//
+// Every band is transcribed from the post's own paragraphs in "The normalized
+// identity database":
+//   Italy    "A change of residence is *one* write — online through the ANPR
+//             portal — and it propagates automatically to Agenzia delle Entrate,
+//             INPS, INAIL, ISTAT and the Motorizzazione." The five names are
+//             verbatim and in the post's order; do not reorder or abbreviate.
+//             "Those agencies still keep their own records, so this is
+//             replication rather than a true foreign key" — which is why the
+//             fan is drawn from ANPR to five separate boxes rather than as one
+//             shared record.
+//   Portugal "The NIF acts as a stable join key, and there is an authoritative
+//             owner for each administrative domain (Finanças for tax, the câmara
+//             for residence, AIMA for immigration, and so on), but those systems
+//             don't share a common canonical record… Updating my address, for
+//             instance, would still have to be done in several places."
+//             NOTE the post's "and so on" — three owners is a SAMPLE, not the
+//             complete set, and the caption says so. Do not present it as an
+//             exhaustive list, and do not add owners the post never names.
+//   US       "My address is *copied* into the DMV, the IRS, the Social Security
+//             Administration, my bank, and my utility company — each an
+//             independent write, with nothing propagating between them. Copies
+//             drift. The stale address on that New York driver's license isn't
+//             an administrative failure; it's an update anomaly."
+//
+// The three bands deliberately share one skeleton — "you move" on the left,
+// targets on the right — so the only thing that varies between them is what
+// sits in the middle. Italy has a register there, Portugal has a key pointing
+// at a record that does not exist, and the US has nothing at all. Keep that
+// skeleton if you edit any band; the comparison is the whole diagram.
+//
+// The missing canonical record is drawn with .dg-node--out, the same dashed
+// "present on the page, absent from the result" treatment RegionGraphNYC uses
+// for New Jersey. It is an absence, not a component — do not fill it in.
+//
+// Deliberately absent: the US non-citizen case, which the post describes as
+// "nearly the mirror image of Italy". It is a fourth propagation story and it
+// would fit here, but it belongs to the turn the post makes in the next
+// section, and CitizenAsymmetry.astro draws it there.
+//
+// Styles live in global.css (.post-diagram, .dg-*) per the one-stylesheet rule.
+// Marker and aria IDs are prefixed dg-writes-* — four diagrams share this page.
+---
+
+<figure class="post-figure post-diagram">
+  <svg
+    viewBox="0 0 700 502"
+    role="img"
+    aria-labelledby="dg-writes-title dg-writes-desc"
+    class="dg"
+  >
+    <title id="dg-writes-title">
+      What one change of address costs in Italy, Portugal and the United States
+    </title>
+    <desc id="dg-writes-desc">
+      Three bands, each showing a person moving house and what has to be written.
+      In Italy, one arrow leaves "you move" and reaches a single register, the
+      ANPR, which then fans out automatically to five agencies: Agenzia delle
+      Entrate, INPS, INAIL, ISTAT and the Motorizzazione. One write, five copies
+      fed from it. In Portugal, three arrows leave "you move" and reach three
+      separate owners — Finanças for tax, the câmara for residence, AIMA for
+      immigration — which all file against the same NIF join key, but the box
+      that would hold a shared canonical record is drawn dashed and empty,
+      because none exists. Three writes. In the United States, five arrows leave
+      "you move" and reach the DMV, the IRS, the Social Security Administration,
+      a bank and a utility company, with nothing in between them and nothing
+      propagating. Five independent writes, and the copies drift apart.
+    </desc>
+
+    <defs>
+      <marker
+        id="dg-writes-arrow"
+        viewBox="0 0 10 10"
+        refX="9"
+        refY="5"
+        markerWidth="6"
+        markerHeight="6"
+        orient="auto-start-reverse"
+      >
+        <path d="M0 0 L10 5 L0 10 z" class="dg-arrowhead" />
+      </marker>
+    </defs>
+
+    {/* ================= ITALY — one write ================= */}
+    <text x="6" y="22" class="dg-call dg-call--start">Italy — one write, and the copies are fed from it</text>
+
+    <g class="dg-group">
+      <rect x="6" y="68" width="104" height="48" class="dg-node" />
+      <text x="58" y="97" class="dg-label">you move</text>
+    </g>
+
+    <g class="dg-edges" fill="none" marker-end="url(#dg-writes-arrow)">
+      <path class="dg-edge dg-edge--key" d="M110 92 H 136" />
+    </g>
+
+    <g class="dg-group">
+      <rect x="140" y="68" width="150" height="48" class="dg-node dg-node--anchor" />
+      <text x="215" y="90" class="dg-label">ANPR</text>
+      <text x="215" y="107" class="dg-sub">one authoritative write</text>
+    </g>
+
+    <g class="dg-edges" fill="none" marker-end="url(#dg-writes-arrow)">
+      <path class="dg-edge" d="M290 92 H 320 V 40 H 352" />
+      <path class="dg-edge" d="M290 92 H 320 V 66 H 352" />
+      <path class="dg-edge" d="M290 92 H 352" />
+      <path class="dg-edge" d="M290 92 H 320 V 118 H 352" />
+      <path class="dg-edge" d="M290 92 H 320 V 144 H 352" />
+    </g>
+
+    <text x="362" y="44" class="dg-row">Agenzia delle Entrate</text>
+    <text x="362" y="70" class="dg-row">INPS</text>
+    <text x="362" y="96" class="dg-row">INAIL</text>
+    <text x="362" y="122" class="dg-row">ISTAT</text>
+    <text x="362" y="148" class="dg-row">Motorizzazione</text>
+
+    <path class="dg-edge" d="M6 170 H 694" />
+
+    {/* ================= PORTUGAL — one key, three writes ================= */}
+    <text x="6" y="190" class="dg-call dg-call--start">Portugal — one key, but a write to every owner</text>
+
+    <g class="dg-group">
+      <rect x="6" y="236" width="104" height="48" class="dg-node" />
+      <text x="58" y="265" class="dg-label">you move</text>
+    </g>
+
+    <g class="dg-edges" fill="none" marker-end="url(#dg-writes-arrow)">
+      <path class="dg-edge" d="M110 260 H 150 V 224 H 188" />
+      <path class="dg-edge" d="M110 260 H 188" />
+      <path class="dg-edge" d="M110 260 H 150 V 296 H 188" />
+    </g>
+
+    <g class="dg-group">
+      <rect x="192" y="208" width="196" height="32" class="dg-node" />
+      <text x="290" y="229" class="dg-label">Finanças — tax</text>
+    </g>
+    <g class="dg-group">
+      <rect x="192" y="244" width="196" height="32" class="dg-node" />
+      <text x="290" y="265" class="dg-label">câmara — residence</text>
+    </g>
+    <g class="dg-group">
+      <rect x="192" y="280" width="196" height="32" class="dg-node" />
+      <text x="290" y="301" class="dg-label">AIMA — immigration</text>
+    </g>
+
+    <g class="dg-edges" fill="none">
+      <path class="dg-edge dg-edge--key" d="M388 224 H 416" />
+      <path class="dg-edge dg-edge--key" d="M388 260 H 416" />
+      <path class="dg-edge dg-edge--key" d="M388 296 H 416" />
+    </g>
+
+    <g class="dg-group">
+      <rect x="416" y="208" width="104" height="104" class="dg-node dg-node--anchor" />
+      <text x="468" y="254" class="dg-label">NIF</text>
+      <text x="468" y="273" class="dg-sub">one join key</text>
+    </g>
+
+    <path class="dg-node dg-node--out" d="M520 260 H 552" />
+
+    <g class="dg-group dg-group--out">
+      <rect x="552" y="208" width="142" height="104" class="dg-node dg-node--out" />
+      <text x="623" y="252" class="dg-note">no shared canonical</text>
+      <text x="623" y="268" class="dg-note">record — so the address</text>
+      <text x="623" y="284" class="dg-note">is written three times</text>
+    </g>
+
+    <path class="dg-edge" d="M6 338 H 694" />
+
+    {/* ================= US CITIZEN — no key, five writes ================= */}
+    <text x="6" y="358" class="dg-call dg-call--start">US citizen — no key, and nothing between the copies</text>
+
+    <g class="dg-group">
+      <rect x="6" y="404" width="104" height="48" class="dg-node" />
+      <text x="58" y="433" class="dg-label">you move</text>
+    </g>
+
+    <g class="dg-edges" fill="none" marker-end="url(#dg-writes-arrow)">
+      <path class="dg-edge" d="M110 428 H 150 V 376 H 188" />
+      <path class="dg-edge" d="M110 428 H 150 V 402 H 188" />
+      <path class="dg-edge" d="M110 428 H 188" />
+      <path class="dg-edge" d="M110 428 H 150 V 454 H 188" />
+      <path class="dg-edge" d="M110 428 H 150 V 480 H 188" />
+    </g>
+
+    <text x="198" y="380" class="dg-row">DMV</text>
+    <text x="198" y="406" class="dg-row">IRS</text>
+    <text x="198" y="432" class="dg-row">Social Security Administration</text>
+    <text x="198" y="458" class="dg-row">your bank</text>
+    <text x="198" y="484" class="dg-row">your utility company</text>
+
+    <text x="248" y="380" class="dg-note dg-note--start">— the New York address that never got updated</text>
+
+    <text x="430" y="416" class="dg-call dg-call--start">five independent writes</text>
+    <text x="430" y="436" class="dg-note dg-note--start">nothing propagates between them,</text>
+    <text x="430" y="452" class="dg-note dg-note--start">so the copies drift — an update anomaly</text>
+  </svg>
+
+  <figcaption>
+    The same move, three times. Italy writes once and the register carries it;
+    the agencies still keep their own records, so this is replication rather
+    than a true foreign key, but every copy is fed from one authoritative write.
+    Portugal has the key and the owners — Finanças, the câmara and AIMA are
+    three of them, not all — and no shared record beneath, so the address is
+    written in each place separately. The US has neither, and the stale address
+    on a driver's license is the update anomaly that normalization exists to
+    prevent.
+  </figcaption>
+</figure>

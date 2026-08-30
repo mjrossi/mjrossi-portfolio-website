@@ -1,6 +1,7 @@
 // The sentences the site says about itself, in one place.
 //
-// These are said in TWO rendering engines: `src/layouts/Base.astro` renders
+// These are said in two rendering engines that CAN import them (a third that
+// cannot is covered below): `src/layouts/Base.astro` renders
 // them as HTML on every page, and `scripts/make-og.mjs` renders them into an
 // SVG that sharp rasterises to `public/og.png`. A string spelled once per
 // engine is a string that drifts — and the OG card is the half that drifts
@@ -15,6 +16,14 @@
 // `{}` expression itself, while the SVG generator has to emit `&amp;`. A string
 // pre-escaped for one of them is wrong in the other, and `&amp;` rendered as
 // HTML shows up on the page as literal `&amp;`.
+//
+// There is a THIRD engine for the colophon, and it cannot import this file:
+// `docs/buttondown-rss-template.md` is pasted by hand into Buttondown's
+// dashboard, so it spells `SET_IN` and `BUILT_WITH` as literal markdown. That
+// copy is pinned the other way round — `scripts/smoke/static.mjs` asserts the
+// template still matches these constants, so changing one of them fails the
+// build until the template is updated and re-pasted. Editing a sentence here is
+// therefore an operator step as well as a code change.
 //
 // What is deliberately NOT here: the two-tone "Matthew Rossi" wordmark and the
 // `mjrossi.com` domain. Both are also spelled in more than one engine (adding

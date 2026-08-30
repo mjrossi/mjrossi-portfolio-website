@@ -12,7 +12,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { check, stripComments } from './check.mjs';
 import { DIST, FIXTURE_SLUG, GALLEY_WRITE_QUOTA, PUBLISHED_SLUG } from './config.mjs';
-import { SET_IN, TAGLINE } from '../../src/lib/identity.js';
+import { BUILT_WITH, SET_IN, TAGLINE } from '../../src/lib/identity.js';
 
 /** Read and comment-strip a source file, or return '' if it isn't there. */
 function source(path) {
@@ -172,6 +172,24 @@ export function checkSourceGuards() {
   // is unchanged by the bug, and the endpoint it never called is tested
   // directly. Both halves are needed: a script searching from the form, or a
   // component that stopped rendering the element, break it the same way.
+
+  const subscribeSource = source(resolve('src/components/Subscribe.astro'));
+  const newsletterClient = source(resolve('public/scripts/newsletter.js'));
+  if (subscribeSource && newsletterClient) {
+    check(
+      'Subscribe.astro: renders the .newsletter-msg status line',
+      /class="newsletter-msg"/.test(subscribeSource),
+      'the status line is gone from Subscribe.astro — newsletter.js writes every message into it',
+    );
+    check(
+      'newsletter.js: resolves .newsletter-msg from the component root, not the form',
+      /closest\(\s*['"]aside['"]\s*\)/.test(newsletterClient) &&
+        !/form\.querySelector\(\s*['"]\.newsletter-msg/.test(newsletterClient),
+      'newsletter.js scopes the status-line lookup to the <form>, where the element is not — ' +
+        'the handler throws after preventDefault and the form silently does nothing',
+    );
+  }
+
   // THE SITE-LEVEL OG CARD CARRIES IDENTITY ONLY, NEVER A FACT ABOUT TODAY.
   //
   // Social scrapers cache by image URL and effectively never re-fetch, so a
@@ -193,12 +211,15 @@ export function checkSourceGuards() {
   if (ogGenSource) {
     check(
       'make-og.mjs: the site card states no fact about the present',
-      !/meta-loc|Brooklyn/.test(ogGenSource),
-      'scripts/make-og.mjs emits a location again — the site-level card must carry ' +
+      !/meta-loc|Brooklyn|Lisbon|Barcelona|edition\.js|\bissue\(/.test(ogGenSource),
+      'scripts/make-og.mjs states a fact about the present again — a location, or an ' +
+        'edition line. The site-level card must carry ' +
         'identity only (avatar, name, tagline, domain). A per-post card may carry a ' +
         'date because that is a fact about the POST, pinned to a pubDate that never ' +
         'moves; anything on this card is a fact about today, and a stale one cannot ' +
-        'be recalled from the scrapers that cached it',
+        'be recalled from the scrapers that cached it. The edition line is in this ' +
+        'pattern for the same reason: it was left out by a comment alone, and a comment ' +
+        'is not a check',
     );
   }
 
@@ -225,32 +246,53 @@ export function checkSourceGuards() {
     ['Base.astro', 'src/layouts/Base.astro'],
   ]) {
     const src = source(resolve(path)).replaceAll('&amp;', '&');
-    if (!src) continue;
     check(
       `${label}: masthead sentences come from src/lib/identity.js`,
-      src.includes('identity.js') && !src.includes(TAGLINE) && !src.includes(SET_IN),
-      `${path} spells the tagline or colophon itself instead of importing it — ` +
-        'the page and the OG card then drift independently, and the card is the ' +
-        'half that drifts silently',
+      Boolean(src) &&
+        src.includes('identity.js') &&
+        !src.includes(TAGLINE) &&
+        !src.includes(SET_IN),
+      src
+        ? `${path} spells the tagline or colophon itself instead of importing it — ` +
+          'the page and the OG card then drift independently, and the card is the ' +
+          'half that drifts silently'
+        : `${path} could not be read — it has moved or been renamed, and this check ` +
+          'is blind until the path here follows it',
     );
   }
 
-  const subscribeSource = source(resolve('src/components/Subscribe.astro'));
-  const newsletterClient = source(resolve('public/scripts/newsletter.js'));
-  if (subscribeSource && newsletterClient) {
-    check(
-      'Subscribe.astro: renders the .newsletter-msg status line',
-      /class="newsletter-msg"/.test(subscribeSource),
-      'the status line is gone from Subscribe.astro — newsletter.js writes every message into it',
-    );
-    check(
-      'newsletter.js: resolves .newsletter-msg from the component root, not the form',
-      /closest\(\s*['"]aside['"]\s*\)/.test(newsletterClient) &&
-        !/form\.querySelector\(\s*['"]\.newsletter-msg/.test(newsletterClient),
-      'newsletter.js scopes the status-line lookup to the <form>, where the element is not — ' +
-        'the handler throws after preventDefault and the form silently does nothing',
-    );
-  }
+  // THE COLOPHON IS SAID IN A THIRD ENGINE, AND THAT ONE CANNOT IMPORT.
+  //
+  // docs/buttondown-rss-template.md is pasted by hand into Buttondown's
+  // RSS-to-email Template field, so it spells the colophon as literal markdown
+  // and no amount of restructuring will let it read identity.js. That makes it
+  // the drift risk this module exists to remove, one surface further out: the
+  // sentence can change here and the mailing keeps the old one until someone
+  // remembers to re-paste, and nothing in this repo serves that file to notice.
+  //
+  // So the assertion runs the other way round from the two above — the literal
+  // must be PRESENT and must match, rather than absent. A failure here does not
+  // mean the template is broken; it means identity.js moved and the dashboard
+  // copy is now stale. Fix by updating the template and re-pasting it.
+  //
+  // TAGLINE is not checked: the email carries a byline, not a masthead, so the
+  // template never spells it.
+  const emailTemplate = source(resolve('docs/buttondown-rss-template.md')).replaceAll(
+    '&amp;',
+    '&',
+  );
+  check(
+    'buttondown-rss-template.md: the colophon still matches src/lib/identity.js',
+    Boolean(emailTemplate) &&
+      emailTemplate.includes(SET_IN) &&
+      emailTemplate.includes(BUILT_WITH),
+    emailTemplate
+      ? 'the email template no longer spells the colophon the way identity.js does — ' +
+        'update docs/buttondown-rss-template.md and re-paste it into Buttondown, or ' +
+        'the mailing keeps saying the old sentence with nothing here to show it'
+      : 'docs/buttondown-rss-template.md could not be read — it has moved or been ' +
+        'renamed, and this check is blind until the path here follows it',
+  );
 
   // The write quota must stay ONE statement. A check-then-insert pair passes
   // every sequential test and still lets concurrent requests race past the limit,

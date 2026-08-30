@@ -1,0 +1,173 @@
+---
+// Hand-authored inline SVG: the same five obligations, asked of a US
+// non-citizen and of a US citizen. Inline for the same reasons as
+// ThreeQuestions.astro — see that file's header.
+//
+// The five rows are exactly the five the post enumerates in the closing
+// paragraph of "The normalized identity database", in its order, and nothing
+// has been added to round the list out:
+//   "One identifier — the A-number — that USCIS, Customs and Border Protection,
+//    the State Department and the immigration courts all file against.
+//    Mandatory registration on arrival, mandatory address writes within ten
+//    days, mandatory status reporting, and a formal exit record in Form I-407
+//    when permanent residency is abandoned — a filing USCIS is required by law
+//    to report to the IRS."
+// Supporting detail per cell, also from the post:
+//   A-number      "built to be an identifier and nothing else — it follows a
+//                  person through every change of status"
+//   registration  DHS rule finalized June 2026: "effectively every non-citizen
+//                 aged fourteen or over who stays thirty days to register, be
+//                 fingerprinted, and be issued a number"
+//                 https://www.federalregister.gov/documents/2026/06/29/2026-13057/alien-registration-form-and-evidence-of-registration
+//   address       "Form AR-11 requires a change of address within 10 days of
+//                  moving (8 U.S.C. § 1305), and failing to file is a criminal
+//                  offense"
+//   status        "for students and exchange visitors, the Student and Exchange
+//                  Visitor Information System (SEVIS) does the same job, with
+//                  the school reporting on their behalf"
+//   exit          "a permanent resident who gives up the status submits Form
+//                  I-407, and USCIS is required by law to report it to the IRS"
+//   footnote      8 U.S.C. § 1304(e), from "What proves it": carry duty for a
+//                 registered non-citizen 18 or older, "No US citizen has any
+//                 comparable duty."
+//   SSN cell      "From 1946 to 1972, the SSN card carried 'NOT FOR
+//                  IDENTIFICATION.'"
+//
+// Two things a future editor must NOT "fix":
+//   - The citizen column is dashed and empty in four of five rows. That is
+//     .dg-node--out, the same "present on the page, absent from the result"
+//     treatment RegionGraphNYC uses for New Jersey. It is the argument. Filling
+//     the cells with plausible near-equivalents (a passport, a voter roll, a
+//     state DMV record) would be exactly the inference-by-proxy the post is
+//     about, asserted as though it were structure.
+//   - The citizen column is NOT entirely empty: row one holds the SSN, solid,
+//     because the number does exist — it was just never built for the job.
+//     Dashing it too would overstate the case.
+//
+// The carry duty (§ 1304(e)) is a footnote rather than a sixth row because the
+// post raises it two sections earlier and does not include it in the list this
+// diagram tabulates. Matching the enumeration exactly is what lets a reader
+// check the picture against the paragraph.
+//
+// Styles live in global.css (.post-diagram, .dg-*) per the one-stylesheet rule.
+// aria IDs are prefixed dg-asym-* — four diagrams share this page.
+---
+
+<figure class="post-figure post-diagram">
+  <svg
+    viewBox="0 0 700 462"
+    role="img"
+    aria-labelledby="dg-asym-title dg-asym-desc"
+    class="dg"
+  >
+    <title id="dg-asym-title">
+      Five federal obligations, asked of a US non-citizen and of a US citizen
+    </title>
+    <desc id="dg-asym-desc">
+      Five rows — stable identifier, registration on arrival, change of address,
+      status reporting, exit record — across two columns, US citizen and US
+      non-citizen. The non-citizen column is filled in at every row: the
+      A-number, mandatory registration and fingerprinting for anyone fourteen or
+      over staying thirty days, Form AR-11 within ten days of moving under
+      8 U.S.C. § 1305, status reporting through SEVIS, and Form I-407 on
+      departure, which USCIS must report to the IRS. The citizen column holds
+      only the Social Security number, a card that read NOT FOR IDENTIFICATION
+      from 1946 to 1972; the other four cells are drawn dashed and empty,
+      because no such obligation exists. A footnote adds that a registered
+      non-citizen eighteen or older must carry the document at all times, and
+      that no citizen has a comparable duty.
+    </desc>
+
+    {/* ---- column headers ---- */}
+    <text x="334" y="24" class="dg-call">US citizen</text>
+    <text x="577" y="24" class="dg-call">US non-citizen</text>
+
+    <path class="dg-edge" d="M6 34 H 694" />
+
+    {/* ---- row labels ---- */}
+    <text x="6" y="82" class="dg-call dg-call--start">stable identifier</text>
+    <text x="6" y="154" class="dg-call dg-call--start">registration on arrival</text>
+    <text x="6" y="226" class="dg-call dg-call--start">change of address</text>
+    <text x="6" y="298" class="dg-call dg-call--start">status reporting</text>
+    <text x="6" y="370" class="dg-call dg-call--start">exit record</text>
+
+    {/* ---- row 1: the one cell the citizen column actually has ---- */}
+    <g class="dg-group">
+      <rect x="220" y="46" width="228" height="64" class="dg-node" />
+      <text x="334" y="70" class="dg-label">SSN</text>
+      <text x="334" y="90" class="dg-sub">“NOT FOR IDENTIFICATION”,</text>
+      <text x="334" y="104" class="dg-sub">printed on the card 1946–1972</text>
+    </g>
+    <g class="dg-group">
+      <rect x="460" y="46" width="234" height="64" class="dg-node" />
+      <text x="577" y="70" class="dg-label">A-number</text>
+      <text x="577" y="90" class="dg-sub">an identifier and nothing else,</text>
+      <text x="577" y="104" class="dg-sub">carried through every status change</text>
+    </g>
+
+    {/* ---- row 2: registration on arrival ---- */}
+    <g class="dg-group dg-group--out">
+      <rect x="220" y="118" width="228" height="64" class="dg-node dg-node--out" />
+      <text x="334" y="156" class="dg-note">none</text>
+    </g>
+    <g class="dg-group">
+      <rect x="460" y="118" width="234" height="64" class="dg-node" />
+      <text x="577" y="142" class="dg-label">mandatory</text>
+      <text x="577" y="162" class="dg-sub">fourteen and over, thirty days,</text>
+      <text x="577" y="176" class="dg-sub">fingerprinted — DHS rule, 2026</text>
+    </g>
+
+    {/* ---- row 3: change of address ---- */}
+    <g class="dg-group dg-group--out">
+      <rect x="220" y="190" width="228" height="64" class="dg-node dg-node--out" />
+      <text x="334" y="222" class="dg-note">none — and no register</text>
+      <text x="334" y="238" class="dg-note">to write it to</text>
+    </g>
+    <g class="dg-group">
+      <rect x="460" y="190" width="234" height="64" class="dg-node" />
+      <text x="577" y="214" class="dg-label">Form AR-11</text>
+      <text x="577" y="234" class="dg-sub">within 10 days of moving —</text>
+      <text x="577" y="248" class="dg-sub">8 U.S.C. § 1305, a criminal offense</text>
+    </g>
+
+    {/* ---- row 4: status reporting ---- */}
+    <g class="dg-group dg-group--out">
+      <rect x="220" y="262" width="228" height="64" class="dg-node dg-node--out" />
+      <text x="334" y="300" class="dg-note">none</text>
+    </g>
+    <g class="dg-group">
+      <rect x="460" y="262" width="234" height="64" class="dg-node" />
+      <text x="577" y="286" class="dg-label">SEVIS</text>
+      <text x="577" y="306" class="dg-sub">students and exchange visitors,</text>
+      <text x="577" y="320" class="dg-sub">reported by the school</text>
+    </g>
+
+    {/* ---- row 5: exit record ---- */}
+    <g class="dg-group dg-group--out">
+      <rect x="220" y="334" width="228" height="64" class="dg-node dg-node--out" />
+      <text x="334" y="366" class="dg-note">none — the IRS finds out,</text>
+      <text x="334" y="382" class="dg-note">and tells no one else</text>
+    </g>
+    <g class="dg-group">
+      <rect x="460" y="334" width="234" height="64" class="dg-node" />
+      <text x="577" y="358" class="dg-label">Form I-407</text>
+      <text x="577" y="378" class="dg-sub">USCIS is required by law</text>
+      <text x="577" y="392" class="dg-sub">to report it to the IRS</text>
+    </g>
+
+    <text x="6" y="428" class="dg-note dg-note--start">
+      And 8 U.S.C. § 1304(e): a registered non-citizen 18 or older must carry the document at all times.
+    </text>
+    <text x="6" y="444" class="dg-note dg-note--start">
+      No US citizen has any comparable duty.
+    </text>
+  </svg>
+
+  <figcaption>
+    A canonical record, a stable join key, one authoritative owner, and
+    mandatory propagation on every change — the register the US never built for
+    its citizens, filled in column by column for the people who cannot vote. The
+    empty cells on the left are not an oversight in the drawing. They are the
+    finding.
+  </figcaption>
+</figure>

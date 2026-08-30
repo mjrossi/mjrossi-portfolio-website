@@ -5,6 +5,11 @@ pubDate: 2026-09-07T09:00:00+01:00
 tags: ["governance", "software-engineering", "advocacy", "personal"]
 ---
 
+import ThreeQuestions from '../../components/diagrams/ThreeQuestions.astro';
+import CredentialSplit from '../../components/diagrams/CredentialSplit.astro';
+import WritePropagation from '../../components/diagrams/WritePropagation.astro';
+import CitizenAsymmetry from '../../components/diagrams/CitizenAsymmetry.astro';
+
 I recently relocated to Lisbon, and in doing so I jumped immediately on the bureaucratic task of properly establishing my residency and acquiring the respective documentation. I had acquired Italian citizenship before the move, so I arrived in Portugal as an EU citizen rather than an American one. I've never been someone who likes to sit too long on bureaucratic tasks. What I found was a system that felt much more like my identity lived in a normalized database.
 
 Portugal, Italy, and the wider European Union have taken more concrete steps to build out a normalized database of citizens. The US has too, but only for immigrants — without the benefits that I've found accessible so far in the EU.
@@ -17,7 +22,9 @@ Quick level setting on definitions: a canonical record is one entry that is the 
 
 The US has neither for its citizens. Instead, it has authoritative records organized around purpose. It requires cross-referencing several items to get all the specifics for a person. In the US, a driver's license here, a lease there, a utility bill standing in as proof that "this person exists at this address": all of it is accepted as commonplace. It was genuinely startling to move into a system that has something closer to both — albeit far from perfect. For non-citizens, though, the US does have both.
 
-Strip the problem down and there are only three questions any of this has to answer: who you are, what proves it, and where you live. Every document below is one country's answer to one of them.
+Strip the problem down and there are only three questions any of this has to answer: who you are, what proves it, and where you live.
+
+<ThreeQuestions />
 
 ## Who you are
 
@@ -43,9 +50,11 @@ Europeans tend to carry identification documents, where identity is the entire p
 
 The card is not yet how most Italians actually log in. More than forty million SPID identities have been issued, a credential issued independently of any identity document. In summer 2025 the government decided to retire it, and the transition now under way points at the CIE and the IT-Wallet instead. The CIE carries my unique identifier — the codice fiscale — and an NFC chip that authenticates me directly. Since the physical card has to be present, it satisfies the security requirement: the codice fiscale is my username, the CIE is my password. Once SPID is gone, that pairing becomes how most Italians will authenticate. Italy is collapsing its credentials back onto a single document — normalization playing out in real time.
 
-Portugal implements its own version of this. Citizens receive a Cartão de Cidadão. The rest of us use a passport or residence title tied to us. Regardless of identity card, the NIF acts as our username, the document verifies our identity, and the password is a state-certified credential — most commonly the [Chave Móvel Digital](https://www.autenticacao.gov.pt/a-chave-movel-digital), though the Cartão de Cidadão's own certificates and an eIDAS credential from another member state authenticate just as well. The fundamental principle is the same.
+Portugal implements its own version of this. Citizens receive a Cartão de Cidadão. The rest of us use a passport or residence title tied to us. Either way the credential stays separate from the document: most commonly the [Chave Móvel Digital](https://www.autenticacao.gov.pt/a-chave-movel-digital), though the Cartão de Cidadão's own certificates and an eIDAS credential from another member state authenticate just as well.
 
-The US license has to do both jobs at once, and it falls apart very quickly on the second. Many people move but keep their old state driver's license until it expires. Often enough, the address on a driver's license in a state like New York — where people change apartments frequently — is no longer where that person lives. So the question of "who you are" is usually answered by the license, while "where you live" may not be anymore.
+<CredentialSplit />
+
+The US license has to do both jobs at once, and it falls apart very quickly on the second. People move and keep the old license until it expires, so the address on a driver's license in a state like New York — where people change apartments frequently — is often no longer where that person lives.
 
 US non-citizens, meanwhile, have a very different situation. United States Citizenship and Immigration Services (USCIS) issues several federal photo IDs. The permanent resident card (Form I-551, known colloquially as a green card) is the obvious example, and the Employment Authorization Document (Form I-766) is another. 8 U.S.C. § 1304(e) requires any registered non-citizen 18 or older to carry their registration document at all times, and failing to do so is a misdemeanor. No US citizen has any comparable duty. So the country that supposedly has no ID card does issue one — and only mandates carrying it for the people who are not citizens.
 
@@ -79,7 +88,9 @@ Ultimately, the takeaway from the whole process of registering in Portugal was s
 
 As an engineer, I found the European approach easy to wrap my head around and easy to appreciate. Portugal and Italy have made my administrative life straightforward. It also came with tangible benefits: the pet-store receipt, and every other shopping trip, fed into my tax return; one ANPR write propagating to five agencies automatically; my CRUE issued the same day, with online verification anyone can access; and eIDAS, an authentication credential from one member state that can be used in another. How close a country gets to that shape is the real difference between the three systems in this piece.
 
-Italy comes closest of the three. The register is the ANPR (Anagrafe Nazionale della Popolazione Residente), owned by the Ministry of the Interior. A change of residence is *one* write — online through the ANPR portal — and it propagates automatically to Agenzia delle Entrate, INPS, INAIL, ISTAT and the Motorizzazione. Those agencies still keep their own records, so this is replication rather than a true foreign key. What matters is that every copy is fed from one authoritative write, so a divergence is a fault rather than the expected state. It is a first step toward what the EU calls the "once-only principle": you tell the state something once, and the state carries it from there.
+<WritePropagation />
+
+Italy comes closest of the three. The register is the ANPR (Anagrafe Nazionale della Popolazione Residente), owned by the Ministry of the Interior. A change of residence is *one* write — online through the ANPR portal — and it propagates automatically to the five agencies above. Those agencies still keep their own records, so this is replication rather than a true foreign key. What matters is that every copy is fed from one authoritative write, so a divergence is a fault rather than the expected state. It is a first step toward what the EU calls the "once-only principle": you tell the state something once, and the state carries it from there.
 
 Portugal comes close in that the data is the right shape. The NIF acts as a stable join key, and there is an authoritative owner for each administrative domain (Finanças for tax, the câmara for residence, AIMA for immigration, and so on), but those systems don't share a common canonical record. It's essentially a normalized schema where the foreign keys aren't entirely connected. Updating my address, for instance, would still have to be done in several places. It falls short in other ways too: the document list can be left up to interpretation, and the registration itself doesn't cross EU borders, so moving to another member state means starting over. Each member state implements the directive differently, so while the core tenets are the same, the actual implementation differs. The upside is that the key and the authentication mechanism are consistent. [eIDAS](https://eidas.ec.europa.eu/efda/home) is the piece of this I have actually leaned on: a credential issued by one member state authenticates to another's services, with nothing re-issued. Authentication travels; registration doesn't.
 
@@ -94,6 +105,8 @@ The same pattern shows up at the airport. TSA PreCheck and Global Entry are the 
 ## Who it was built for
 
 The US does have a normalized identity database — canonical record, stable join key, one authoritative owner, mandatory propagation on change — it just lives in the immigration system. For its own citizens, the country has refused to build this type of population register.
+
+<CitizenAsymmetry />
 
 From 1946 to 1972, the SSN card carried "NOT FOR IDENTIFICATION." The Privacy Act of 1974 stopped government agencies from denying you a benefit for refusing the number — with exceptions wide enough to cover tax and driver's licensing — and said nothing at all about anyone else, which is why a landlord, a bank, and a doctor's office can all still insist. Something as straightforward as REAL ID took two decades to overcome state resistance.
 

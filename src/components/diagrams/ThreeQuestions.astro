@@ -1,0 +1,146 @@
+---
+// Hand-authored inline SVG: the three questions any identity system has to
+// answer, and each country's document for each. Inline (not an <img>) so it
+// inherits the Broadsheet tokens from global.css and needs no client JS — the
+// site ships none outside the newsletter carve-out, and `script-src 'self'`
+// would block a renderer anyway. See "Diagrams in posts" in CLAUDE.md.
+//
+// Every cell is transcribed from the post's own prose, not summarised from
+// memory. Cell -> sentence:
+//   Italy / who    "My codice fiscale — the Italian equivalent of a Social
+//                   Security number, issued by the Agenzia delle Entrate"
+//   Italy / proves "For Italy, that is the Carta d'Identità Elettronica (CIE)"
+//                  "an NFC chip that authenticates me directly"
+//   Italy / where  "The register is the ANPR (Anagrafe Nazionale della
+//                   Popolazione Residente), owned by the Ministry of the Interior"
+//   PT / who       "The Portuguese Número de Identificação Fiscal (NIF)…
+//                   linked to Finanças, the Portuguese tax authority"
+//   PT / proves    "Citizens receive a Cartão de Cidadão"; the credential is
+//                  "most commonly the Chave Móvel Digital"
+//   PT / where     "register your presence with the municipality you live in";
+//                  the CRUE is the EU-citizen instrument (Directive 2004/38/EC)
+//   US / who       "the Social Security number is the closest thing an American
+//                   has to a unique identifier"
+//   US / proves+where
+//                  "For most American citizens, the answer to identity
+//                   verification is a driver's license. This document is the one
+//                   most likely to tie together their identity and their residency."
+//
+// The one structural claim in the drawing: the US cell SPANS the lower two
+// rows, where every other column has two separate boxes and a gap between them.
+// That is the post's "The US license has to do both jobs at once, and it falls
+// apart very quickly on the second." Do not split it into two boxes to tidy the
+// grid — the span IS the argument, and the gap in the other columns is what
+// makes it legible.
+//
+// Deliberately absent: the US non-citizen column. This diagram is the map of
+// the next three sections, all of which are written from the citizen's side;
+// the asymmetry gets its own diagram (CitizenAsymmetry.astro) where the post
+// makes that turn. Adding a fourth column here would spend the ending early.
+//
+// Styles live in global.css (.post-diagram, .dg-*) per the one-stylesheet rule.
+// aria IDs are prefixed dg-q3-* — four diagrams share this page.
+---
+
+<figure class="post-figure post-diagram">
+  <svg
+    viewBox="0 0 700 322"
+    role="img"
+    aria-labelledby="dg-q3-title dg-q3-desc"
+    class="dg"
+  >
+    <title id="dg-q3-title">
+      Three questions an identity system answers, and each country's document
+    </title>
+    <desc id="dg-q3-desc">
+      A grid with three rows — who you are, what proves it, where you live — and
+      three columns for Italy, Portugal, and a United States citizen. Italy
+      answers each question with a separate document: the codice fiscale, the
+      CIE identity card, and the ANPR residence register. Portugal likewise: the
+      NIF, the Cartão de Cidadão, and registration with the municipality. The
+      United States column has the Social Security number against the first
+      question, and then a single box that spans both remaining rows: the
+      driver's license answers what proves it and stands in for where you live,
+      with no residence register behind it, so the address on the card holds
+      until the card expires.
+    </desc>
+
+    {/* ---- column headers ---- */}
+    <text x="244" y="24" class="dg-call">Italy</text>
+    <text x="426" y="24" class="dg-call">Portugal</text>
+    <text x="608" y="24" class="dg-call">US citizen</text>
+
+    <path class="dg-edge" d="M6 34 H 694" />
+
+    {/* ---- row labels ---- */}
+    <text x="6" y="88" class="dg-call dg-call--start">who you are</text>
+    <text x="6" y="168" class="dg-call dg-call--start">what proves it</text>
+    <text x="6" y="248" class="dg-call dg-call--start">where you live</text>
+
+    {/* ---- row 1: who you are ---- */}
+    <g class="dg-group">
+      <rect x="158" y="46" width="172" height="68" class="dg-node" />
+      <text x="244" y="76" class="dg-label">codice fiscale</text>
+      <text x="244" y="95" class="dg-sub">Agenzia delle Entrate</text>
+    </g>
+
+    <g class="dg-group">
+      <rect x="340" y="46" width="172" height="68" class="dg-node" />
+      <text x="426" y="76" class="dg-label">NIF</text>
+      <text x="426" y="95" class="dg-sub">Finanças — safe to hand out</text>
+    </g>
+
+    <g class="dg-group">
+      <rect x="522" y="46" width="172" height="68" class="dg-node dg-node--anchor" />
+      <text x="608" y="76" class="dg-label">SSN</text>
+      <text x="608" y="95" class="dg-sub">Social Security number</text>
+    </g>
+
+    {/* ---- row 2: what proves it ---- */}
+    <g class="dg-group">
+      <rect x="158" y="126" width="172" height="68" class="dg-node" />
+      <text x="244" y="156" class="dg-label">CIE</text>
+      <text x="244" y="175" class="dg-sub">identity card, NFC chip</text>
+    </g>
+
+    <g class="dg-group">
+      <rect x="340" y="126" width="172" height="68" class="dg-node" />
+      <text x="426" y="156" class="dg-label">Cartão de Cidadão</text>
+      <text x="426" y="175" class="dg-sub">+ Chave Móvel Digital</text>
+    </g>
+
+    {/* ---- row 3: where you live ---- */}
+    <g class="dg-group">
+      <rect x="158" y="206" width="172" height="68" class="dg-node" />
+      <text x="244" y="236" class="dg-label">ANPR</text>
+      <text x="244" y="255" class="dg-sub">one registered residence</text>
+    </g>
+
+    <g class="dg-group">
+      <rect x="340" y="206" width="172" height="68" class="dg-node" />
+      <text x="426" y="236" class="dg-label">câmara</text>
+      <text x="426" y="255" class="dg-sub">CRUE for EU citizens</text>
+    </g>
+
+    {/* ---- the US cell that spans both lower rows — the whole point ---- */}
+    <g class="dg-group">
+      <rect x="522" y="126" width="172" height="148" class="dg-node dg-node--anchor" />
+      <text x="608" y="156" class="dg-label">driver's license</text>
+      <text x="608" y="175" class="dg-sub">the pivotal document</text>
+      <text x="608" y="228" class="dg-note">no register behind it — the</text>
+      <text x="608" y="244" class="dg-note">address holds until the card</text>
+      <text x="608" y="260" class="dg-note">expires, moved or not</text>
+    </g>
+
+    <text x="608" y="302" class="dg-call">one document, two rows</text>
+  </svg>
+
+  <figcaption>
+    Every document in this post is one country's answer to one of three
+    questions. Italy and Portugal answer each with a separate document, which is
+    what lets each one be replaced without touching the others. The US column
+    has no third box: the driver's license answers what proves it and then
+    stands in for where you live, with nothing underneath it keeping that half
+    true.
+  </figcaption>
+</figure>

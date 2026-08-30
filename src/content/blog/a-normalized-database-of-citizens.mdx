@@ -10,6 +10,62 @@ import CredentialSplit from '../../components/diagrams/CredentialSplit.astro';
 import WritePropagation from '../../components/diagrams/WritePropagation.astro';
 import CitizenAsymmetry from '../../components/diagrams/CitizenAsymmetry.astro';
 
+{/*
+  EDITORIAL NOTE — outside review + trim, Aug 2026.
+
+  FACTUAL, applied and verified:
+  - Citizenship-based taxation: "two countries" → "three". Myanmar has taxed
+    nonresident citizens' foreign salary income since Oct 2023. The clause that
+    was always load-bearing ("the only one that applies its full domestic income
+    tax code") is unchanged.
+  - ANPR propagation now links the official portal.
+  - The DHS citation checks out: FR 2026-13057, DHS final rule, published and
+    effective 29 Jun 2026, responding to the 12 Mar 2025 IFR whose deadline was
+    11 Apr 2025. Both dates in that paragraph are right.
+  - 2004/38 Art. 4(3) says what the post says it says, and the §1304(e) carrying
+    duty was already scoped to REGISTERED non-citizens 18+.
+
+  THE TRIM: 3,989 → ~3,590 words (-10%). Every cut was duplication — prose
+  restating a diagram, or a fact told a second and third time. No argument,
+  example or citation left the piece.
+
+  The rule it followed, taken from "The data was the hard part": prose may
+  overlap a diagram when it is a NARRATIVE WALK ("Tri-State in, Bike JC out"),
+  never when it is an ENUMERATION ("Finanças for tax, the câmara for residence,
+  AIMA for immigration"). A list is what a diagram is for.
+
+  Two structural fixes came out of that:
+  - WritePropagation.astro moved BELOW the Italy/Portugal/US paragraphs. Every
+    diagram in the Atlas post follows the argument it confirms; this one ran
+    ahead of it, which is why those paragraphs read as a restatement of a
+    picture the reader had already seen.
+  - ThreeQuestions.astro's caption is now "the license answers both" rather than "one
+    document, two rows", so it stops rhyming with CredentialSplit's "one field,
+    two jobs" thirty lines later. Two separate findings, two different shapes.
+
+  Note that WritePropagation.astro is now the ONLY place the five Italian
+  agencies, the three Portuguese owners and the five US copy targets appear —
+  its header carries the sourcing. Deleting a box there deletes the claim.
+
+  DECLINED, and why:
+  - The 25–35% cut. The reviewer counted 4,500 words against an actual 3,989,
+    so it was aimed at a draft that does not exist. Past ~10% the cuts stop
+    being duplication and start being evidence.
+  - The restructure. "What a system needs" is already section one and defines
+    canonical record / single source of truth before the first example.
+  - Softening "exactly one population register". Their replacement is more
+    defensible and much flatter. If you want to armour it instead, define
+    "population register" earlier and the absolute stops being litigable.
+  - Cutting the airport paragraph. It carries the best line in the piece.
+
+  STILL OPEN, your call:
+  - The reviewer's PDF quotes "one document, two rows" and "no key, and nothing
+    between the copies" as prose problems. Both were DIAGRAM CAPTIONS — they
+    were reading the rendered page. Worth knowing before weighing the rest of
+    their structural notes.
+  - C-61/22 in the ending (see the note further down, unchanged).
+*/}
+
 I recently relocated to Lisbon, and in doing so I jumped immediately on the bureaucratic task of properly establishing my residency and acquiring the respective documentation. I had acquired Italian citizenship before the move, so I arrived in Portugal as an EU citizen rather than an American one. I've never been someone who likes to sit too long on bureaucratic tasks. What I found was a system that felt much more like my identity lived in a normalized database.
 
 Portugal, Italy, and the wider European Union have taken more concrete steps to build out a normalized database of citizens. The US has too, but only for immigrants — without the benefits that I've found accessible so far in the EU.
@@ -20,7 +76,7 @@ As an engineer, I recently worked on an identity and authorization system. From 
 
 Quick level setting on definitions: a canonical record is one entry that is the person, with an identifier stable enough that every other system can point at it. A single source of truth is narrower and per-fact: one place that owns each specific fact about that person. Every other copy is fed from that source, so a disagreement is an error condition rather than the normal state of affairs.
 
-The US has neither for its citizens. Instead, it has authoritative records organized around purpose. It requires cross-referencing several items to get all the specifics for a person. In the US, a driver's license here, a lease there, a utility bill standing in as proof that "this person exists at this address": all of it is accepted as commonplace. It was genuinely startling to move into a system that has something closer to both — albeit far from perfect. For non-citizens, though, the US does have both.
+By that standard the US has neither for its citizens. It keeps authoritative records organized around purpose instead, so pulling together the specifics on a person means cross-referencing several of them: a driver's license here, a lease there, a utility bill standing in as proof that "this person exists at this address." All of it accepted as commonplace. It was genuinely startling to move into a system that has something closer to both — albeit far from perfect. For non-citizens, though, the US does have both.
 
 Strip the problem down and there are only three questions any of this has to answer: who you are, what proves it, and where you live.
 
@@ -36,11 +92,9 @@ Italy does the same, and I learned it years ago. Just by virtue of being an Ital
 
 My instinct to guard the number came from growing up in the US. More than anything else, the Social Security number is the closest thing an American has to a unique identifier. What makes the NIF and the codice fiscale safe to hand out is that the number alone won't get anyone anywhere. Each is a username and nothing more, whereas the US Social Security number has to act as both username and password. The US has no equivalent second credential that's universally held, so institutions started treating "knows the SSN" as good enough proof of identity. Over decades it got quietly promoted from identifier to de facto password. That's the actual flaw: one field doing two jobs it was never built for.
 
-The first Social Security numbers were issued in 1936. For most of this number's life, there was no way at all for a bank to check that the person reciting it was the person it belonged to. That finally changed in 2020, when the Social Security Administration launched [eCBSV](https://www.ssa.gov/dataexchange/eCBSV/), a verification service that Congress had to legislate into existence in 2018 specifically to fight synthetic identity fraud. The API arrived eighty-four years later, and even now it is narrow: consent-gated, fee-based, limited to financial institutions and their service providers, and it answers only whether a name, a date of birth, and a number match SSA's records. That confirms the number belongs to that name. It does not confirm that the person in front of you *is* that name.
+The first Social Security numbers were issued in 1936. For most of this number's life, there was no way at all for a bank to check that the person reciting it was the person it belonged to. That finally changed in 2020, when the Social Security Administration launched [eCBSV](https://www.ssa.gov/dataexchange/eCBSV/), a verification service Congress had to legislate into existence in 2018 to fight synthetic identity fraud. The API arrived eighty-four years later, and it answers exactly one question: whether a name, a date of birth, and a number match SSA's records. That confirms the number belongs to that name. It does not confirm that the person in front of you *is* that name. There is still no general-purpose lookup, just purpose-built ones — eCBSV for banks, SSNVS for employers reporting wages, SSOLV for states issuing driver's licenses.
 
-So there is still no general-purpose lookup, just a handful of purpose-built ones — eCBSV for banks, SSNVS for employers reporting wages, SSOLV for states issuing driver's licenses.
-
-Two other lanes go further than any of these. E-Verify, the check that confirms a new hire is allowed to work, puts a government-held photo in front of the employer — the exact thing eCBSV cannot do. It is the employer who compares it to the document, and it only works when the document handed over is a green card, an Employment Authorization Document, a US passport, or a passport card. SAVE does something similar for state agencies that need to confirm someone's immigration status. Both hang off a federally issued document rather than the Social Security number. That is why a citizen carrying nothing but a state driver's license never encounters either one. Everyone outside these purpose-built lanes validates by inference instead: credit reports, background checks, commercial identity verification.
+Two other lanes go further than any of these. E-Verify, the check that confirms a new hire is allowed to work, puts a government-held photo in front of the employer — the exact thing eCBSV cannot do. It only works when the document handed over is a federal one: a green card, an Employment Authorization Document, a US passport. SAVE does something similar for state agencies confirming someone's immigration status. Both hang off a federally issued document rather than the Social Security number. That is why a citizen carrying nothing but a state driver's license never encounters either one. Everyone outside these purpose-built lanes validates by inference instead: credit reports, background checks, commercial identity verification.
 
 Something record-shaped does exist. SSA's NUMIDENT file has held a name, a date of birth, and a place of birth for nearly every citizen since enumeration at birth began in the late 1980s. What it has never had is a read path, and a record no one else can point at isn't a canonical record.
 
@@ -48,40 +102,32 @@ There is clear value in having a federal-level identifier for an individual pers
 
 ## What proves it
 
-For most American citizens, the answer to identity verification is a driver's license. This document is the one most likely to tie together their identity and their residency. Since the ability to drive is effectively required to function in most of the US, most people have one. Federal ID is the exception rather than the rule — a passport, a passport card, a military ID — and since many Americans don't travel outside the country, they don't bother to acquire a passport. The driver's license (or less often, a state ID) becomes the pivotal document.
+For most American citizens, the answer to identity verification is a driver's license — the one document most likely to tie together their identity and their residency. Since the ability to drive is effectively required to function in most of the US, most people have one. Federal ID is the exception rather than the rule — a passport, a passport card, a military ID — and since many Americans don't travel outside the country, they don't bother to acquire a passport.
 
-Europeans tend to carry identification documents, where identity is the entire point — not health, not driving, not anything else. For Italy, that is the Carta d'Identità Elettronica (CIE). It is governed by two EU instruments: [Directive 2004/38/EC](https://eur-lex.europa.eu/eli/dir/2004/38/oj/eng) requires every member state to issue its nationals an identity card or a passport, and requires the other member states to accept it, but says nothing about what that document looks like. Uniformity came later, with [Regulation (EU) 2019/1157](https://eur-lex.europa.eu/eli/reg/2019/1157/oj/eng), which defines common security standards and harmonization for national identity cards; the Court of Justice struck that regulation down in 2024 over the procedure used to adopt it rather than its substance, and it was re-enacted as [Regulation (EU) 2025/1208](https://eur-lex.europa.eu/eli/reg/2025/1208/oj/eng).
+Europeans tend to carry identification documents, where identity is the entire point — not health, not driving, not anything else. For Italy, that is the Carta d'Identità Elettronica (CIE). It is governed by two EU instruments: [Directive 2004/38/EC](https://eur-lex.europa.eu/eli/dir/2004/38/oj/eng) requires every member state to issue its nationals an identity card or a passport, and requires the other member states to accept it, but says nothing about what that document looks like. Uniformity came later, with [Regulation (EU) 2019/1157](https://eur-lex.europa.eu/eli/reg/2019/1157/oj/eng), which defines common security standards for national identity cards — struck down by the Court of Justice in 2024 over the procedure used to adopt it rather than its substance, and re-enacted as [Regulation (EU) 2025/1208](https://eur-lex.europa.eu/eli/reg/2025/1208/oj/eng).
 
-The card is not yet how most Italians actually log in. More than forty million SPID identities have been issued, a credential issued independently of any identity document. In summer 2025 the government decided to retire it, and the transition now under way points at the CIE and the IT-Wallet instead. The CIE carries my unique identifier — the codice fiscale — and an NFC chip that authenticates me directly. Since the physical card has to be present, it satisfies the security requirement: the codice fiscale is my username, the CIE is my password. Once SPID is gone, that pairing becomes how most Italians will authenticate. Italy is collapsing its credentials back onto a single document — normalization playing out in real time.
+The card is not yet how most Italians actually log in — that is still SPID, a credential issued independently of any identity document, which the government decided in summer 2025 to retire, pointing the transition at the CIE instead. The CIE carries my unique identifier, the codice fiscale, and an NFC chip that authenticates me directly. Since the physical card has to be present, it satisfies the security requirement: the codice fiscale is my username, the CIE is my password. Once SPID is gone, that pairing becomes how most Italians will authenticate. Italy is collapsing its credentials back onto a single document — normalization playing out in real time.
 
 Portugal implements its own version of this. Citizens receive a Cartão de Cidadão. The rest of us use a passport or residence title tied to us. Either way the credential stays separate from the document: most commonly the [Chave Móvel Digital](https://www.autenticacao.gov.pt/a-chave-movel-digital), though the Cartão de Cidadão's own certificates and an eIDAS credential from another member state authenticate just as well.
 
 <CredentialSplit />
 
-The US license has to do both jobs at once, and it falls apart very quickly on the second. People move and keep the old license until it expires, so the address on a driver's license in a state like New York — where people change apartments frequently — is often no longer where that person lives.
+The US license has to do both jobs at once, and it falls apart very quickly on the second. People move and keep the old license until it expires.
 
 US non-citizens, meanwhile, have a very different situation. United States Citizenship and Immigration Services (USCIS) issues several federal photo IDs. The permanent resident card (Form I-551, known colloquially as a green card) is the obvious example, and the Employment Authorization Document (Form I-766) is another. 8 U.S.C. § 1304(e) requires any registered non-citizen 18 or older to carry their registration document at all times, and failing to do so is a misdemeanor. No US citizen has any comparable duty. So the country that supposedly has no ID card does issue one — and only mandates carrying it for the people who are not citizens.
 
 {/*
-  EDITORIAL NOTE — C-61/22 may belong in the ending, not just here.
+  C-61/22 (Landeshauptstadt Wiesbaden), 21 Mar 2024 — the case behind the
+  sentence above. Verified Aug 2026 against the judgment and the Court's own
+  summary: the Grand Chamber UPHELD the mandatory two fingerprints against
+  Charter Arts. 7 and 8 as a proportionate limitation under Art. 52(1), and
+  invalidated Regulation 2019/1157 SOLELY because it was adopted under Art.
+  21(2) TFEU when Art. 77(3) — special procedure, unanimity in Council — was
+  the correct basis. Effects maintained until replaced; Council Regulation
+  2025/1208 re-enacted it on the corrected basis, applying from 10/07/2025.
 
-  The Court struck 2019/1157 down on 21 March 2024. Grounds: mandatory fingerprints
-  in ID cards had to be adopted under Art. 77(3) TFEU (special procedure, unanimity
-  in Council), not Art. 21(2) (ordinary procedure). It expressly UPHELD the
-  fingerprint requirement against Charter Arts. 7 and 8 as proportionate. Effects
-  maintained until replaced; Council Regulation 2025/1208 re-enacted it on the
-  corrected basis, applying from 10/07/2025.
-
-  Why it matters to the argument: your closing says the US "needs to do so in a way
-  that properly protects the civil liberties of the population," and that the
-  objection is why it was never built. Here is the EU building exactly this half —
-  biometric identity harmonisation — and its constitutional machinery forcing the
-  measure back through the procedure that requires every member state to agree.
-  Not a court blocking the register; a court dictating the consent required to
-  build it. That is the concrete answer to "it can't be done safely," and it is
-  currently missing from a conclusion that has to assert it instead.
-
-  Your call, your ending — leaving it to you rather than writing it in.
+  Whether to USE that in the argument is decided at the end of the post — see
+  the note above the closing.
 */}
 
 ## Where you live
@@ -94,7 +140,7 @@ Obtaining it requires a specific list of documents. I arrived at the office with
 
 My wife on the other hand is not an EU citizen, so her pathway has a different set of frictions. Being married to an EU citizen still gets her an expedited process, but she has to go through AIMA directly — slower, and more of it left to interpretation. The route is nothing like mine. The destination is: the same three questions, answered in the same normalized structure, on the same join key.
 
-That differs sharply from the US, where I could move to New York and, unless I wanted a New York driver's license, go a long time without telling anyone I lived there, right up until I had to file a New York tax return. The US produces many answers to the question "where do you live," and each individual one is authoritative to that institution. If you last filed a federal tax return living in Illinois, the Internal Revenue Service (IRS) has that address until you file again, or submit a specific IRS change of address request. The Social Security Administration may have a different address for you. All of these are authoritative, but there is no single source of truth.
+That differs sharply from the US, where I could move to New York and, unless I wanted a New York driver's license, go a long time without telling anyone I lived there, right up until I had to file a New York tax return. The US produces many answers to the question "where do you live," each authoritative to the institution holding it. If you last filed a federal tax return living in Illinois, the Internal Revenue Service (IRS) has that address until you file again, or submit a specific IRS change of address request. The Social Security Administration may have a different one. All of them are authoritative, and none is a single source of truth.
 
 Unless, again, you're an immigrant! Form AR-11 requires a change of address within 10 days of moving (8 U.S.C. § 1305), and failing to file is a criminal offense; for students and exchange visitors, the Student and Exchange Visitor Information System (SEVIS) does the same job, with the school reporting on their behalf. So the mandatory federal residence register exists, but only for foreigners.
 
@@ -102,7 +148,7 @@ Unless, again, you're an immigrant! Form AR-11 requires a change of address with
 
 Italy keeps track even after you leave. Once I acquired Italian citizenship from abroad, I was enrolled as part of that process in a system called the Anagrafe degli Italiani Residenti all'Estero (AIRE) — a registry of every Italian citizen living abroad. It is a declaration rather than an automatic consequence of citizenship; an Italian who moves abroad later has to file it themselves. As a citizen registered in AIRE, I deal with the consular district covering my residence for passports, registering life events, voting, and the rest.
 
-Having just moved abroad myself, I can say there is no US equivalent to AIRE for citizens. Instead, the US keeps track of citizens living abroad indirectly, and far more invasively, through the tax code. The US is one of only two countries that tax on the basis of citizenship at all — Eritrea is the other, with a flat 2% levy on its diaspora — and the only one that applies its full domestic income tax code to citizens wherever they live.
+Having just moved abroad myself, I can say there is no US equivalent to AIRE for citizens. Instead, the US keeps track of citizens living abroad indirectly, and far more invasively, through the tax code. The US is one of only three countries that tax on the basis of citizenship at all — Eritrea levies a flat 2% on its diaspora, and Myanmar has taxed nonresident citizens' foreign salary income since 2023 — and it is the only one that applies its full domestic income tax code to citizens wherever they live.
 
 Where that differs from a formalized system like AIRE is that the IRS knows I live abroad, but until I specifically tell anyone else, they don't. Worse, plenty of US institutions will simply stop doing business with you once you aren't residing there, which, if your stay abroad is temporary, becomes a real problem. Most expats work around it by maintaining a "legal domicile" address — a family member's, for example — and a mailing address, in order to keep their US ties intact. It is another patchwork built on the fragmented federal and state delineation that makes the US function, often enough, as "50 mini countries under a trenchcoat."
 
@@ -110,23 +156,23 @@ Unless, once more, you're not a citizen. For a non-citizen, leaving is itself a 
 
 ## The normalized identity database
 
-Ultimately, the takeaway from the whole process of registering in Portugal was seeing the shape of it. My Italian identity document, the CRUE, and the NIF are not three separate copies of me across multiple databases. Logically, they're three tables — one answering who I am, one proving it, and one recording where I live. That's what normalization means in a database: you don't duplicate a fact, you point at the one place it lives, so there is never a second copy to go quietly out of date.
+What I actually took from registering in Portugal was the shape of it. My Italian identity document, the CRUE, and the NIF are not three separate copies of me across multiple databases. Logically, they're three tables — one answering who I am, one proving it, and one recording where I live. That's what normalization means in a database: you don't duplicate a fact, you point at the one place it lives, so there is never a second copy to go quietly out of date.
 
-As an engineer, I found the European approach easy to wrap my head around and easy to appreciate. Portugal and Italy have made my administrative life straightforward. It also came with tangible benefits: the pet-store receipt, and every other shopping trip, fed into my tax return; one ANPR write propagating to five agencies automatically; my CRUE issued the same day, with online verification anyone can access; and eIDAS, an authentication credential from one member state that can be used in another. How close a country gets to that shape is the real difference between the three systems in this piece.
+As an engineer, I found the European approach easy to wrap my head around and easy to appreciate. Portugal and Italy have made my administrative life straightforward, and the benefits were concrete: the pet-store receipt fed into my tax return, my CRUE issued the same day with online verification anyone can access.
+
+Italy comes closest of the three. The register is the ANPR (Anagrafe Nazionale della Popolazione Residente), owned by the Ministry of the Interior, and a change of residence is *one* write — online, through the [ANPR portal](https://www.anpr.interno.it/). Everything downstream still keeps its own records, so this is replication rather than a true foreign key, but every copy is fed from that single write. It is a first step toward what the EU calls the "once-only principle": you tell the state something once, and the state carries it from there.
+
+Portugal comes close in that the data is the right shape. The NIF acts as a stable join key, and every administrative domain has an authoritative owner, but those systems don't share a common canonical record. It's essentially a normalized schema where the foreign keys aren't entirely connected, so updating my address would still have to be done in several places. It falls short in other ways too: the document list can be left up to interpretation, and the registration itself doesn't cross EU borders, so moving to another member state means starting over. [eIDAS](https://eidas.ec.europa.eu/efda/home) is the piece of this I have actually leaned on: a credential issued by one member state authenticates to another's services, with nothing re-issued. Authentication travels; registration doesn't.
+
+The US is denormalized for its citizens — a lens, not a literal schema, but it holds. My address is *copied* into every institution that needs it, each an independent write, with nothing propagating between them. Copies drift. The stale address on that New York driver's license isn't an administrative failure; it's an update anomaly, the exact thing normalization exists to prevent. So a loose collection of proxies stands in for the structure, and every time I answered that question in New York I assembled it out of the same three or four documents.
 
 <WritePropagation />
 
-Italy comes closest of the three. The register is the ANPR (Anagrafe Nazionale della Popolazione Residente), owned by the Ministry of the Interior. A change of residence is *one* write — online through the ANPR portal — and it propagates automatically to the five agencies above. Those agencies still keep their own records, so this is replication rather than a true foreign key. What matters is that every copy is fed from one authoritative write, so a divergence is a fault rather than the expected state. It is a first step toward what the EU calls the "once-only principle": you tell the state something once, and the state carries it from there.
+Meanwhile, non-citizens get the opposite: one identifier every agency files against, and a mandatory write at every turn. It is nearly the mirror image of Italy — a real join key, and propagation that fires at the boundaries, registration, status change, exit, rather than running continuously under every fact the way ANPR does. A non-citizen gets the join key and the propagation, but is billed for it in duties and obligations that no citizen carries, nor any of the potential benefits.
 
-Portugal comes close in that the data is the right shape. The NIF acts as a stable join key, and there is an authoritative owner for each administrative domain (Finanças for tax, the câmara for residence, AIMA for immigration, and so on), but those systems don't share a common canonical record. It's essentially a normalized schema where the foreign keys aren't entirely connected. Updating my address, for instance, would still have to be done in several places. It falls short in other ways too: the document list can be left up to interpretation, and the registration itself doesn't cross EU borders, so moving to another member state means starting over. Each member state implements the directive differently, so while the core tenets are the same, the actual implementation differs. The upside is that the key and the authentication mechanism are consistent. [eIDAS](https://eidas.ec.europa.eu/efda/home) is the piece of this I have actually leaned on: a credential issued by one member state authenticates to another's services, with nothing re-issued. Authentication travels; registration doesn't.
+[REAL ID](https://www.tsa.gov/real-id) has been enforced in the US since May 2025, and it is a genuine step: a state now has to check an applicant's Social Security number against SSA records rather than take the card at face value. But look at what each applicant gets checked against: a citizen's status rests on a birth certificate or a passport, a non-citizen's on a live federal database called SAVE. Even here, the same split. What REAL ID standardizes is how the states issue their own documents; it doesn't build the thing underneath them, at least not for citizens. Travelers without a compliant ID can now pay the TSA $45 for a ten-day window under a process called "TSA ConfirmID," which the TSA is careful to say it cannot promise will succeed.
 
-The US system is denormalized for citizens. My address is *copied* into the DMV, the IRS, the Social Security Administration, my bank, and my utility company — each an independent write, with nothing propagating between them. Copies drift. The stale address on that New York driver's license isn't an administrative failure; it's an update anomaly, the exact thing normalization exists to prevent. So a loose collection of proxies stands in for the structure, and the Social Security number, the driver's license, and often some one-off document have to be assembled together every time you answer the same question. This adds administrative friction to citizens and how they interact with the government.
-
-Meanwhile, non-citizens get the opposite. One identifier — the A-number — that USCIS, Customs and Border Protection, the State Department and the immigration courts all file against. Mandatory registration on arrival, mandatory address writes within ten days, mandatory status reporting, and a formal exit record in Form I-407 when permanent residency is abandoned — a filing USCIS is required by law to report to the IRS. Those agencies keep their own systems, so this is nearly the mirror image of Italy: a real join key, and propagation that fires at the boundaries — registration, status change, exit — rather than running continuously under every fact the way ANPR does. A non-citizen gets the join key and the propagation, but is billed for it in duties and obligations that no citizen carries, nor any of the potential benefits.
-
-[REAL ID](https://www.tsa.gov/real-id) has been enforced in the US since May 2025, and it is a genuine step — to issue a compliant license, a state now has to check the applicant's Social Security number against the SSA's records rather than take the card at face value. But look at what each applicant gets checked against: a citizen's status rests on a birth certificate or a passport, a non-citizen's on a live federal database called SAVE. Even here, the same split. What REAL ID standardizes is how the states issue their own documents; it doesn't build the thing underneath them, at least not for citizens. Even within this, looking at the Transportation Security Administration (TSA) as an example, travelers who don't have a compliant ID have been able since February 2026 to pay $45 for a process called "TSA ConfirmID." The fee buys a ten-day window rather than a single trip, and TSA is careful to say it cannot promise the check will succeed. Without a general-purpose federal citizen identity record to check against, the federal response is a paid, inference-based verification lane that may still not produce an answer.
-
-The same pattern shows up at the airport. TSA PreCheck and Global Entry are the expedited lanes for domestic screening and for coming back into the country, respectively, and getting into either one means an application, a fee, a background check, fingerprints, and an in-person interview. A citizen who wants a faster identity check has to volunteer for a small version of the registration regime non-citizens are compelled into, and pay for it, in five-year increments. My EU passport gets me the same thing at the border, for free. There is no application because there is nothing to apply for: the chip authenticates against a record that already exists — the codice fiscale and the CIE again, username and password. In one system, trust in a citizen is manufactured one traveler at a time and sold. In the other, it is a property of the record.
+The same pattern shows up at the airport. Getting into TSA PreCheck or Global Entry means an application, a fee, a background check, fingerprints, and an in-person interview. A citizen who wants a faster identity check has to volunteer for a small version of the registration regime non-citizens are compelled into, and pay for it, in five-year increments. My EU passport gets me the same thing at the border, for free. There is no application because there is nothing to apply for: the chip authenticates against a record that already exists — the codice fiscale and the CIE again, username and password. In one system, trust in a citizen is manufactured one traveler at a time and sold. In the other, it is a property of the record.
 
 ## Who it was built for
 
@@ -134,13 +180,75 @@ The US does have a normalized identity database — canonical record, stable joi
 
 <CitizenAsymmetry />
 
-From 1946 to 1972, the SSN card carried "NOT FOR IDENTIFICATION." The Privacy Act of 1974 stopped government agencies from denying you a benefit for refusing the number — with exceptions wide enough to cover tax and driver's licensing — and said nothing at all about anyone else, which is why a landlord, a bank, and a doctor's office can all still insist. Something as straightforward as REAL ID took two decades to overcome state resistance.
+The Privacy Act of 1974 stopped government agencies from denying you a benefit for refusing the number — with exceptions wide enough to cover tax and driver's licensing — and said nothing at all about anyone else, which is why a landlord, a bank, and a doctor's office can all still insist. Something as straightforward as REAL ID took two decades to overcome state resistance.
 
 The US built exactly one population register and pointed it at people who cannot vote. Normalization is not politically neutral.
 
 I walked through the EU citizen door in Portugal and had a certificate the same afternoon. I walked through the citizen door in America and got a filing cabinet. Same person, two paths, and the path is what determined the schema I experienced. None of that is something I earned.
 
 An immigrant in Portugal would have a different process to build their database, but once it is built, it would look much like mine. An immigrant in the US would have neither my process nor my end result: far more is recorded about them at the federal level than any US citizen is required to hold.
+
+{/*
+  EDITORIAL NOTE — C-61/22 in the ending. Draft below; rewrite freely.
+
+  THE QUESTION WAS whether this is new material arriving too late. It isn't:
+  2019/1157, the Court, and "procedure rather than substance" are all already
+  in "What proves it". The only genuinely new fact is that the fingerprints
+  were UPHELD — one sentence, not a section. So this is a callback, and you
+  have precedent for exactly that shape in the Atlas post's close ("On the two
+  occasions in this post that actually mattered — a join that silently returned
+  nothing, a polygon that measured too big — …").
+
+  WHAT IS ACTUALLY WRONG WITH THE ENDING is unrelated to C-61/22, and worth
+  fixing either way. Closing ¶ lengths across the blog:
+
+      this post   20 → 50 → 56 → 41 → 98
+      atlas-data  49 → 49 → 35 → 34
+      pivoting   111 → 71 → 11
+      netherlands 74 → 71 → 52
+
+  Every other post tapers to a short final beat. This one swells to 98 words,
+  the longest close you have written. That is why there is no room — not
+  novelty.
+
+  WHY IT GOES HERE rather than in the closing: this is already the EU
+  forward-looking paragraph, it sits immediately before the close so the
+  evidence is fresh when the closing asserts it, and it leaves the final beat
+  alone. Putting it beside the Privacy Act ¶ instead would blunt the "exactly
+  one population register" punch that follows.
+
+  WHAT IT FILLS: "needs to do so in a way that properly protects the civil
+  liberties of the population" and "that objection is why it was never built"
+  both assume a register CAN be built with protections. Nothing in the post
+  shows it. This is the only material you have where a constitutional system
+  forced the consent rather than blocking the build.
+
+  ── DRAFT: two sentences onto the end of this paragraph ──
+
+  It is worth knowing what that machinery has already survived. When the
+  identity-card regulation reached the Court of Justice in 2024, the
+  fingerprints in my own CIE were upheld as proportionate — and the regulation
+  was struck down anyway, because a measure that biometric had to be adopted by
+  unanimity rather than by majority. Not a court refusing to let the register be
+  built. A court naming the price of building it.
+
+  ── DRAFT: split the closing ¶, restoring the taper ──
+
+  ¶1 (~57w, the argument):
+    The US could stand to take a page out of the European book, but needs to do
+    so in a way that properly protects the civil liberties of the population.
+    That objection is why it was never built, and it has already failed on its
+    own terms: the register got built anyway, and pointed at the people with
+    the least protection from it.
+
+  ¶2 (~35w, the beat — unchanged words, standing alone):
+    Refusing to build one for citizens never prevented the surveillance; it
+    only withheld the half that helps. Without those protections, it'll end up
+    a surveillance state for citizens and immigrants both, and nothing more.
+
+  No allusion needed in ¶1 — with the paragraph above in place the reader has
+  just read the evidence, and pointing at it again would be the third mention.
+*/}
 
 I'll be curious whether these systems ever start talking to each other in earnest. The EU is trying — there's a digital identity wallet coming that would carry all of this across borders, and I'll sign up the day it ships.
 

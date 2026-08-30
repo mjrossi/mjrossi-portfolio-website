@@ -3,29 +3,56 @@
 // three systems the post ranks, and what propagates afterwards. Inline for the
 // same reasons as ThreeQuestions.astro — see that file's header.
 //
-// Every band is transcribed from the post's own paragraphs in "The normalized
-// identity database":
-//   Italy    "A change of residence is *one* write — online through the ANPR
-//             portal — and it propagates automatically to Agenzia delle Entrate,
-//             INPS, INAIL, ISTAT and the Motorizzazione." The five names are
-//             verbatim and in the post's order; do not reorder or abbreviate.
-//             "Those agencies still keep their own records, so this is
-//             replication rather than a true foreign key" — which is why the
-//             fan is drawn from ANPR to five separate boxes rather than as one
-//             shared record.
-//   Portugal "The NIF acts as a stable join key, and there is an authoritative
-//             owner for each administrative domain (Finanças for tax, the câmara
-//             for residence, AIMA for immigration, and so on), but those systems
-//             don't share a common canonical record… Updating my address, for
-//             instance, would still have to be done in several places."
-//             NOTE the post's "and so on" — three owners is a SAMPLE, not the
-//             complete set, and the caption says so. Do not present it as an
-//             exhaustive list, and do not add owners the post never names.
-//   US       "My address is *copied* into the DMV, the IRS, the Social Security
-//             Administration, my bank, and my utility company — each an
-//             independent write, with nothing propagating between them. Copies
-//             drift. The stale address on that New York driver's license isn't
-//             an administrative failure; it's an update anomaly."
+// READ THIS BEFORE EDITING EITHER THIS FILE OR THE POST.
+//
+// This diagram used to restate three paragraphs that named the same things in
+// prose. The Aug 2026 trim cut the enumerations FROM THE PROSE and left them
+// here, so the relationship has inverted: the post now states the argument and
+// this drawing carries the specifics. Three consequences.
+//
+// 1. THIS FILE IS NOW THE ONLY PLACE THE SPECIFICS APPEAR. The five Italian
+//    agencies, the three Portuguese owners and the five US copy targets are no
+//    longer written anywhere in the post. Deleting a box here deletes the claim
+//    from the post outright — there is no prose left to fall back on.
+//
+// 2. THE PROVENANCE HAS TO LIVE HERE, because the prose no longer carries it:
+//      Italy    A change of residence entered once in ANPR is notified
+//               automatically to Agenzia delle Entrate, INPS, INAIL, ISTAT and
+//               the Motorizzazione. Documented by the Ministry's own ANPR
+//               portal (anpr.interno.it) and Italy's digital-transition
+//               department (innovazione.gov.it). Order matches the post's
+//               original sentence; do not reorder or abbreviate.
+//      Portugal Finanças for tax, the câmara for residence, AIMA for
+//               immigration. This is a SAMPLE, not the complete set — the post
+//               used to say "and so on" and the caption still says so. Do not
+//               present it as exhaustive, and do not add owners the post never
+//               named.
+//      US       DMV, IRS, Social Security Administration, bank, utility
+//               company — the five the post named before the trim.
+//
+// 3. THE POST'S SURVIVING SENTENCES still anchor each band, and these are what
+//    to keep the drawing true to:
+//      Italy    "Everything downstream still keeps its own records, so this is
+//                replication rather than a true foreign key, but every copy is
+//                fed from that single write."
+//      Portugal "a normalized schema where the foreign keys aren't entirely
+//                connected, so updating my address would still have to be done
+//                in several places."
+//      US       "Copies drift… it's an update anomaly, the exact thing
+//                normalization exists to prevent."
+//
+// THE CAPTION MUST NOT RECAP THE PROSE. It used to, which was right when the
+// diagram ran ahead of the paragraphs — it previewed them. Following them, the
+// same words landed as an echo one line later ("so this is replication rather
+// than a true foreign key" appeared twice on screen). A caption in payoff
+// position states what the PICTURE adds: here, the shared skeleton and the one
+// slot that differs between the three bands.
+//
+// PLACEMENT: this diagram sits AFTER the three paragraphs, not before them.
+// That is the house pattern (see the-atlas-data-was-the-hard-part.mdx, where
+// every diagram follows the argument it confirms). It ran before them until
+// Aug 2026, which is why the prose read as a restatement of a picture the
+// reader had already seen. Do not move it back above the Italy paragraph.
 //
 // The three bands deliberately share one skeleton — "you move" on the left,
 // targets on the right — so the only thing that varies between them is what
@@ -199,13 +226,10 @@
   </svg>
 
   <figcaption>
-    The same move, three times. Italy writes once and the register carries it;
-    the agencies still keep their own records, so this is replication rather
-    than a true foreign key, but every copy is fed from one authoritative write.
-    Portugal has the key and the owners — Finanças, the câmara and AIMA are
-    three of them, not all — and no shared record beneath, so the address is
-    written in each place separately. The US has neither, and the stale address
-    on a driver's license is the update anomaly that normalization exists to
-    prevent.
+    The same move, three times. Every band has the same skeleton — you move on
+    the left, the records that need to know on the right — so the only thing
+    that differs is what sits between them. Italy has a register. Portugal has
+    a key pointing at a record that does not exist; Finanças, the câmara and
+    AIMA are three of its owners, not all of them. The US has nothing at all.
   </figcaption>
 </figure>

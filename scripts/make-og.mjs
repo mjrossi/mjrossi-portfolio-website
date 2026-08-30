@@ -13,6 +13,8 @@ import sharp from 'sharp';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { TAGLINE, SET_IN } from '../src/lib/identity.js';
+
 const W = 1200;
 const H = 630;
 
@@ -22,7 +24,7 @@ const BG = '#f6f2ec';
 const BAND = '#f2e1c8';
 const BAND_BORDER = '#d8be98';
 const RULE = '#cbaf8b';
-const TAGLINE = '#7c512c';
+const ACCENT_TAGLINE = '#7c512c';   // --accent-tagline
 const TEXT = '#2a2520';
 const MUTED = '#7d7369';
 const ACCENT = '#8f5520';
@@ -32,10 +34,19 @@ const BORDER = '#dbd0c2';
 const PAD = 72;
 const BAND_H = 340;
 
-// Intentionally no edition line on the OG card — the site's masthead
-// carries the monthly Vol./No./date signal. Keeping the card timeless
-// means it doesn't drift out of sync with the live site between
-// regenerations.
+// THE CARD STATES IDENTITY ONLY — NEVER A FACT ABOUT THE PRESENT.
+//
+// Social scrapers cache by image URL and effectively never re-fetch, so a
+// card asserting where I live, or what issue it is, is wrong the moment that
+// fact moves — and the correction cannot reach the caches already holding it.
+// That is why there is no edition line here, and it is also why there is no
+// location: the masthead said "Brooklyn, New York" on this card for months
+// after the site itself said Lisbon, because make-og.mjs is a manual `just og`
+// step and nothing compares the two.
+//
+// The per-post cards get away with a date and a read time (make-post-og.mjs)
+// because those are facts about the POST, pinned to a pubDate that never
+// moves. Anything here is a fact about today. Don't add one back.
 
 // Avatar as a circle at the top-left of the band.
 const AVATAR_SIZE = 112;
@@ -53,13 +64,22 @@ const avatarBuf = await sharp(resolve('src/assets/profile.jpg'))
   .png()
   .toBuffer();
 
+// Escaping is the RENDERER's job, not the identity module's — src/lib/identity.js
+// stores plain text because Astro escapes its own `{}` expressions and this file
+// has to emit `&amp;` for SVG. Same helper as scripts/make-post-og.mjs: a
+// four-line formatter duplicated across the two card generators is a far smaller
+// risk than a sentence duplicated, because it cannot silently go out of date.
+const escapeXml = (s) =>
+  String(s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]
+  ));
+
 // Noise overlay — reuse the same texture the masthead uses at runtime.
 const noiseBuf = readFileSync(resolve('public/noise.webp'));
 
 // Layout constants — all measured from the band top, then body region below.
 const NAME_X = PAD + AVATAR_SIZE + 32;
 const NAME_Y_BASELINE = 168;              // baseline of "Matthew Rossi"
-const META_LOC_Y = 118;                   // top-right: BROOKLYN, NEW YORK
 const RULE_Y = 250;                       // the rule under the name
 const TAGLINE_Y = 282;                    // italic tagline below the rule
 const QUOTE_Y = 462;                      // pull-quote line 1 baseline
@@ -71,11 +91,9 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <defs>
     <style>
       .name      { font: 600 86px/1 'Fraunces', Georgia, serif; letter-spacing: -0.04em; }
-      .meta-loc  { font: 600 18px/1 'Inter', system-ui, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; }
       .tagline   { font: italic 400 26px/1 'Fraunces', Georgia, serif; letter-spacing: 0.01em; }
       .quote     { font: italic 400 42px/1.25 'Fraunces', Georgia, serif; letter-spacing: -0.005em; }
       .footer-l  { font: italic 400 22px/1 'Fraunces', Georgia, serif; }
-      .footer-r  { font: 600 15px/1 'Inter', system-ui, sans-serif; letter-spacing: 0.12em; text-transform: uppercase; }
       .colophon  { font: italic 400 16px/1 'Fraunces', Georgia, serif; letter-spacing: 0.02em; }
     </style>
   </defs>
@@ -90,9 +108,6 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <rect x="0" y="${BAND_H}"     width="${W}" height="1" fill="${BAND_BORDER}"/>
   <rect x="0" y="${BAND_H + 3}" width="${W}" height="2" fill="${BAND_BORDER}"/>
 
-  <!-- meta (top right): location only; edition line is timeless on the card -->
-  <text x="${W - PAD}" y="${META_LOC_Y}" text-anchor="end" class="meta-loc" fill="${TAGLINE}">Brooklyn, New York</text>
-
   <!-- name: Matthew + accent Rossi -->
   <text x="${NAME_X}" y="${NAME_Y_BASELINE}" class="name" fill="${TEXT}">Matthew <tspan fill="${ACCENT_SURNAME}">Rossi</tspan></text>
 
@@ -100,7 +115,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <line x1="${PAD}" y1="${RULE_Y}" x2="${W - PAD}" y2="${RULE_Y}" stroke="${RULE}" stroke-width="1"/>
 
   <!-- tagline, centered under the rule -->
-  <text x="${W/2}" y="${TAGLINE_Y}" text-anchor="middle" class="tagline" fill="${TAGLINE}">Software engineer turning toward sustainable urban mobility</text>
+  <text x="${W/2}" y="${TAGLINE_Y}" text-anchor="middle" class="tagline" fill="${ACCENT_TAGLINE}">${escapeXml(TAGLINE)}</text>
 
   <!-- editorial pull quote in the lower half -->
   <text x="${PAD}" y="${QUOTE_Y}"              class="quote" fill="${TEXT}">Building at the intersection of software,</text>
@@ -109,10 +124,9 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <!-- footer divider rule -->
   <rect x="${PAD}" y="${FOOTER_RULE_Y}" width="${W - PAD * 2}" height="1" fill="${BORDER}"/>
 
-  <!-- footer row: mjrossi.com · colophon · route -->
+  <!-- footer row: mjrossi.com · colophon -->
   <text x="${PAD}"     y="${FOOTER_Y}" class="footer-l" fill="${ACCENT}">mjrossi.com</text>
-  <text x="${W/2}"     y="${FOOTER_Y}" text-anchor="middle" class="colophon" fill="${MUTED}">· Set in Fraunces &amp; Source Serif ·</text>
-  <text x="${W - PAD}" y="${FOOTER_Y}" text-anchor="end" class="footer-r" fill="${MUTED}">Brooklyn · Lisbon · Barcelona</text>
+  <text x="${W/2}"     y="${FOOTER_Y}" text-anchor="middle" class="colophon" fill="${MUTED}">· ${escapeXml(SET_IN)} ·</text>
 </svg>`;
 
 // Compose: base SVG → tile noise.png across the band only (multiply) → drop avatar on top

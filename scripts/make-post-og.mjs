@@ -58,7 +58,7 @@ const TEXT = '#2a2520';
 const MUTED = '#7d7369';
 const ACCENT = '#8f5520';
 const ACCENT_SURNAME = '#c97d3e';
-const TAGLINE = '#7c512c';
+const ACCENT_TAGLINE = '#7c512c';
 
 const RULE_Y = 150;
 const FOOTER_Y = H - PAD;
@@ -169,7 +169,7 @@ function card({ title, pubDate, readLabel }) {
 
   <!-- the masthead conceit: wordmark and issue above one heavy rule -->
   <text x="${PAD}" y="${RULE_Y - 26}" class="wordmark" fill="${TEXT}">Matthew <tspan fill="${ACCENT_SURNAME}">Rossi</tspan></text>
-  <text x="${W - PAD}" y="${RULE_Y - 28}" text-anchor="end" class="issue" fill="${TAGLINE}">${escapeXml(short)}</text>
+  <text x="${W - PAD}" y="${RULE_Y - 28}" text-anchor="end" class="issue" fill="${ACCENT_TAGLINE}">${escapeXml(short)}</text>
   <rect x="${PAD}" y="${RULE_Y}" width="${W - PAD * 2}" height="2" fill="${TEXT}"/>
 
   ${titleTspans}

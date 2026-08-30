@@ -10,62 +10,6 @@ import CredentialSplit from '../../components/diagrams/CredentialSplit.astro';
 import WritePropagation from '../../components/diagrams/WritePropagation.astro';
 import CitizenAsymmetry from '../../components/diagrams/CitizenAsymmetry.astro';
 
-{/*
-  EDITORIAL NOTE — outside review + trim, Aug 2026.
-
-  FACTUAL, applied and verified:
-  - Citizenship-based taxation: "two countries" → "three". Myanmar has taxed
-    nonresident citizens' foreign salary income since Oct 2023. The clause that
-    was always load-bearing ("the only one that applies its full domestic income
-    tax code") is unchanged.
-  - ANPR propagation now links the official portal.
-  - The DHS citation checks out: FR 2026-13057, DHS final rule, published and
-    effective 29 Jun 2026, responding to the 12 Mar 2025 IFR whose deadline was
-    11 Apr 2025. Both dates in that paragraph are right.
-  - 2004/38 Art. 4(3) says what the post says it says, and the §1304(e) carrying
-    duty was already scoped to REGISTERED non-citizens 18+.
-
-  THE TRIM: 3,989 → ~3,590 words (-10%). Every cut was duplication — prose
-  restating a diagram, or a fact told a second and third time. No argument,
-  example or citation left the piece.
-
-  The rule it followed, taken from "The data was the hard part": prose may
-  overlap a diagram when it is a NARRATIVE WALK ("Tri-State in, Bike JC out"),
-  never when it is an ENUMERATION ("Finanças for tax, the câmara for residence,
-  AIMA for immigration"). A list is what a diagram is for.
-
-  Two structural fixes came out of that:
-  - WritePropagation.astro moved BELOW the Italy/Portugal/US paragraphs. Every
-    diagram in the Atlas post follows the argument it confirms; this one ran
-    ahead of it, which is why those paragraphs read as a restatement of a
-    picture the reader had already seen.
-  - ThreeQuestions.astro's caption is now "the license answers both" rather than "one
-    document, two rows", so it stops rhyming with CredentialSplit's "one field,
-    two jobs" thirty lines later. Two separate findings, two different shapes.
-
-  Note that WritePropagation.astro is now the ONLY place the five Italian
-  agencies, the three Portuguese owners and the five US copy targets appear —
-  its header carries the sourcing. Deleting a box there deletes the claim.
-
-  DECLINED, and why:
-  - The 25–35% cut. The reviewer counted 4,500 words against an actual 3,989,
-    so it was aimed at a draft that does not exist. Past ~10% the cuts stop
-    being duplication and start being evidence.
-  - The restructure. "What a system needs" is already section one and defines
-    canonical record / single source of truth before the first example.
-  - Softening "exactly one population register". Their replacement is more
-    defensible and much flatter. If you want to armour it instead, define
-    "population register" earlier and the absolute stops being litigable.
-  - Cutting the airport paragraph. It carries the best line in the piece.
-
-  STILL OPEN, your call:
-  - The reviewer's PDF quotes "one document, two rows" and "no key, and nothing
-    between the copies" as prose problems. Both were DIAGRAM CAPTIONS — they
-    were reading the rendered page. Worth knowing before weighing the rest of
-    their structural notes.
-  - C-61/22 in the ending (see the note further down, unchanged).
-*/}
-
 I recently relocated to Lisbon, and in doing so I jumped immediately on the bureaucratic task of properly establishing my residency and acquiring the respective documentation. I had acquired Italian citizenship before the move, so I arrived in Portugal as an EU citizen rather than an American one. I've never been someone who likes to sit too long on bureaucratic tasks. What I found was a system that felt much more like my identity lived in a normalized database.
 
 Portugal, Italy, and the wider European Union have taken more concrete steps to build out a normalized database of citizens. The US has too, but only for immigrants — without the benefits that I've found accessible so far in the EU.
@@ -115,20 +59,6 @@ Portugal implements its own version of this. Citizens receive a Cartão de Cidad
 The US license has to do both jobs at once, and it falls apart very quickly on the second. People move and keep the old license until it expires.
 
 US non-citizens, meanwhile, have a very different situation. United States Citizenship and Immigration Services (USCIS) issues several federal photo IDs. The permanent resident card (Form I-551, known colloquially as a green card) is the obvious example, and the Employment Authorization Document (Form I-766) is another. 8 U.S.C. § 1304(e) requires any registered non-citizen 18 or older to carry their registration document at all times, and failing to do so is a misdemeanor. No US citizen has any comparable duty. So the country that supposedly has no ID card does issue one — and only mandates carrying it for the people who are not citizens.
-
-{/*
-  C-61/22 (Landeshauptstadt Wiesbaden), 21 Mar 2024 — the case behind the
-  sentence above. Verified Aug 2026 against the judgment and the Court's own
-  summary: the Grand Chamber UPHELD the mandatory two fingerprints against
-  Charter Arts. 7 and 8 as a proportionate limitation under Art. 52(1), and
-  invalidated Regulation 2019/1157 SOLELY because it was adopted under Art.
-  21(2) TFEU when Art. 77(3) — special procedure, unanimity in Council — was
-  the correct basis. Effects maintained until replaced; Council Regulation
-  2025/1208 re-enacted it on the corrected basis, applying from 10/07/2025.
-
-  Whether to USE that in the argument is decided at the end of the post — see
-  the note above the closing.
-*/}
 
 ## Where you live
 
@@ -188,68 +118,10 @@ I walked through the EU citizen door in Portugal and had a certificate the same 
 
 An immigrant in Portugal would have a different process to build their database, but once it is built, it would look much like mine. An immigrant in the US would have neither my process nor my end result: far more is recorded about them at the federal level than any US citizen is required to hold.
 
-{/*
-  EDITORIAL NOTE — C-61/22 in the ending. Draft below; rewrite freely.
-
-  THE QUESTION WAS whether this is new material arriving too late. It isn't:
-  2019/1157, the Court, and "procedure rather than substance" are all already
-  in "What proves it". The only genuinely new fact is that the fingerprints
-  were UPHELD — one sentence, not a section. So this is a callback, and you
-  have precedent for exactly that shape in the Atlas post's close ("On the two
-  occasions in this post that actually mattered — a join that silently returned
-  nothing, a polygon that measured too big — …").
-
-  WHAT IS ACTUALLY WRONG WITH THE ENDING is unrelated to C-61/22, and worth
-  fixing either way. Closing ¶ lengths across the blog:
-
-      this post   20 → 50 → 56 → 41 → 98
-      atlas-data  49 → 49 → 35 → 34
-      pivoting   111 → 71 → 11
-      netherlands 74 → 71 → 52
-
-  Every other post tapers to a short final beat. This one swells to 98 words,
-  the longest close you have written. That is why there is no room — not
-  novelty.
-
-  WHY IT GOES HERE rather than in the closing: this is already the EU
-  forward-looking paragraph, it sits immediately before the close so the
-  evidence is fresh when the closing asserts it, and it leaves the final beat
-  alone. Putting it beside the Privacy Act ¶ instead would blunt the "exactly
-  one population register" punch that follows.
-
-  WHAT IT FILLS: "needs to do so in a way that properly protects the civil
-  liberties of the population" and "that objection is why it was never built"
-  both assume a register CAN be built with protections. Nothing in the post
-  shows it. This is the only material you have where a constitutional system
-  forced the consent rather than blocking the build.
-
-  ── DRAFT: two sentences onto the end of this paragraph ──
-
-  It is worth knowing what that machinery has already survived. When the
-  identity-card regulation reached the Court of Justice in 2024, the
-  fingerprints in my own CIE were upheld as proportionate — and the regulation
-  was struck down anyway, because a measure that biometric had to be adopted by
-  unanimity rather than by majority. Not a court refusing to let the register be
-  built. A court naming the price of building it.
-
-  ── DRAFT: split the closing ¶, restoring the taper ──
-
-  ¶1 (~57w, the argument):
-    The US could stand to take a page out of the European book, but needs to do
-    so in a way that properly protects the civil liberties of the population.
-    That objection is why it was never built, and it has already failed on its
-    own terms: the register got built anyway, and pointed at the people with
-    the least protection from it.
-
-  ¶2 (~35w, the beat — unchanged words, standing alone):
-    Refusing to build one for citizens never prevented the surveillance; it
-    only withheld the half that helps. Without those protections, it'll end up
-    a surveillance state for citizens and immigrants both, and nothing more.
-
-  No allusion needed in ¶1 — with the paragraph above in place the reader has
-  just read the evidence, and pointing at it again would be the third mention.
-*/}
-
 I'll be curious whether these systems ever start talking to each other in earnest. The EU is trying — there's a digital identity wallet coming that would carry all of this across borders, and I'll sign up the day it ships.
 
-The US could stand to take a page out of the European book, but needs to do so in a way that properly protects the civil liberties of the population. That objection is why it was never built — and it has already failed on its own terms: the register got built anyway, and pointed at the people with the least protection from it. Refusing to build one for citizens never prevented the surveillance; it only withheld the half that helps. Without those protections, it'll end up a surveillance state for citizens and immigrants both, and nothing more.
+It is worth knowing what that machinery has already survived. When the identity-card regulation reached the Court of Justice in 2024, the fingerprints in my own CIE were upheld as proportionate — and the regulation was struck down anyway, because a measure that biometric had to be adopted by unanimity rather than by majority. Not a court refusing to let the register be built. A court naming the price of building it.
+
+The US could stand to take a page out of the European book, but needs to do so in a way that properly protects the civil liberties of the population. That objection is why it was never built, and it has already failed on its own terms: the register got built anyway, and pointed at the people with the least protection from it.
+
+Refusing to build one for citizens never prevented the surveillance; it only withheld the half that helps. Without those protections, it'll end up a surveillance state for citizens and immigrants both, and nothing more.

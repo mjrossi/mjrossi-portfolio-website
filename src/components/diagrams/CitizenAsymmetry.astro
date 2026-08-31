@@ -3,22 +3,30 @@
 // non-citizen and of a US citizen. Inline for the same reasons as
 // ThreeQuestions.astro — see that file's header.
 //
-// The five rows are exactly the five the post enumerates in the closing
-// paragraph of "The normalized identity database", in its order, and nothing
-// has been added to round the list out:
-//   "One identifier — the A-number — that USCIS, Customs and Border Protection,
-//    the State Department and the immigration courts all file against.
-//    Mandatory registration on arrival, mandatory address writes within ten
-//    days, mandatory status reporting, and a formal exit record in Form I-407
-//    when permanent residency is abandoned — a filing USCIS is required by law
-//    to report to the IRS."
-// Supporting detail per cell, also from the post:
+// This diagram now renders directly under the post's OPENING section, "Who it
+// was built for", where the thesis is stated — it is the first diagram a reader
+// meets, not the last. The Aug 2026 restructure moved it there so the claim and
+// its evidence arrive together.
+//
+// The five rows used to be transcribed from a single enumerating sentence in
+// the post. That sentence no longer exists: the trim in b65d4a3 cut it, and the
+// restructure did not restore it. THE ENUMERATION NOW LIVES ONLY HERE, in the
+// same sense WritePropagation.astro's specifics do — deleting a row deletes the
+// claim, because there is no prose left to fall back on. The order is that
+// original sentence's order and must not be resorted:
+//   identifier, registration, address, status, exit.
+//
+// Every row is still separately supported by prose elsewhere in the post, and
+// those sentences are what a row must continue to match:
 //   A-number      "built to be an identifier and nothing else — it follows a
 //                  person through every change of status"
-//   registration  DHS rule finalized June 2026: "effectively every non-citizen
-//                 aged fourteen or over who stays thirty days to register, be
-//                 fingerprinted, and be issued a number"
+//   registration  DHS rule finalized June 2026, which "closed the operational
+//                 gap in a registration system that already required nearly
+//                 every non-citizen aged fourteen or over who stays thirty
+//                 days to register and be fingerprinted"
 //                 https://www.federalregister.gov/documents/2026/06/29/2026-13057/alien-registration-form-and-evidence-of-registration
+//                 (Re-synced Sep 2026 — the previous wording quoted here
+//                 predated the paragraph's rewrite and no longer matched.)
 //   address       "Form AR-11 requires a change of address within 10 days of
 //                  moving (8 U.S.C. § 1305), and failing to file is a criminal
 //                  offense"
@@ -27,9 +35,10 @@
 //                  the school reporting on their behalf"
 //   exit          "a permanent resident who gives up the status submits Form
 //                  I-407, and USCIS is required by law to report it to the IRS"
-//   footnote      8 U.S.C. § 1304(e), from "What proves it": carry duty for a
-//                 registered non-citizen 18 or older, "No US citizen has any
-//                 comparable duty."
+//   footnote      8 U.S.C. § 1304(e), which now CLOSES "What proves it": carry
+//                 duty for a
+//                 registered non-citizen 18 or older, "No US citizen has a
+//                 comparable duty to carry one."
 //   SSN cell      "From 1946 to 1972, the SSN card carried 'NOT FOR
 //                  IDENTIFICATION.'"
 //
@@ -164,10 +173,9 @@
   </svg>
 
   <figcaption>
-    A canonical record, a stable join key, one authoritative owner, and
-    mandatory propagation on every change — the register the US never built for
-    its citizens, filled in column by column for the people who cannot vote. The
-    empty cells on the left are not an oversight in the drawing. They are the
-    finding.
+    Five things the US requires of a non-citizen, and the same five asked of a
+    citizen. The dashed cells are empty on purpose: there is no citizen
+    equivalent to put in them. The one that is filled holds the Social Security
+    number, which carried NOT FOR IDENTIFICATION on the card until 1972.
   </figcaption>
 </figure>

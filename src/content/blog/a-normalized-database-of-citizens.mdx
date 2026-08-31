@@ -10,15 +10,9 @@ import CredentialSplit from '../../components/diagrams/CredentialSplit.astro';
 import WritePropagation from '../../components/diagrams/WritePropagation.astro';
 import CitizenAsymmetry from '../../components/diagrams/CitizenAsymmetry.astro';
 
-I recently relocated to Lisbon. I had obtained Italian citizenship before the move, so I arrived in Portugal as an EU citizen rather than an American one, and what I found was a system that felt much more like my identity was stored in a normalized database. The US has built one of those too — but only for immigrants, and without the benefits I've found accessible here.
+I recently relocated to Lisbon. I had obtained Italian citizenship before the move, so I arrived in Portugal as an EU citizen rather than an American one, and what I found was a system that felt much more like my identity was stored in a normalized database.
 
-{/* TODO(mjr) — the "so what" paragraph. kw filed this note in round 1 ("there's
-    not much setup or reason for the reader to care; you need to preview more of
-    the piece up top") and it is the same complaint as the restructure note. Two
-    or three sentences: this is a post about who a state decides to know, and the
-    schema is how you can see the decision. The old opening (the "designing a data
-    model" throat-clear, four sentences on data models being all around us) is
-    parked at the bottom of this file if you want any of it back. */}
+A key component in writing software is designing the data model. Data models don't just live in software though: they're all around us. We interact with systems, and systems generate data, that is stored, referenced, and updated. As I went through the tasks I needed to do upon arriving here, and I started obtaining documents, seeing how my data was registered, and comparing it to the US, I saw a data model of a resident in a city. Most importantly though, a citizen in both worlds.
 
 ## Who it was built for
 
@@ -30,10 +24,7 @@ An immigrant in Portugal would have a different process to build their database,
 
 <CitizenAsymmetry />
 
-{/* TODO(mjr) — optional bridge into the next section, one or two sentences. The
-    reader has just been handed the conclusion and now has to sit through the
-    evidence, so it is worth saying that is what is happening: three questions,
-    three countries, and the asymmetry shows up in every one of them. */}
+It is a common misconception that data and algorithms are unbiased and apolitical: a computer doesn't have bias, the reasoning goes, because it is a computer. However, humans are the ones behind the keyboard, and a schema is a record of who a state decided to know.
 
 ## What a system needs
 
@@ -125,20 +116,11 @@ The immigration system is nearly the mirror image of Italy: the propagation fire
 
 ## What got built instead
 
-{/* TODO(mjr) — the connective argument for this section, and the main piece of
-    new writing in the restructure. Everything below is existing material that
-    used to sit at the end of the post as a list; it needs a paragraph up front
-    saying what it adds up to. The claim, roughly: refusing to build the register
-    never prevented surveillance — it produced a worse version of it. No read
-    path, no propagation the citizen benefits from, no protections, and identity
-    assembled by inference instead. The inference sentence relocated from "Who
-    you are" is parked here as a starting point:
+The US claims to have never built a federal population register. There is a long history in the US of distrust in the government, and in the sorts of federalized structures that you see in Europe. As the federal government grew over the centuries, especially after the Civil War and into the 20th and 21st century, a cautious amount of separation and state autonomy always remained. There is a long and storied history behind this.
 
-    "Everyone outside these purpose-built systems validates by inference instead:
-    credit reports, background checks, commercial identity verification."
+As far as this thesis is concerned, surveillance and tracking of citizens was the argument most often given against building this register. It got built anyway, just not for citizens, and what citizens were left with has the surveillance in it regardless. It simply confers minimal other benefits.
 
-    Once that paragraph exists, the four beats below read as evidence for it
-    rather than as four more facts. */}
+In the database analogy: no read path, no propagation between systems, no protections, and an identity assembled by inference rather than looked up — credit reports, background checks, commercial identity verification, standing in wherever a purpose-built system doesn't reach.
 
 [REAL ID](https://www.tsa.gov/real-id) has been enforced in the US since May 2025, and it is a genuine step: a state now has to check an applicant's Social Security number against SSA records rather than take the card at face value. But look at what each applicant gets checked against: a citizen's status rests on a birth certificate or a passport, a non-citizen's on a live federal database called SAVE. Even here, the same split. What REAL ID standardizes is how the states issue their own documents; it doesn't build the thing underneath them, at least not for citizens.
 
@@ -159,52 +141,3 @@ It is worth knowing what that machinery has already survived. When the identity-
 The US could stand to take a page out of the European book, but needs to do so in a way that properly protects the civil liberties of the population. That objection is why it was never built, and it has already failed on its own terms: the register got built anyway, and pointed at the people with the least protection from it.
 
 Refusing to build one for citizens never prevented the surveillance; it only withheld the half that helps. Without those protections, it'll end up a surveillance state for citizens and immigrants both, and nothing more. Normalization is not politically neutral.
-
-{/* ---------------------------------------------------------------------------
-    PARKED PROSE — cut by the restructure, kept here so nothing is lost until
-    you have signed off. Delete this whole block before publishing.
-
-    1. The old opening paragraph, which the new standfirst is assembled out of.
-       The sentence with no home in the new version is the third one:
-
-       "I recently relocated to Lisbon, and in doing so I jumped immediately on
-       the bureaucratic task of properly establishing my residency and acquiring
-       the documents that go with it. I had obtained Italian citizenship before
-       the move, so I arrived in Portugal as an EU citizen rather than an
-       American one. I've never been someone who likes to sit too long on
-       bureaucratic tasks. What I found was a system that felt much more like my
-       identity was stored in a normalized database. Portugal, Italy, and the
-       wider European Union have taken more concrete steps toward something
-       closer to a normalized identity infrastructure. The US has too, but only
-       for immigrants — without the benefits that I've found accessible so far
-       in the EU."
-
-    2. The old second opening paragraph (the "data model" throat-clear). Its
-       last two sentences are the salvageable part if the new standfirst wants
-       them:
-
-       "A key component in writing software is designing the data model. Data
-       models don't just live in software though: they're all around us. We
-       interact with systems, and systems generate data, that is stored,
-       referenced, and updated. As I went through the tasks I needed to do upon
-       arriving here, and I started obtaining documents, seeing how my data was
-       registered, and comparing it to the US, I saw a data model of a resident
-       in a city. I wanted to explore the contract between the model I was
-       familiar with and the one I had just relocated into. That deep dive is
-       this blog post."
-
-       (Note "the contract between" — almost certainly meant to be "contrast".)
-
-    3. From the old close of "Who it was built for", now redundant with the new
-       opening section:
-
-       "For its own citizens, the country has refused to build this type of
-       population register." — kept, moved up.
-
-    4. The old "Who you are" tail, relocated into the What got built instead
-       TODO above:
-
-       "Everyone outside these purpose-built systems validates by inference
-       instead: credit reports, background checks, commercial identity
-       verification."
-    --------------------------------------------------------------------------- */}

@@ -10,11 +10,11 @@ import CredentialSplit from '../../components/diagrams/CredentialSplit.astro';
 import WritePropagation from '../../components/diagrams/WritePropagation.astro';
 import CitizenAsymmetry from '../../components/diagrams/CitizenAsymmetry.astro';
 
-Moving to Portugal as an Italian citizen showed me what public identity looks like when it is designed as a system: one stable identifier, authoritative records, and credentials that prove who owns them. Comparing that system with the American patchwork revealed something stranger—the US built much of the same machinery, but primarily for non-citizens.
+Moving to Portugal as an Italian citizen showed me what public identity looks like when it is designed as a system: one stable identifier, authoritative records, and credentials that prove who owns them. Comparing that system with the American patchwork revealed something stranger — the US built much of the same machinery, but primarily for non-citizens.
 
 ## Who it was built for
 
-The US does have a normalized identity database — canonical record, stable join key, one authoritative owner, mandatory propagation on change — it just lives in the immigration system. A non-citizen gets the join key and the propagation, but it comes wrapped in duties and obligations no citizen carries, without equivalent benefits. For its own citizens, the country has refused to build this type of population register.
+The US does have something much closer to a normalized identity database — canonical record, a stable join key every system can point at, one authoritative owner, mandatory propagation on change — it just lives in the immigration system. A non-citizen gets the join key and the propagation, but it comes wrapped in duties and obligations no citizen carries, without equivalent benefits. For its own citizens, the country has refused to build this type of population register.
 
 I walked through the EU citizen door in Portugal and had a certificate the same afternoon. I walked through the citizen door in America and got a filing cabinet. Same person, two paths, and the path is what determined the schema I experienced. None of that is something I earned.
 
@@ -22,7 +22,7 @@ An immigrant in Portugal would go through a different process to establish their
 
 <CitizenAsymmetry />
 
-It is a common misconception that data and algorithms are unbiased and apolitical: a computer doesn't have bias, the reasoning goes, because it is a computer. However, humans are the ones behind the keyboard, and a schema is a record of who a state decided to know.
+That table isn't a bureaucratic accident. The four empty cells on the citizen side aren't a computer's decision — computers don't have opinions about who gets a column. Congress and DHS do, and a schema is a record of who a state decided to know.
 
 ## What a system needs
 
@@ -90,11 +90,11 @@ Unless, again, you're an immigrant — or, in the language of US law, even a non
 
 ## When you leave
 
-Italy keeps track even after you leave. Once I acquired Italian citizenship from abroad, I was enrolled as part of that process in a system called the Anagrafe degli Italiani Residenti all'Estero (AIRE) — a registry of every Italian citizen living abroad. It is a declaration rather than an automatic consequence of citizenship; an Italian who moves abroad later has to file it themselves. As a citizen registered in AIRE, I deal with the consular district covering my residence for passports, registering life events, voting, and the rest.
+The three questions leave one thing unanswered: what happens once you're gone. Italy keeps track even after you leave. Once I acquired Italian citizenship from abroad, I was enrolled as part of that process in a system called the Anagrafe degli Italiani Residenti all'Estero (AIRE) — a registry of every Italian citizen living abroad. It is a declaration rather than an automatic consequence of citizenship; an Italian who moves abroad later has to file it themselves. As a citizen registered in AIRE, I deal with the consular district covering my residence for passports, registering life events, voting, and the rest.
 
-Having just moved abroad myself, I can say there is no US equivalent to AIRE for citizens. Instead, the US keeps track of citizens living abroad indirectly, and far more invasively, through the tax code. The US is among the very few countries that tax on the basis of citizenship at all — Eritrea levies a flat 2% on its diaspora, and Myanmar has taxed nonresident citizens' foreign salary income since 2023 — and is distinctive in applying its full domestic income tax code to citizens wherever they live.
+There is no US equivalent to AIRE for citizens. Instead, the US keeps track of citizens living abroad indirectly, and far more invasively, through the tax code. The US is among the very few countries that tax on the basis of citizenship at all — Eritrea levies a flat 2% on its diaspora, and Myanmar has taxed nonresident citizens' foreign salary income since 2023 — and is distinctive in applying its full domestic income tax code to citizens wherever they live.
 
-Where that differs from a formalized system like AIRE is that the IRS knows I live abroad, but until I specifically tell anyone else, they don't. Worse, plenty of US institutions will simply stop doing business with you once you aren't residing there, which, if your stay abroad is temporary, becomes a real problem. It is another patchwork built on the fragmented federal and state delineation that makes the US function, often enough, as "50 mini countries under a trenchcoat."
+Where that differs from a formalized system like AIRE is that the IRS knows I live abroad, but until I specifically tell anyone else, they don't. It is another patchwork built on the fragmented federal and state delineation that makes the US function, often enough, as "50 mini countries under a trenchcoat."
 
 Unless, once more, you're not a citizen! For a non-citizen, leaving is itself a filing: a permanent resident who gives up the status submits Form I-407, and USCIS is required by law to report it to the IRS. Until then the registration obligations keep running, and they are backed by criminal statute rather than by a tax bill.
 
@@ -102,7 +102,7 @@ Unless, once more, you're not a citizen! For a non-citizen, leaving is itself a 
 
 What I actually took from registering in Portugal was the shape of it. My Italian identity document, the CRUE, and the NIF are not three separate copies of me across multiple databases. Logically, they're three tables — one answering who I am, one proving it, and one recording where I live. That is a lens I brought with me rather than a schema any of these states sat down and wrote, but it holds all the way through.
 
-Italy comes closest of the three. The register is the ANPR (Anagrafe Nazionale della Popolazione Residente), owned by the Ministry of the Interior, and a change of residence is *one* write — online, through the [ANPR portal](https://www.anpr.interno.it/). Everything downstream still keeps its own records, so this is replication rather than a true foreign key, but every copy is fed from that single write. It is a first step toward what the EU calls the "once-only principle": you tell the state something once, and the state carries it from there.
+Italy comes closest of the three. The register is the ANPR (Anagrafe Nazionale della Popolazione Residente), owned by the Ministry of the Interior, and a change of residence is *one* write — online, through the [ANPR portal](https://www.anpr.interno.it/). Everything downstream still keeps its own records, so this is replication rather than a true foreign key, but each one can be fed from that single write. It is a first step toward what the EU calls the "once-only principle": you tell the state something once, and the state carries it from there.
 
 Portugal comes close in that the data is the right shape. The NIF acts as a stable join key, and every administrative domain has an authoritative owner, but those systems don't share a common canonical record. It's essentially a normalized schema where the foreign keys aren't entirely connected, so updating my address would still have to be done in several places. It falls short in other ways too: the document list can be left up to interpretation, and the registration itself doesn't cross EU borders, so moving to another member state means starting over. [eIDAS](https://eidas.ec.europa.eu/efda/home) is the piece of this I have actually leaned on: a credential issued by one member state authenticates to another's services, with nothing re-issued. Authentication travels; registration doesn't.
 
@@ -130,6 +130,6 @@ I'll be curious whether these systems ever start talking to each other in earnes
 
 It is worth knowing what that machinery has already survived. When the identity-card regulation reached the Court of Justice in 2024, the fingerprints in my own CIE were upheld as proportionate — and the regulation was struck down anyway, because mandating biometrics put the regulation under a treaty article requiring unanimity in the Council, not the majority procedure the EU had used. Not a court refusing to let the register be built. A court naming the price of building it.
 
-The US could stand to take a page out of the European book, but needs to do so in a way that properly protects the civil liberties of the population. That objection is why it was never built, and it has already failed on its own terms: the register got built anyway, and pointed at the people with the least protection from it.
+The US could stand to take a page out of the European book, but needs to do so in a way that properly protects the civil liberties of the population. That objection is one reason it was never built, and it has already failed on its own terms: the register got built anyway, and pointed at the people with the least protection from it.
 
 Refusing to build one for citizens never prevented the surveillance; it only withheld the half that helps. Without those protections, it'll end up a surveillance state for citizens and immigrants both, and nothing more. Normalization is not politically neutral.

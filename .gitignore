@@ -18,6 +18,9 @@ dist/
 # claude
 .claude/
 
+# codex
+.codex/
+
 # design notes written while working a change out. Process artifacts, not
 # documentation -- what they conclude belongs in CLAUDE.md or a header comment,
 # which is where the next person will actually look for it.

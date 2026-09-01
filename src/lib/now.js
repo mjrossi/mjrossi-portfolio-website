@@ -10,7 +10,7 @@
 // wrong month, which reads as perfectly ordinary.
 
 /** Month the Now section was last rewritten. `YYYY-MM`. */
-export const NOW_UPDATED = '2026-08';
+export const NOW_UPDATED = '2026-09';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',

@@ -5,17 +5,13 @@
 //
 // READ THIS BEFORE EDITING EITHER THIS FILE OR THE POST.
 //
-// This diagram used to restate three paragraphs that named the same things in
-// prose. The Aug 2026 trim cut the enumerations FROM THE PROSE and left them
-// here, so the relationship has inverted: the post now states the argument and
-// this drawing carries the specifics. Three consequences.
+// The prose states what one address change costs and names the Portuguese and
+// US targets from the author's experience. The drawing supplies the complete
+// Italian fan-out and makes the shared skeleton visible. It follows the three
+// paragraphs it illustrates, so the caption states what the picture adds rather
+// than walking the reader through those paragraphs again.
 //
-// 1. THIS FILE IS NOW THE ONLY PLACE THE SPECIFICS APPEAR. The five Italian
-//    agencies, the three Portuguese owners and the five US copy targets are no
-//    longer written anywhere in the post. Deleting a box here deletes the claim
-//    from the post outright — there is no prose left to fall back on.
-//
-// 2. THE PROVENANCE HAS TO LIVE HERE, because the prose no longer carries it:
+// PROVENANCE:
 //      Italy    A change of residence entered once in ANPR is notified
 //               automatically to Agenzia delle Entrate, INPS, INAIL, ISTAT and
 //               the Motorizzazione. Documented by the Ministry's own ANPR
@@ -23,26 +19,20 @@
 //               department (innovazione.gov.it). Order matches the post's
 //               original sentence; do not reorder or abbreviate.
 //      Portugal Finanças for tax, the câmara for residence, AIMA for
-//               immigration. This is a SAMPLE, not the complete set — the post
-//               used to say "and so on" and the caption still says so. Do not
-//               present it as exhaustive, and do not add owners the post never
-//               named.
+//               immigration. This is a sample, not the complete set; the post
+//               says "and anyone else" and the caption says these are three of
+//               its owners. Do not present them as exhaustive.
 //      US       DMV, IRS, Social Security Administration, bank, utility
-//               company — the five the post named before the trim.
+//               company — the five the post names in the paragraph above.
 //
-// 3. THE POST'S SURVIVING SENTENCES still anchor each band, and these are what
-//    to keep the drawing true to:
-//      Italy    "Everything downstream still keeps its own records, so this is
-//                replication rather than a true foreign key, but each one can
-//                be fed from that single write."
-//                (Re-synced Sep 2026: the quote here read "but every copy is
-//                fed from that single write" and had not matched the post for
-//                some time. The claim is unchanged.)
-//      Portugal "a normalized schema where the foreign keys aren't entirely
-//                connected, so updating my address would still have to be done
-//                in several places."
-//      US       "Copies drift… it's an update anomaly, the exact thing
-//                normalization exists to prevent."
+// POST ANCHORS:
+//      Italy    "a resident writes the change once to the national population
+//                register, the ANPR, and downstream agencies can receive it
+//                from there."
+//      Portugal "Updating my address still means telling Finanças, the
+//                municipality, AIMA, and anyone else separately."
+//      US       "My address is written independently at the DMV, the IRS,
+//                Social Security, my bank, and my utility company."
 //
 // THE CAPTION MUST NOT RECAP THE PROSE. It used to, which was right when the
 // diagram ran ahead of the paragraphs — it previewed them. Following them, the
@@ -57,12 +47,9 @@
 // Aug 2026, which is why the prose read as a restatement of a picture the
 // reader had already seen. Do not move it back above the Italy paragraph.
 //
-// The Aug 2026 restructure left ONE paragraph after this diagram — the sentence
-// about the immigration system being "nearly the mirror image of Italy". That
-// is a hinge into the next section, not a fourth band, and it is deliberately
-// on the far side of the drawing: it compares the US immigration register to
-// ANPR, which only means anything once the reader has seen the three bands.
-// The diagram still follows the three paragraphs it illustrates.
+// One paragraph follows the diagram and returns to the immigration system. It
+// is a hinge into the political section, not a fourth band; the picture remains
+// a comparison of Italy, Portugal and a US citizen.
 //
 // The three bands deliberately share one skeleton — "you move" on the left,
 // targets on the right — so the only thing that varies between them is what
@@ -74,10 +61,9 @@
 // "present on the page, absent from the result" treatment RegionGraphNYC uses
 // for New Jersey. It is an absence, not a component — do not fill it in.
 //
-// Deliberately absent: the US non-citizen case, which the post describes as
-// "nearly the mirror image of Italy". It is a fourth propagation story and it
-// would fit here, but it belongs to the turn the post makes in the next
-// section, and CitizenAsymmetry.astro draws it there.
+// Deliberately absent: the composite US immigration case. It would be a fourth
+// propagation story assembled across several statuses, and CitizenAsymmetry
+// already draws that distinction where the post first makes it.
 //
 // Styles live in global.css (.post-diagram, .dg-*) per the one-stylesheet rule.
 // Marker and aria IDs are prefixed dg-writes-* — four diagrams share this page.

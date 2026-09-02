@@ -1,62 +1,39 @@
 ---
-// Hand-authored inline SVG: the same five obligations, asked of a US
-// non-citizen and of a US citizen. Inline for the same reasons as
-// ThreeQuestions.astro — see that file's header.
+// Hand-authored inline SVG: five federal identity mechanisms used across the
+// US immigration system, compared with what exists for a US citizen. Inline
+// for the same reasons as ThreeQuestions.astro — see that file's header.
 //
-// This diagram now renders directly under the post's OPENING section, "Who it
-// was built for", where the thesis is stated — it is the first diagram a reader
-// meets, not the last. The Aug 2026 restructure moved it there so the claim and
-// its evidence arrive together.
+// THE RIGHT-HAND COLUMN IS A COMPOSITE, NOT ONE PERSON'S PATH. A visitor, a
+// student and a permanent resident do not encounter the same systems. The
+// diagram asks what the federal immigration system has built across those
+// statuses; its caption and labels must never imply that every non-citizen gets
+// an A-number, uses SEVIS and files I-407. That distinction is now stated in
+// the prose immediately before and after the drawing.
 //
-// The five rows used to be transcribed from a single enumerating sentence in
-// the post. That sentence no longer exists: the trim in b65d4a3 cut it, and the
-// restructure did not restore it. THE ENUMERATION NOW LIVES ONLY HERE, in the
-// same sense WritePropagation.astro's specifics do — deleting a row deletes the
-// claim, because there is no prose left to fall back on. The order is that
-// original sentence's order and must not be resorted:
-//   identifier, registration, address, status, exit.
-//
-// Every row is still separately supported by prose elsewhere in the post, and
-// those sentences are what a row must continue to match:
-//   A-number      "built to be an identifier and nothing else — it follows a
-//                  person through every change of status"
-//   registration  DHS rule finalized June 2026, which "closed the operational
-//                 gap in a registration system that already required nearly
-//                 every non-citizen aged fourteen or over who stays thirty
-//                 days to register and be fingerprinted"
-//                 https://www.federalregister.gov/documents/2026/06/29/2026-13057/alien-registration-form-and-evidence-of-registration
-//                 (Re-synced Sep 2026 — the previous wording quoted here
-//                 predated the paragraph's rewrite and no longer matched.)
+// Row -> supporting sentence in the post:
+//   identifier    "Many people who pass through USCIS also receive a
+//                  purpose-built identifier: the A-number… It is not universal."
+//   registration  "Many visitors and students satisfy the registration
+//                  requirement through a visa or Form I-94 without receiving
+//                  one. In April 2025, DHS created Form G-325R so people missed
+//                  by the existing forms finally had a way to comply…"
 //   address       "Form AR-11 requires a change of address within 10 days of
 //                  moving (8 U.S.C. § 1305), and failing to file is a criminal
 //                  offense"
 //   status        "for students and exchange visitors, the Student and Exchange
 //                  Visitor Information System (SEVIS) does the same job, with
 //                  the school reporting on their behalf"
-//   exit          "a permanent resident who gives up the status submits Form
-//                  I-407, and USCIS is required by law to report it to the IRS"
-//   footnote      8 U.S.C. § 1304(e), which now CLOSES "What proves it": carry
-//                 duty for a
-//                 registered non-citizen 18 or older, "No US citizen has a
-//                 comparable duty to carry one."
-//   SSN cell      "From 1946 to 1972, the SSN card carried 'NOT FOR
-//                  IDENTIFICATION.'"
+//   exit          "A permanent resident who gives up that status… can file Form
+//                  I-407, and USCIS reports the departure to the IRS."
+//   carry note    8 U.S.C. § 1304(e), which closes "What proves it": a
+//                 registered non-citizen 18 or older must carry the document;
+//                 no US citizen has a comparable duty.
 //
-// Two things a future editor must NOT "fix":
-//   - The citizen column is dashed and empty in four of five rows. That is
-//     .dg-node--out, the same "present on the page, absent from the result"
-//     treatment RegionGraphNYC uses for New Jersey. It is the argument. Filling
-//     the cells with plausible near-equivalents (a passport, a voter roll, a
-//     state DMV record) would be exactly the inference-by-proxy the post is
-//     about, asserted as though it were structure.
-//   - The citizen column is NOT entirely empty: row one holds the SSN, solid,
-//     because the number does exist — it was just never built for the job.
-//     Dashing it too would overstate the case.
-//
-// The carry duty (§ 1304(e)) is a footnote rather than a sixth row because the
-// post raises it two sections earlier and does not include it in the list this
-// diagram tabulates. Matching the enumeration exactly is what lets a reader
-// check the picture against the paragraph.
+// The citizen column is dashed and empty in four rows on purpose. Filling it
+// with near-equivalents (passport, voter roll, DMV record) would turn the
+// proxies the post criticises into a coherent structure it says does not exist.
+// The SSN cell stays solid because the number exists, though it was not designed
+// as a general identity credential.
 //
 // Styles live in global.css (.post-diagram, .dg-*) per the one-stylesheet rule.
 // aria IDs are prefixed dg-asym-* — four diagrams share this page.
@@ -70,26 +47,25 @@
     class="dg"
   >
     <title id="dg-asym-title">
-      Five federal obligations, asked of a US non-citizen and of a US citizen
+      Five identity mechanisms across the US immigration system, compared with a US citizen
     </title>
     <desc id="dg-asym-desc">
       Five rows — stable identifier, registration on arrival, change of address,
-      status reporting, exit record — across two columns, US citizen and US
-      non-citizen. The non-citizen column is filled in at every row: the
-      A-number, mandatory registration and fingerprinting for anyone fourteen or
-      over staying thirty days, Form AR-11 within ten days of moving under
-      8 U.S.C. § 1305, status reporting through SEVIS, and Form I-407 on
-      departure, which USCIS must report to the IRS. The citizen column holds
-      only the Social Security number, a card that read NOT FOR IDENTIFICATION
-      from 1946 to 1972; the other four cells are drawn dashed and empty,
-      because no such obligation exists. A footnote adds that a registered
-      non-citizen eighteen or older must carry the document at all times, and
-      that no citizen has a comparable duty.
+      status reporting, exit record — across two columns, US citizen and the US
+      immigration system. The immigration column is explicitly a composite
+      across different statuses, not one non-citizen's path: A-numbers are not
+      universal, registration can happen through a visa, I-94 or G-325R, SEVIS
+      covers students and exchange visitors, and I-407 records a permanent
+      resident giving up that status. The citizen column holds only the Social
+      Security number; the other four cells are drawn dashed and empty because
+      there is no connected citizen equivalent. A note adds that a registered
+      non-citizen eighteen or older must carry evidence of registration, while
+      no citizen has a comparable duty.
     </desc>
 
     {/* ---- column headers ---- */}
     <text x="334" y="24" class="dg-call">US citizen</text>
-    <text x="577" y="24" class="dg-call">US non-citizen</text>
+    <text x="577" y="24" class="dg-call">US immigration</text>
 
     <path class="dg-edge" d="M6 34 H 694" />
 
@@ -110,8 +86,8 @@
     <g class="dg-group">
       <rect x="460" y="46" width="234" height="64" class="dg-node" />
       <text x="577" y="70" class="dg-label">A-number</text>
-      <text x="577" y="90" class="dg-sub">an identifier and nothing else,</text>
-      <text x="577" y="104" class="dg-sub">carried through every status change</text>
+      <text x="577" y="90" class="dg-sub">assigned in many USCIS cases;</text>
+      <text x="577" y="104" class="dg-sub">not universal</text>
     </g>
 
     {/* ---- row 2: registration on arrival ---- */}
@@ -121,9 +97,9 @@
     </g>
     <g class="dg-group">
       <rect x="460" y="118" width="234" height="64" class="dg-node" />
-      <text x="577" y="142" class="dg-label">mandatory</text>
-      <text x="577" y="162" class="dg-sub">fourteen and over, thirty days,</text>
-      <text x="577" y="176" class="dg-sub">fingerprinted — DHS rule, 2026</text>
+      <text x="577" y="142" class="dg-label">visa · I-94 · G-325R</text>
+      <text x="577" y="162" class="dg-sub">different routes feed the</text>
+      <text x="577" y="176" class="dg-sub">federal registration system</text>
     </g>
 
     {/* ---- row 3: change of address ---- */}
@@ -147,7 +123,7 @@
     <g class="dg-group">
       <rect x="460" y="262" width="234" height="64" class="dg-node" />
       <text x="577" y="286" class="dg-label">SEVIS</text>
-      <text x="577" y="306" class="dg-sub">students and exchange visitors,</text>
+      <text x="577" y="306" class="dg-sub">students and exchange visitors;</text>
       <text x="577" y="320" class="dg-sub">reported by the school</text>
     </g>
 
@@ -160,8 +136,8 @@
     <g class="dg-group">
       <rect x="460" y="334" width="234" height="64" class="dg-node" />
       <text x="577" y="358" class="dg-label">Form I-407</text>
-      <text x="577" y="378" class="dg-sub">USCIS is required by law</text>
-      <text x="577" y="392" class="dg-sub">to report it to the IRS</text>
+      <text x="577" y="378" class="dg-sub">permanent residents giving up</text>
+      <text x="577" y="392" class="dg-sub">status; USCIS tells the IRS</text>
     </g>
 
     <text x="6" y="428" class="dg-note dg-note--start">
@@ -173,9 +149,10 @@
   </svg>
 
   <figcaption>
-    Five things the US requires of a non-citizen, and the same five asked of a
-    citizen. The dashed cells are empty on purpose: there is no citizen
-    equivalent to put in them. The one that is filled holds the Social Security
-    number, which carried NOT FOR IDENTIFICATION on the card until 1972.
+    The right-hand column gathers mechanisms used across different immigration
+    statuses; no single person encounters every row. Taken together, they show
+    connections the federal government built for immigration but not for its
+    citizens. The dashed cells are empty on purpose: there is no connected
+    citizen equivalent to put in them.
   </figcaption>
 </figure>

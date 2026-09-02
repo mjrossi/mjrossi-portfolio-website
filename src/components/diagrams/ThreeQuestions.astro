@@ -5,14 +5,15 @@
 // site ships none outside the newsletter carve-out, and `script-src 'self'`
 // would block a renderer anyway. See "Diagrams in posts" in CLAUDE.md.
 //
-// Every cell is transcribed from the post's own prose, not summarised from
-// memory. Cell -> sentence:
+// Every cell is grounded in the post's own prose; expanded document and agency
+// names may live here when the surrounding paragraph uses the abbreviation.
+// Cell -> sentence:
 //   Italy / who    "My codice fiscale — the Italian equivalent of a Social
 //                   Security number, issued by the Agenzia delle Entrate"
-//   Italy / proves "For Italy, that is the Carta d'Identità Elettronica (CIE)"
-//                  "an NFC chip that authenticates me directly"
-//   Italy / where  "The register is the ANPR (Anagrafe Nazionale della
-//                   Popolazione Residente), owned by the Ministry of the Interior"
+//   Italy / proves "For Italy, that is the Carta d'Identità Elettronica (CIE),
+//                   a national card built to common EU security standards."
+//                  "an NFC chip that can authenticate me directly"
+//   Italy / where  "the national population register, the ANPR"
 //   PT / who       "The Portuguese Número de Identificação Fiscal (NIF)…
 //                   linked to Finanças, the Portuguese tax authority"
 //   PT / proves    "Citizens receive a Cartão de Cidadão"; the credential is
@@ -48,10 +49,10 @@
 // grid — the span IS the argument, and the gap in the other columns is what
 // makes it legible.
 //
-// Deliberately absent: the US non-citizen column. This diagram is the map of
-// the next three sections, all of which are written from the citizen's side;
-// the asymmetry gets its own diagram (CitizenAsymmetry.astro) where the post
-// makes that turn. Adding a fourth column here would spend the ending early.
+// Deliberately absent: the composite US immigration column. This diagram maps
+// the next three citizen-side sections; CitizenAsymmetry.astro has already made
+// the immigration comparison in the opening. Adding it here would conflate
+// those different statuses again and repeat the first diagram.
 //
 // Styles live in global.css (.post-diagram, .dg-*) per the one-stylesheet rule.
 // aria IDs are prefixed dg-q3-* — four diagrams share this page.

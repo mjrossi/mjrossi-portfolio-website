@@ -3,8 +3,8 @@
 // regressions that would be user-visible or hard to catch by eye — not every
 // class name in the markup.
 //
-// Run after `npm run build` via `npm run smoke`. See CLAUDE.md, "Running smoke —
-// read this before you debug a failure", before investigating a failure.
+// Run after `npm run build` via `npm run smoke`. See docs/ENVIRONMENT.md, "Running
+// smoke — read this before you debug a failure", before investigating a failure.
 //
 // This file is the SEQUENCE; the assertions live in scripts/smoke/. The order
 // below is load-bearing and each step says why it sits where it does.

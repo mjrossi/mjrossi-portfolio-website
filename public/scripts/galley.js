@@ -1,4 +1,4 @@
-// The galley: inline editorial review on scheduled posts. See CLAUDE.md.
+// The galley: inline editorial review on scheduled posts. See docs/GALLEY.md.
 //
 // Loads ONLY when the page was opened with a signed preview link that names a
 // reviewer, which means only on responses middleware has already forced to

@@ -353,7 +353,7 @@ Env vars in brief — full sourcing in [docs/NEWSLETTER.md](docs/NEWSLETTER.md),
 |---|---|---|
 | `PUBLIC_TURNSTILE_SITE_KEY` | Astro build — baked into HTML | mise `[env]`; public by design |
 | `BUTTONDOWN_API_KEY`, `TURNSTILE_SECRET_KEY` | Worker runtime | `.dev.vars` / `wrangler secret put` |
-| `PREVIEW_SIGNING_KEY` | Worker runtime **and** `scripts/preview-link.mjs` | `.dev.vars` only — the one documented exception |
+| `PREVIEW_SIGNING_KEY` | Worker runtime **and** `scripts/preview-link.mjs` | `.dev.vars` + `wrangler secret put`; never `mise.local.toml` — the one documented exception |
 | `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` | Worker runtime | `vars` in `wrangler.jsonc` — identifiers, not secrets |
 | `ACCESS_JWKS_OVERRIDE` | Worker runtime | `.dev.vars` **only**, normally unset. Never `wrangler secret put` this. |
 

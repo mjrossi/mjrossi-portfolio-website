@@ -9,7 +9,7 @@ import {
   unmark,
 } from './galley-relocate.js';
 
-// The two invariants under test are the ones CLAUDE.md names by hand:
+// The two invariants under test are the ones docs/GALLEY.md names by hand:
 // typography must be folded on both sides before searching, and an ambiguous
 // match must resolve to NOTHING rather than to a guess. Everything else here
 // exists to keep those two honest.

@@ -1,11 +1,8 @@
 # Newsletter
 
-The blog index and the foot of every published post carry an email signup that forwards to Buttondown via `src/pages/api/subscribe.ts`. Buttondown polls `/blog/rss.xml` and emails new posts automatically, so publishing stays "write MDX, `git push`."
+The blog index and the foot of every published post carry an email signup form (`src/components/Subscribe.astro`, one implementation with a `line` / `card` variant) that forwards to Buttondown via `src/pages/api/subscribe.ts`. Buttondown polls `/blog/rss.xml` and emails new posts automatically — the publishing flow stays "write MDX, `git push`."
 
 Split out of `CLAUDE.md`, which keeps the JS carve-out rule and the env-var summary. This file has the full env sourcing table and the operator-side Buttondown design. For how mise and wrangler divide ownership of those variables, see [ENVIRONMENT.md](ENVIRONMENT.md).
-
-
-The blog index and the foot of every published post carry an email signup form (`src/components/Subscribe.astro`, one implementation with a `line` / `card` variant) that forwards to Buttondown via `src/pages/api/subscribe.ts`. Buttondown polls `/blog/rss.xml` and emails new posts automatically — the publishing flow stays "write MDX, `git push`."
 
 **JS carve-out:** This is one of the two client-side JavaScript carve-outs (the other is the galley review client, which only loads on a signed review link). The Turnstile loader + form handler load on `/blog` **and on every published post** — that widening is the deliberate cost of the August 2026 review's placement D, and it is where the carve-out stops. Do not lift `Subscribe.astro` into `Base.astro` or any shared chrome, and do not render it on a draft: `BlogPost.astro` gates the card on `isPublished`, so a galley reader never meets a signup form on the post they are reviewing. Smoke asserts the form is absent on `/` as a regression guard.
 

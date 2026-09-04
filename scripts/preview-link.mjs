@@ -205,7 +205,8 @@ const maxExp = nowSec + Math.round(Math.max(hours, CEILING_HOURS) * 3600);
 // An ALREADY-PUBLISHED post skips the clamp and mints exactly as before. The
 // clamp would hand back an expiry in the past — a link dead on arrival — and
 // minting against a live post is a legitimate thing to do: it is how the local
-// galley trial loop in CLAUDE.md works, on whichever post is handy.
+// galley trial loop in docs/GALLEY.md, "Trying the galley locally", works, on
+// whichever post is handy.
 const live = isPublished(pubDate);
 const exp = live ? requested : clampToPublication(requested, pubDate);
 const cappedByPublication = !live && exp < requested;

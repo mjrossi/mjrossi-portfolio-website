@@ -50,7 +50,7 @@ Two files, two layers. Each variable lives in exactly one place:
 | `BUTTONDOWN_API_KEY` | `.dev.vars` | Wrangler → Worker (`locals.runtime.env`) | runtime |
 | `TURNSTILE_SECRET_KEY` | `.dev.vars` | Wrangler → Worker (`locals.runtime.env`) | runtime |
 
-mise owns shell env (build-time tools, language version, and the public Turnstile site key). Wrangler owns worker bindings (runtime secrets). Keeping the worker secrets out of shell env means only wrangler can see them — a small but real defense-in-depth boundary. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture and [CLAUDE.md](CLAUDE.md) for the "how mise and wrangler relate" explanation.
+mise owns shell env (build-time tools, language version, and the public Turnstile site key). Wrangler owns worker bindings (runtime secrets). Keeping the worker secrets out of shell env means only wrangler can see them — a small but real defense-in-depth boundary. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture and [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) for the "how mise and wrangler relate" explanation.
 
 mise picks files in this precedence order: `mise.local.toml` (gitignored, optional) > `mise.<MISE_ENV>.toml` (committed; e.g. `mise.development.toml`, `mise.ci.toml`) > `mise.toml`. The recommended local shell setting is `MISE_ENV=development` (in your `~/.zshrc` / `~/.bashrc`), which auto-substitutes the always-passes Turnstile test key locally — no need to add `localhost` to your real Turnstile site's hostname allowlist. CI does the same with `MISE_ENV=ci`, set in `.github/workflows/build.yml`.
 

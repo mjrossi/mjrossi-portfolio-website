@@ -10,7 +10,7 @@
 // died and no token had written anything. So: watch the process, and on any
 // failure say what happened to it.
 //
-// This is not a flake to be tolerated. See CLAUDE.md, "wrangler dev died
+// This is not a flake to be tolerated. See docs/ENVIRONMENT.md, "wrangler dev died
 // mid-run, and smoke exited 75" — the cause is a handler returning without
 // draining a request body it was sent, and `refuse` in src/lib/server.ts is the
 // fix. Do not re-add the CI retry that was briefly here; it failed twice in a

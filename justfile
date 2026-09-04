@@ -20,11 +20,11 @@
 # That is a version-skew message, not a broken database — it means two
 # wranglers touched one state directory. One pin, in package.json.
 #
-# MISE_ENV convention (see CLAUDE.md "Newsletter" / "Running smoke"):
+# MISE_ENV convention (see docs/ENVIRONMENT.md, "Running smoke"):
 #   - dev/build/preview/smoke/ci recipes force MISE_ENV=development (or
 #     =ci for `ci`) so the always-passes Turnstile test key is baked in
 #     regardless of the caller's ambient shell state — this is the exact
-#     failure mode CLAUDE.md documents at length.
+#     failure mode docs/ENVIRONMENT.md documents at length.
 #   - `deploy` deliberately leaves MISE_ENV unset, so it picks up the real
 #     production PUBLIC_TURNSTILE_SITE_KEY from mise.toml's base [env].
 #
@@ -79,7 +79,7 @@ build:
     MISE_ENV=development mise exec -- npm run build
 
 # build then run the post-build smoke assertions — always rebuilds first
-# so you can't accidentally smoke-test a stale bundle (see CLAUDE.md
+# so you can't accidentally smoke-test a stale bundle (see docs/ENVIRONMENT.md,
 # "Running smoke — read this before you debug a failure")
 [group('build')]
 [doc('build + run smoke assertions against a fresh build')]
@@ -145,7 +145,7 @@ galley-preview *flags:
 # preview. *.workers.dev preview hosts sit behind Cloudflare Access, so an
 # editor without a service token gets a login page instead of the post. That is
 # why a draft is merged to main with a future pubDate before review — see
-# CLAUDE.md, "The galley".
+# docs/GALLEY.md, "The authoring workflow this implies".
 # usage: just preview-link my-draft --remote
 #        just preview-link my-draft --remote --hours 4
 #        just preview-link my-draft --remote --reviewer jd

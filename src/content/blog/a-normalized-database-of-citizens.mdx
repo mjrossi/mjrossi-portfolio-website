@@ -10,39 +10,99 @@ import CredentialSplit from '../../components/diagrams/CredentialSplit.astro';
 import WritePropagation from '../../components/diagrams/WritePropagation.astro';
 import CitizenAsymmetry from '../../components/diagrams/CitizenAsymmetry.astro';
 
-I walked through the EU citizen door in Portugal and had a certificate before the office closed. I walked through the citizen door in America and got a filing cabinet: a birth certificate from one county, a Social Security card from one agency, a driver's license from one state, and nothing joining them.
+I walked through the EU citizen door in Portugal and left with a certificate. I walked through the citizen door in America and got a filing cabinet: a birth certificate from one county, a Social Security card from one agency, a driver's license from one state, and nothing joining them.
 
-Same person, two paths, and the path is what decided how much of me each country bothered to write down. None of that is something I earned. What stayed with me was not simply that the Portuguese government knew more about me. It was that the system did something for me in return: one identifier that follows me, records that agree with each other, and a credential that proves I am the person they name.
+Same person, two paths, and the path is what decided how much of me each country bothered to write down. None of that is a reward for anything I did. What stayed with me was not simply that the Portuguese government knew more about me. It was that the system gave something back for what it took: one identifier that follows me, records that agree with each other, and a credential that proves I am the person those records name.
 
 ## Who it was built for
 
-The US has built much more of that machinery inside the immigration system than it maintains for its own citizens. Across different statuses, the federal government can assign a lasting identifier, record an arrival, require an address change, follow a change of status, and record a departure. No single non-citizen passes through every one of those systems: a visitor, a student, and a permanent resident travel different lanes. Taken together, though, the pieces form a federal recordkeeping architecture around people who cannot vote that has no citizen equivalent.
+That machinery is one identifier that follows you, records that agree with each other, and a credential behind them. The US has built much more of it inside the immigration system than it maintains for its own citizens. Across different immigration statuses, the federal government can assign a lasting identifier, record an arrival, require an address change, follow a change of status, and record a departure. No single non-citizen passes through every one of those systems: a visitor, a student, and a permanent resident travel different lanes. Taken together, though, the pieces form a federal recordkeeping architecture around people who cannot vote that has no citizen equivalent.
 
 That difference matters because the same machinery can be a service or a threat, depending on what it is for. Citizens get duplicated paperwork, a fragile Social Security number, and private companies assembling identity records for sale. Non-citizens get more connected federal records, but mainly through duties backed by penalties. One group gets the costs of decentralization; the other gets the costs of coordination. Neither gets a public identity system designed first around the person using it.
 
 <CitizenAsymmetry />
 
-The right-hand column is a composite, not one person's itinerary. That does not make it an accident. The empty cells on the citizen side aren't a computer's decision — computers don't have opinions about who gets a column. Congress and the Department of Homeland Security (DHS) do, and a schema is a record of who a state decided to know.
+The right-hand column is a composite, not one person's itinerary. That does not make it an accident. The empty cells on the citizen side aren't a computer's decision — computers don't have opinions about who gets a column. Congress and the Department of Homeland Security (DHS) do, and a schema shows who a state decided was worth knowing.
 
 ## What a system needs
 
-As an engineer, I recently worked on an identity and authorization system. From day one, I knew I would need two key pieces: a canonical record, meaning one authoritative identity that other systems can refer to, and a single source of truth for each fact it holds. If two systems disagree about an address, one of them has to settle which is correct.
+As an engineer, I recently worked on an identity and authorization system, and the first question I had to answer is the one a government has to answer too.
 
-That's the practical point of normalization in a database. Store a fact once, then let everything else point to it or receive an update from it. The alternative is a set of copies that can quietly drift apart.
+Say the state needs two facts about me, my name and where I live, for two purposes: taxing me, and licensing me to drive. The obvious way to store that is to let each purpose keep what it needs.
 
-By that standard the US has neither for its citizens. Each agency keeps the record it needs for its own purpose, so proving the specifics of one person means cross-referencing a driver's license here, a lease there, and a utility bill standing in as proof that "this person exists at this address." All of it accepted as commonplace. It was startling to move into a system that comes closer to joining those facts, albeit far from perfectly.
+| Purpose | Name | Address |
+| --- | --- | --- |
+| Tax | Matthew Rossi | Lisboa, Portugal |
+| Driving | Matthew Rossi | Brooklyn, New York |
+
+Both rows were correct the day they were written. Then I moved, and I told the tax office, because tax is the one that comes looking. Nobody told the DMV. Neither row is a lie and neither is marked stale — each is authoritative to the office holding it, and nothing here says which one describes where I actually sleep. Store one fact in two places and you have signed up to change it in two places, forever. Databases call the result an update anomaly.
+
+Store it the other way and my address has exactly one home:
+
+| Person | Name | Address |
+| --- | --- | --- |
+| 1 | Matthew Rossi | Lisboa, Portugal |
+
+with everything that needs it holding a pointer instead of a copy:
+
+| Purpose | Person |
+| --- | --- |
+| Tax | 1 |
+| Driving | 1 |
+
+Moving now means changing one row, and both purposes see it, because neither of them ever had its own version to forget about. That is most of what normalization means: a canonical record — one authoritative entry per person, carrying an identifier stable enough that everything else can point at it — and a single source of truth for each fact it holds, so no second copy exists to drift.
+
+By that standard the US has neither for its citizens. Each agency keeps the record it needs for its own purpose, so proving the specifics of one person means cross-referencing a driver's license here, a lease there, and a utility bill standing in as proof that "this person exists at this address" — all of it accepted as commonplace. It was startling to move into a system that comes closer to joining those facts, albeit far from perfectly.
 
 Strip the problem down and there are only three questions any identity system has to answer: who you are, what proves it, and where you live.
 
 <ThreeQuestions />
 
+{/*
+EDITOR ROUND 4 (kw) — "Bopping between Italy, Portugal, and the US made it a
+bit hard for me to follow." Symptom accepted, prescription declined.
+
+kw asked for country-first sections (Italy, then Portugal, then the US). That
+was tried before and it flattens the post: the argument runs on TWO axes —
+country x question, and citizen x non-citizen — and the second one is the
+thesis. Country-first forces the US asymmetry into one section at the end,
+carrying the whole argument alone, with Italy and Portugal demoted to a
+travelogue preamble.
+
+What was wrong was not the section order but the RHYTHM. The three question
+sections each swept the countries in a different sequence — 10, 8 and 12
+hand-offs — so a reader never got to build a habit. "What one change costs"
+already ran Italy → Portugal → US → immigration and was the calmest section in
+the post at 4. So do that everywhere and leave the spine alone.
+
+Fixed sweep, now used by every section that visits more than one country:
+
+    Italy → Portugal → US → US-immigration
+
+It is also the column order of all three matrix diagrams, which the prose used
+to contradict in three sections out of four. Keep new material in this order;
+if a section has to break it, the break should be doing work.
+
+Sections touched: "Who you are" (moved Italy to the front) and "What proves it"
+(moved the driver's-license paragraph down to the US slot, and CredentialSplit
+after both US paragraphs, so it closes the citizen comparison before the
+section turns to non-citizens). "Where you live" and "What one change costs"
+already conformed and were left alone.
+
+All transitions the move broke have since been rewritten, and galley round 4
+is answered in full — kw's and hw's line notes applied, hw's two grammar
+suggestions and both "refusal" tone notes declined on the record (the grammar
+ones would have introduced comma splices; "lack" would have traded the post's
+agency for an accident). Two notes were left open as unactionable: hw's
+"oopsy", and "I think what should be 'it' here" on "what proves who I am".
+*/}
 ## Who you are: the identifier
 
-The Portuguese Número de Identificação Fiscal (NIF) is a tax identification number. It is analogous to the US Social Security number. I went to the pet store the afternoon we arrived in Portugal, and they asked me for it. I was so confused — why would a store want this? I assumed that, like my Social Security number, it should be kept secret.
+The Italian codice fiscale is a tax identification number. This number is intended to be sharable knowledge — so sharable, in fact, that the heuristics for calculating it are so explicitly defined that [online calculators exist](https://codicefiscale.expert/en) to determine what yours would be, should you request it from the Agenzia delle Entrate. Italian identity documents and citizen identifiers are far more formalized than the US equivalents. My codice fiscale identifies me permanently, and my identity card prints it without issuing it: the card carries the number, the tax agency owns it.
 
-Apparently not, and the reason turns out to be the thesis of this entire post. The number is linked to Finanças, the Portuguese tax authority, and giving it at checkout files that receipt into e-fatura, the invoice record Finanças keeps against my NIF. How it counts depends on what I bought: health, education, and housing can count toward deductions from the tax I owe, while receipts from restaurants, garages, and gyms earn a deduction based on a percentage of the IVA I paid. Either way the state is holding the receipt, and it has the classification pre-filled as much as possible before I ever open my tax return — no physical shoebox of receipts to reconcile in the spring. The pet store was asking because *I* benefit.
+The Portuguese Número de Identificação Fiscal (NIF) is the Portuguese tax identification number, analogous to the Italian codice fiscale. It is also not intended to be a secret, but that was unknown to me the day we arrived in Portugal and went to the pet store. They asked me for it, and I was extremely confused — why would a store want this? I assumed that this code was like my US Social Security number, and that it should be kept secret in all but the most important communications.
 
-Italy does the same, and I learned it years ago. Italian identity documents and citizen identifiers are far more formalized than the US equivalents. My codice fiscale — the Italian equivalent of a Social Security number, issued by the Agenzia delle Entrate — identifies me permanently, and it is printed on my identity card without being issued by it: the card carries the number, the tax agency owns it.
+Apparently not, and the reason turns out to be the thesis of this entire post. The number is linked to Finanças, the Portuguese tax authority, and giving it at checkout files that receipt into e-fatura, the invoice record Finanças keeps against my NIF. How it counts depends on what I bought: health, education, and housing can count toward deductions from the tax I owe, while receipts from restaurants, garages, and gyms earn a deduction based on a percentage of the value-added tax (IVA) I paid. Either way the state is holding the receipt, and it has the classification pre-filled as much as possible before I ever open my tax return — no physical shoebox of receipts to reconcile in the spring. The pet store was asking because *I* benefit.
 
 My instinct to guard these numbers came from growing up in the US. The Social Security number is the closest thing an American has to a unique identifier. It was never intended to be, though. From 1946 to 1972, the card itself displayed "NOT FOR IDENTIFICATION." Chris Hibbert, who maintained a long-running [SSN FAQ](https://web.archive.org/web/20240803013548/http://cpsr.org/issues/privacy/ssn-faq/), [told The Verge in 2012](https://www.theverge.com/2012/9/26/3384416/social-security-numbers-national-ID-identity-theft-nstic): "There has long been a confusion over whether the SSN is a secret (and so would be useful for verifying someone's identity) or a public identifier (and thus should be treated as well known)."
 
@@ -50,25 +110,25 @@ The NIF and the codice fiscale are designed as identifiers rather than authentic
 
 The first Social Security numbers were issued in 1936. A direct check arrived eighty-four years later, when the Social Security Administration launched [eCBSV](https://www.ssa.gov/dataexchange/eCBSV/) for banks in 2020. It answers one narrow question: whether a name, date of birth, and number match SSA's records. That verifies the record, not the person presenting it. Employers and state agencies get other narrow checks, but there is still no general public credential behind the number and no read path that lets an institution verify a citizen against a federal identity record.
 
-Parts of the immigration system go further because they hang off federal documents. E-Verify can put a government-held photo in front of an employer when a new hire presents one of several federal documents; SAVE lets state agencies check immigration status. A citizen carrying only a state driver's license triggers neither E-Verify's photo matching nor SAVE.
+Parts of the immigration system go further because they hang off federal documents. E-Verify can put a government-held photo in front of an employer when a new hire presents one of several federal documents; the Systematic Alien Verification for Entitlements (SAVE) system lets state agencies check immigration status. A citizen carrying only a state driver's license triggers neither E-Verify's photo matching nor SAVE.
 
-Many people who pass through USCIS also receive a purpose-built identifier: the A-number, short for alien registration number. It follows a person through changes of status and onto the naturalization certificate if they become a citizen. It is not universal. Many visitors and students satisfy the registration requirement through a visa or Form I-94 without receiving one. In April 2025, DHS created Form G-325R so people missed by the existing forms finally had a way to comply with a duty dating to 1940. The [final rule](https://www.federalregister.gov/documents/2026/06/29/2026-13057/alien-registration-form-and-evidence-of-registration) that followed in June 2026 did not create a single new lane for every non-citizen; it closed gaps in a registration system assembled across many of them.
+Many people who pass through United States Citizenship and Immigration Services (USCIS) also receive a purpose-built identifier: the A-number, short for alien registration number. It follows a person through changes of status and onto the naturalization certificate if they become a citizen. It is not universal. Many visitors and students satisfy the registration requirement through a visa or Form I-94 without receiving one. In April 2025, DHS created Form G-325R so people missed by the existing forms finally had a way to comply with a duty dating to 1940. The [final rule](https://www.federalregister.gov/documents/2026/06/29/2026-13057/alien-registration-form-and-evidence-of-registration) that followed in June 2026 did not create a single new lane for every non-citizen; it closed gaps in a registration system assembled across many of them.
 
 ## What proves it: the credential
 
+European identity systems make identification an explicit part of civic life. For Italy, that is the Carta d'Identità Elettronica (CIE), a national card built to common EU security standards. It carries my codice fiscale and a near-field communication (NFC) chip that can authenticate me directly. Since the physical card has to be present, the pairing does what the Social Security number cannot: the codice fiscale is the username, and the CIE is the password.
+
+Most Italians still use the Sistema Pubblico di Identità Digitale (SPID), a separately issued digital credential, to log in to public services. The government is gradually moving those logins toward the CIE and the IT Wallet, but the transition is unfinished. That matters less here than the direction of travel: Italy has an identifier and a credential designed as two different things.
+
+Portugal implements its own version of this. Citizens receive a Cartão de Cidadão. The rest of us use a passport or residence title tied to us. Either way the credential stays separate from the document: most commonly the [Chave Móvel Digital](https://www.autenticacao.gov.pt/a-chave-movel-digital), though the Cartão de Cidadão's own certificates do the same, as does a credential from another member state issued under eIDAS, the EU regulation on electronic identification and trust services.
+
 For most American citizens, the answer to identity verification is a driver's license — the one document most likely to tie together their identity and their residency. Since the ability to drive is effectively required to function in most of the US, most people have one. Federal ID is the exception rather than the rule — a passport, a passport card, a military ID — and since many Americans don't travel outside the country, they don't bother to acquire a passport.
-
-European identity systems make identification an explicit part of civic life, rather than borrowing a document issued for driving. For Italy, that is the Carta d'Identità Elettronica (CIE), a national card built to common EU security standards. It carries my codice fiscale and an NFC chip that can authenticate me directly. Since the physical card has to be present, the pairing does what the Social Security number cannot: the codice fiscale is the username, and the CIE is the password.
-
-Most Italians still use SPID, a separately issued digital credential, to log in to public services. The government is gradually moving those logins toward the CIE and the IT Wallet, but the transition is unfinished. That matters less here than the direction of travel: Italy has an identifier and a credential designed as two different things.
-
-Portugal implements its own version of this. Citizens receive a Cartão de Cidadão. The rest of us use a passport or residence title tied to us. Either way the credential stays separate from the document: most commonly the [Chave Móvel Digital](https://www.autenticacao.gov.pt/a-chave-movel-digital), though the Cartão de Cidadão's own certificates and an eIDAS credential from another member state authenticate just as well.
-
-<CredentialSplit />
 
 The US license has to prove both identity and residency at once, and it falls apart very quickly on the second. People move and keep the old license until it expires.
 
-US non-citizens, meanwhile, have a very different situation. United States Citizenship and Immigration Services (USCIS) issues several federal photo IDs. The permanent resident card (Form I-551, known colloquially as a green card) is the obvious example, and the Employment Authorization Document (Form I-766) is another.
+<CredentialSplit />
+
+US non-citizens, meanwhile, have a very different situation. USCIS issues several federal photo IDs. The permanent resident card (Form I-551, known colloquially as a green card) is the obvious example, and the Employment Authorization Document (Form I-766) is another.
 
 8 U.S.C. § 1304(e) requires any registered non-citizen 18 or older to carry their registration document at all times, and failing to do so is a misdemeanor. No US citizen has a comparable duty to carry one. So the country that supposedly has no ID card does issue one — and only mandates carrying it for the people who are not citizens.
 
@@ -82,7 +142,7 @@ Obtaining it requires a specific list of documents. I arrived at the office with
 
 My wife, on the other hand, is not an EU citizen, so her pathway has a different set of frictions. Being married to an EU citizen still gets her an expedited process, but she has to go through AIMA directly — slower, and more of it left to interpretation. The route is nothing like mine. The destination still connects her identity, the document that proves it, and the place where she lives.
 
-That differs sharply from the US, where I could move to New York and, unless I wanted a New York driver's license, go a long time without telling anyone I lived there, right up until I had to file a New York tax return. The US produces many answers to the question "where do you live," each authoritative to the institution holding it. If you last filed a federal tax return living in Illinois, the Internal Revenue Service (IRS) has that address until you file again, or submit a specific IRS change of address request. The Social Security Administration may have a different one. All of them are authoritative, and none is a single source of truth.
+That differs sharply from the US, where I could move to New York and, unless I wanted a New York driver's license, go a long time without telling anyone I lived there, right up until I had to file a New York tax return. The US produces many answers to the question "where do you live"; each is authoritative to the institution holding it. If you last filed a federal tax return living in Illinois, the Internal Revenue Service (IRS) has that address until you file again, or submit a specific IRS change of address request. The Social Security Administration may have a different one. All of them are authoritative, and none is a single source of truth.
 
 Unless, again, you're an immigrant — or, in the language of US law, even a nonimmigrant! Form AR-11 requires a change of address within 10 days of moving (8 U.S.C. § 1305), and failing to file is a criminal offense; for students and exchange visitors, the Student and Exchange Visitor Information System (SEVIS) does the same job, with the school reporting on their behalf. So mandatory federal address reporting exists for registered non-citizens, but not for citizens.
 
@@ -92,11 +152,11 @@ There is no US equivalent to AIRE for citizens. The IRS knows I live abroad beca
 
 ## What one change costs
 
-Changing an address is where the architecture stops being abstract. In Italy, a resident writes the change once to the national population register, the ANPR, and downstream agencies can receive it from there. This is replication rather than a true foreign key, but it moves toward what the EU calls the "once-only principle": tell the state something once, and the state carries it from there.
+Changing an address is where the architecture stops being abstract. In Italy, a resident writes the change once to the Anagrafe Nazionale della Popolazione Residente (ANPR), the national population register, and downstream agencies can receive it from there. This is replication rather than a true foreign key, but it moves toward what the EU calls the "once-only principle": tell the state something once, and the state carries it from there.
 
-Portugal has a stable key in the NIF and an authoritative owner for each administrative domain, but no single resident record connecting all of them. Updating my address still means telling Finanças, the municipality, AIMA, and anyone else separately. The country has some of the right pieces without one place that joins them.
+Portugal has a stable key in the NIF and an authoritative owner for each administrative domain, but has no single resident record connecting all of them. Updating my address still means telling Finanças, the municipality, AIMA, and anyone else separately. The country has some of the right pieces without one place that joins them.
 
-The US citizen has neither the shared record nor the key connecting the copies. My address is written independently at the DMV, the IRS, Social Security, my bank, and my utility company. My New York driver's license still carries an address I no longer live at — an update anomaly, exactly the ordinary failure normalization is meant to prevent.
+The US citizen has neither the shared record nor the key connecting the copies. My address is written independently at the DMV, the IRS, Social Security, my bank, and my utility company. My New York driver's license still carries an address I no longer live at — an update anomaly, exactly the ordinary failure that normalization is meant to prevent.
 
 <WritePropagation />
 
@@ -108,7 +168,7 @@ The US refusal to build a federal population register is usually framed as a civ
 
 Every alternative put forward preserved the same rule: the federal government would not operate a general identity system, while private institutions remained free to keep asking for the Social Security number. The Privacy Act of 1974 limited when government agencies could demand one, with wide exceptions, while landlords, banks, and doctors kept asking. [REAL ID](https://www.tsa.gov/real-id), passed in 2005 and enforced from May 2025, standardized how states issue their documents but still left the underlying citizen record fragmented. The 2011 [National Strategy for Trusted Identities in Cyberspace](https://obamawhitehouse.archives.gov/sites/default/files/rss_viewer/NSTICstrategy_041511.pdf) tried to grow a private market for better credentials on the explicit condition that the federal government not operate one itself. Fifteen years on, the Social Security number is still what a bank asks for.
 
-The contrast is clearest when I enter each country. Returning to the US as a citizen without Global Entry means a manual immigration queue. To make that experience frictionless, I have to apply, pay a fee, undergo a background check, give fingerprints, sit for an interview, and repeat the process every five years. Entering the EU as an EU citizen, I present my chip-enabled passport at an electronic gate. There is no separate trusted-traveler program to join because the passport authenticates against a record that already exists. In one system, trust in a citizen is manufactured one traveler at a time and sold. In the other, it is a property of the record.
+The contrast is clearest when I enter each country. Returning to the US as a citizen without Global Entry means a manual immigration queue. To make that experience frictionless, I have to apply, pay a fee, undergo a background check, give fingerprints, sit for an interview, and pay to renew every five years. Entering the EU as an EU citizen, I present my chip-enabled passport at an electronic gate. There is no separate trusted-traveler program to join because the passport authenticates against a record that already exists. In one system, trust in a citizen is manufactured one traveler at a time and sold. In the other, it is a property of the record.
 
 The US built much of the machinery of a population register and pointed it at people who cannot vote. The one place it points where people can vote? Selective Service: a mandatory federal registration of men ages 18 through 25, citizens and non-citizens alike — the one register that reaches both — with criminal penalties for not registering. And it is about to get the propagation as well. Section 535 of the [FY2026 National Defense Authorization Act](https://www.govinfo.gov/app/details/PLAW-119publ60), signed in December 2025, makes that registration automatic beginning in December 2026 — Selective Service assembling the roll itself out of records other agencies already hold, rather than waiting to be told. So the machinery is buildable after all, and the country can build it without asking anyone to fill in a form. It just gets built for conscription: pure obligation, with no read path back to the person.
 

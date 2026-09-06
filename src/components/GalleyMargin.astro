@@ -278,8 +278,11 @@ const { slug, reviewer, revision } = Astro.props;
      could not see.
 
      public/scripts/galley.js measures the covered strip and sets the property.
-     It is 0px on a desktop, and on any browser that still resizes the layout
-     viewport, so both declarations below read as their plain form there. */
+     It is 0px on a desktop and on any browser that still resizes the layout
+     viewport, so both declarations below read as their plain form there. On a
+     phone the keyboard is the dominant term but not the only one — a
+     retractable bottom toolbar is in it too, so the box shifts slightly as
+     that toolbar comes and goes. See the measurement's own comment. */
   .galley-composer {
     position: fixed;
     left: 50%;

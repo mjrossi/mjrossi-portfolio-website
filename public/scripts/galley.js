@@ -370,38 +370,61 @@ import { anchorSelection, findQuote } from './galley-quote.js';
 
   // ── the on-screen keyboard ─────────────────────────
 
-  // How much of the layout viewport the keyboard is covering, published as
-  // --galley-keyboard for GalleyMargin.astro to lift the composer by. The
-  // reasoning for why that is needed at all lives on the .galley-composer rule
-  // there; what matters here is the measurement.
+  // How much of the layout viewport is currently off the bottom of the screen,
+  // published as --galley-keyboard for GalleyMargin.astro to lift the composer
+  // by. The reasoning for why that is needed at all lives on the
+  // .galley-composer rule there; what matters here is the measurement.
   //
   // visualViewport is the part of the page still on screen. The layout viewport
   // is what `position: fixed` resolves against, and it does not shrink for the
-  // keyboard any more. The difference between the two IS the keyboard — and on
-  // a browser that does still resize the layout viewport it is zero, which is
-  // why this can run unconditionally rather than sniffing for a platform.
+  // keyboard any more, so the difference between the two is the strip a fixed
+  // box has to be lifted clear of. On a browser that still resizes the layout
+  // viewport that difference is zero, which is why this can run unconditionally
+  // rather than sniffing for a platform.
+  //
+  // THE KEYBOARD IS THE DOMINANT TERM, NOT THE ONLY ONE. `clientHeight` is the
+  // initial containing block, which on Chrome and Firefox for Android and on
+  // Safari is sized to the *large* viewport — so a retractable bottom toolbar
+  // is in this number too, and with the toolbar out and nothing focused the
+  // lift is a few dozen pixels rather than 0. That is the behaviour we want
+  // (4rem above what the reader can see, not above an edge behind the toolbar)
+  // and it is why the composer slides a little as the toolbar retracts. Worth
+  // knowing before reading that motion as a bug.
   //
   // `offsetTop` is subtracted because a visual viewport scrolled down inside the
   // layout viewport has already accounted for part of that difference; counting
   // it twice would lift the composer off the top of the screen.
-  //
-  // IGNORED WHILE PINCH-ZOOMED. The same subtraction then measures the zoom
-  // rather than a keyboard, and reading a galley zoomed in is an ordinary thing
-  // to do on a phone. Nothing moves, which is exactly the behaviour this had
-  // before — a narrower fix, never a wrong one.
   const viewport = window.visualViewport;
 
+  // Tolerance around `scale === 1`: a pinch that settles back to unzoomed can
+  // report 1.0000001, and a strict comparison would trip on that noise.
+  const ZOOM_EPSILON = 1.01;
+
+  let lift = 0;
+
   function trackKeyboard() {
+    // HELD, NOT RECOMPUTED, WHILE PINCH-ZOOMED. The same subtraction then
+    // measures the zoom rather than a keyboard, and reading a galley zoomed in
+    // is an ordinary thing to do on a phone. Holding rather than resetting is
+    // the load-bearing half: a reviewer who pinches to re-read the quote *with
+    // the composer already open* still has the keyboard up, and publishing 0px
+    // there would drop the composer straight back underneath it — re-creating
+    // the exact bug this exists to fix, mid-composition.
+    if (!viewport || viewport.scale > ZOOM_EPSILON) return;
+
     const covered =
-      viewport && viewport.scale <= 1.01
-        ? document.documentElement.clientHeight - viewport.height - viewport.offsetTop
-        : 0;
+      document.documentElement.clientHeight - viewport.height - viewport.offsetTop;
     // Finite-checked because an unparseable value here is not a smaller lift,
     // it is no `bottom` at all: `calc(4rem + NaNpx)` is invalid at computed-value
     // time, the declaration is dropped, and a composer with `bottom: auto` lands
     // at the TOP of the screen. Nothing observed should produce one — this is
     // the fallback being made explicit rather than left to arithmetic.
-    const lift = Number.isFinite(covered) ? Math.max(0, Math.round(covered)) : 0;
+    const next = Number.isFinite(covered) ? Math.max(0, Math.round(covered)) : 0;
+    // `scroll` fires throughout ordinary scrolling as offsetTop tracks the
+    // toolbar, and every write invalidates style on the whole galley subtree —
+    // including the notes panel, which can be dozens of entries.
+    if (next === lift) return;
+    lift = next;
     mount.style.setProperty('--galley-keyboard', `${lift}px`);
   }
 

@@ -368,6 +368,50 @@ import { anchorSelection, findQuote } from './galley-quote.js';
     }
   }
 
+  // ── the on-screen keyboard ─────────────────────────
+
+  // How much of the layout viewport the keyboard is covering, published as
+  // --galley-keyboard for GalleyMargin.astro to lift the composer by. The
+  // reasoning for why that is needed at all lives on the .galley-composer rule
+  // there; what matters here is the measurement.
+  //
+  // visualViewport is the part of the page still on screen. The layout viewport
+  // is what `position: fixed` resolves against, and it does not shrink for the
+  // keyboard any more. The difference between the two IS the keyboard — and on
+  // a browser that does still resize the layout viewport it is zero, which is
+  // why this can run unconditionally rather than sniffing for a platform.
+  //
+  // `offsetTop` is subtracted because a visual viewport scrolled down inside the
+  // layout viewport has already accounted for part of that difference; counting
+  // it twice would lift the composer off the top of the screen.
+  //
+  // IGNORED WHILE PINCH-ZOOMED. The same subtraction then measures the zoom
+  // rather than a keyboard, and reading a galley zoomed in is an ordinary thing
+  // to do on a phone. Nothing moves, which is exactly the behaviour this had
+  // before — a narrower fix, never a wrong one.
+  const viewport = window.visualViewport;
+
+  function trackKeyboard() {
+    const covered =
+      viewport && viewport.scale <= 1.01
+        ? document.documentElement.clientHeight - viewport.height - viewport.offsetTop
+        : 0;
+    // Finite-checked because an unparseable value here is not a smaller lift,
+    // it is no `bottom` at all: `calc(4rem + NaNpx)` is invalid at computed-value
+    // time, the declaration is dropped, and a composer with `bottom: auto` lands
+    // at the TOP of the screen. Nothing observed should produce one — this is
+    // the fallback being made explicit rather than left to arithmetic.
+    const lift = Number.isFinite(covered) ? Math.max(0, Math.round(covered)) : 0;
+    mount.style.setProperty('--galley-keyboard', `${lift}px`);
+  }
+
+  // Both events, because they fire for different halves of the same thing: the
+  // keyboard opening is a resize, and the browser scrolling the focused field
+  // into view afterwards is a scroll.
+  viewport?.addEventListener('resize', trackKeyboard);
+  viewport?.addEventListener('scroll', trackKeyboard);
+  trackKeyboard();
+
   // ── interaction ────────────────────────────────────
 
   let pending = null;

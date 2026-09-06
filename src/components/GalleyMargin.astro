@@ -267,10 +267,28 @@ const { slug, reviewer, revision } = Astro.props;
     background: var(--accent-hover);
   }
 
+  /* LIFTED CLEAR OF THE ON-SCREEN KEYBOARD, which is the whole reason
+     --galley-keyboard exists. This box is fixed against the LAYOUT viewport,
+     and a phone's keyboard no longer shrinks that one: Chrome for Android
+     stopped resizing it in 108 and Firefox for Android followed in 132, both
+     aligning with Safari. The keyboard now covers the bottom of the layout
+     viewport instead of displacing it, so a plain `bottom: 4rem` put both
+     textareas *underneath* it — the composer opened, the quote at its top
+     stayed visible, and everything the reviewer typed landed in a field they
+     could not see.
+
+     public/scripts/galley.js measures the covered strip and sets the property.
+     It is 0px on a desktop, and on any browser that still resizes the layout
+     viewport, so both declarations below read as their plain form there. */
   .galley-composer {
     position: fixed;
     left: 50%;
-    bottom: 4rem;
+    bottom: calc(4rem + var(--galley-keyboard, 0px));
+    /* What is left above the keyboard can be a few hundred pixels. Scroll
+       inside the composer rather than letting it run off the top of the
+       screen: `Leave note` is at its foot and has to stay reachable. */
+    max-height: calc(100svh - 5rem - var(--galley-keyboard, 0px));
+    overflow-y: auto;
     transform: translateX(-50%);
     z-index: 50;
     width: min(30rem, calc(100vw - 2 * var(--pad)));

@@ -145,6 +145,8 @@ Smoke migrates the local database itself — `wrangler dev` does not apply migra
 
 **If all you need is to see the margin, use `just galley-preview`.** It serves the real client and the real stylesheet against fixture prose on `127.0.0.1:8790` — every marker case, the panel, and a working composer — with no build, no worker, no D1 and no link to mint. That is the loop for anything visual, and the one to reach for before believing a change to `GalleyMargin.astro` or `markAnchors`. `--shot FILE` writes a PNG if you have a headless Chrome.
 
+**One thing it cannot show you is the composer clearing the on-screen keyboard.** There is no keyboard on a desktop, `visualViewport.scale` is always 1, and `--galley-keyboard` therefore stays at 0px — so the composer renders in exactly the plain `bottom: 4rem` form it had before that property existed. Changing how the composer is positioned means checking it on a real phone; nothing here or in `just smoke` will go red.
+
 The full loop below is for everything else — authorisation, the endpoint, the database, the pull. It runs on your machine against the local D1 that `just preview` and `just smoke` share. `npm run dev` is **not** the way in — it runs Astro alone, with no worker, no `/api/*`, and no database, so the margin cannot save anything. Use `just preview`.
 
 ```sh

@@ -83,15 +83,15 @@
       Three bands, each showing a person moving house and what has to be written.
       In Italy, one arrow leaves "you move" and reaches a single register, the
       ANPR, which then fans out automatically to five agencies: Agenzia delle
-      Entrate, INPS, INAIL, ISTAT and the Motorizzazione. One write, five copies
-      fed from it. In Portugal, three arrows leave "you move" and reach three
+      Entrate, INPS, INAIL, ISTAT and the Motorizzazione. Written once, and five copies
+      are fed from it. In Portugal, three arrows leave "you move" and reach three
       separate owners — Finanças for tax, the câmara for residence, AIMA for
       immigration — which all file against the same NIF join key, but the box
       that would hold a shared canonical record is drawn dashed and empty,
-      because none exists. Three writes. In the United States, five arrows leave
+      because none exists. Three separate updates. In the United States, five arrows leave
       "you move" and reach the DMV, the IRS, the Social Security Administration,
       a bank and a utility company, with nothing in between them and nothing
-      propagating. Five independent writes, and the copies drift apart.
+      propagating. Five separate updates, and the copies drift apart.
     </desc>
 
     <defs>
@@ -108,8 +108,8 @@
       </marker>
     </defs>
 
-    {/* ================= ITALY — one write ================= */}
-    <text x="6" y="22" class="dg-call dg-call--start">Italy — one write, and the copies are fed from it</text>
+    {/* ================= ITALY — write once ================= */}
+    <text x="6" y="22" class="dg-call dg-call--start">Italy — write once, and the copies are fed from it</text>
 
     <g class="dg-group">
       <rect x="6" y="68" width="104" height="48" class="dg-node" />
@@ -123,7 +123,7 @@
     <g class="dg-group">
       <rect x="140" y="68" width="150" height="48" class="dg-node dg-node--anchor" />
       <text x="215" y="90" class="dg-label">ANPR</text>
-      <text x="215" y="107" class="dg-sub">one authoritative write</text>
+      <text x="215" y="107" class="dg-sub">one authoritative update</text>
     </g>
 
     <g class="dg-edges" fill="none" marker-end="url(#dg-writes-arrow)">
@@ -143,7 +143,7 @@
     <path class="dg-edge" d="M6 170 H 694" />
 
     {/* ================= PORTUGAL — one key, three writes ================= */}
-    <text x="6" y="190" class="dg-call dg-call--start">Portugal — one key, but a write to every owner</text>
+    <text x="6" y="190" class="dg-call dg-call--start">Portugal — one key, but you write to every owner</text>
 
     <g class="dg-group">
       <rect x="6" y="236" width="104" height="48" class="dg-node" />
@@ -216,7 +216,7 @@
 
     <text x="248" y="380" class="dg-note dg-note--start">— the New York address that never got updated</text>
 
-    <text x="430" y="416" class="dg-call dg-call--start">five independent writes</text>
+    <text x="430" y="416" class="dg-call dg-call--start">five separate updates</text>
     <text x="430" y="436" class="dg-note dg-note--start">nothing propagates between them,</text>
     <text x="430" y="452" class="dg-note dg-note--start">so the copies drift — an update anomaly</text>
   </svg>

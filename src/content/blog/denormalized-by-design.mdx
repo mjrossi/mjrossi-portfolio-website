@@ -1,6 +1,6 @@
 ---
 title: "Denormalized by Design"
-description: "America built much of the machinery of a population register, but mostly for people who cannot vote. I only saw the asymmetry clearly after moving to Portugal as an Italian citizen."
+description: "Moving to Portugal made me question why Americans carry the paperwork between systems that never agree. The US already connects identity records to enforce obligations. What would it take to connect them in service of the person?"
 pubDate: 2026-09-14T09:00:00+01:00
 tags: ["governance", "advocacy", "software-engineering", "personal"]
 ---
@@ -16,7 +16,7 @@ Same person, two paths, and the path is what decided how much of me each country
 
 ## Who it was built for
 
-That machinery is one identifier that follows you, records that agree with each other, and a credential behind them. The US has built much more of it inside the immigration system than it maintains for its own citizens. Across different immigration statuses, the federal government can assign a lasting identifier, record an arrival, require an address change, follow a change of status, and record a departure. No single non-citizen passes through every one of those systems: a visitor, a student, and a permanent resident travel different lanes. Taken together, though, the pieces form a federal recordkeeping architecture around non-citizens that has no citizen equivalent.
+The US has built much more of that machinery inside the immigration system than it maintains for its own citizens. Across different immigration statuses, the federal government can assign a lasting identifier, record an arrival, require an address change, follow a change of status, and record a departure. No single non-citizen passes through every one of those systems: a visitor, a student, and a permanent resident travel different lanes. Taken together, though, the pieces form a federal recordkeeping architecture around non-citizens that has no citizen equivalent.
 
 That difference matters because the same machinery can be a service or a threat, depending on what it is for. Citizens get duplicated paperwork, a fragile Social Security number, and private companies assembling identity records for sale. Non-citizens get more connected federal records, but mainly through duties backed by penalties. One group gets the costs of decentralization; the other gets the costs of coordination. Neither gets a public identity system designed first around the person using it.
 
@@ -58,137 +58,13 @@ Strip the problem down and there are only three questions any identity system ha
 
 <ThreeQuestions />
 
-{/*
-EDITOR ROUND 4 (kw) — "Bopping between Italy, Portugal, and the US made it a
-bit hard for me to follow." Symptom accepted, prescription declined.
-
-kw asked for country-first sections (Italy, then Portugal, then the US). That
-was tried before and it flattens the post: the argument runs on TWO axes —
-country x question, and citizen x non-citizen — and the second one is the
-thesis. Country-first forces the US asymmetry into one section at the end,
-carrying the whole argument alone, with Italy and Portugal demoted to a
-travelogue preamble.
-
-What was wrong was not the section order but the RHYTHM. The three question
-sections each swept the countries in a different sequence — 10, 8 and 12
-hand-offs — so a reader never got to build a habit. "What one change costs"
-already ran Italy → Portugal → US → immigration and was the calmest section in
-the post at 4. So do that everywhere and leave the spine alone.
-
-Fixed sweep, now used by every section that visits more than one country:
-
-    Italy → Portugal → US → US-immigration
-
-It is also the column order of all three matrix diagrams, which the prose used
-to contradict in three sections out of four. Keep new material in this order;
-if a section has to break it, the break should be doing work.
-
-Sections touched: "Who you are" (moved Italy to the front) and "What proves it"
-(moved the driver's-license paragraph down to the US slot, and CredentialSplit
-after both US paragraphs, so it closes the citizen comparison before the
-section turns to non-citizens). "Where you live" and "What one change costs"
-already conformed and were left alone.
-
-All transitions the move broke have since been rewritten, and galley round 4
-is answered in full — kw's and hw's line notes applied, hw's two grammar
-suggestions and both "refusal" tone notes declined on the record (the grammar
-ones would have introduced comma splices; "lack" would have traded the post's
-agency for an accident). Two notes were left open as unactionable: hw's
-"oopsy", and "I think what should be 'it' here" on "what proves who I am".
-*/}
-
-{/*
-TONE PASS 5 (self) — political register, not politics. The argument is
-unchanged; four things that were reading as partisan cadence rather than as
-evidence are gone.
-
-1. "people who cannot vote" ran four times (description, here, Selective
-   Service, and inverted in the close). Once it is an observation; four times
-   it is a refrain, and a refrain reads as a slogan. Cut in "Who it was built
-   for", where "non-citizens" is what the paragraph actually enumerates
-   anyway — and is the more accurate word, since some non-citizens do vote in
-   some municipal elections.
-2. "supposedly" dropped from the § 1304(e) paragraph. The fact is already
-   sufficient; the adverb only tells the reader how to feel about it.
-3. The exclamation mark on "even a nonimmigrant" is now a period. It was the
-   only one in the post, and it turned a dry joke about US statutory language
-   into a wink at readers who already agree.
-4. hw's "refusal" note (f173f43f) is now PARTLY honoured, revising round 4's
-   flat decline. "Lack" is still refused for the reason recorded above — it
-   would trade agency for accident, which is the one thing "What got built
-   instead" exists to disprove. But hw's reaction was real and the cause was
-   placement, not the noun: "refusal" opened that section BEFORE the Privacy
-   Act / REAL ID / NSTIC sequence had earned it, so it read as assertion.
-   The section now opens on "The absence of a federal population register",
-   and "Refusing" survives exactly once, in the final paragraph, where the
-   evidence is behind it. Same claim, one instance, load-bearing.
-
-Not touched, deliberately: the post still names no party, president, or
-administration, and assigns agency to institutions instead ("Congress and the
-Department of Homeland Security do"). That is the property protecting every
-argument here, and any future edit should keep it.
-
-Same pass, three structural revisions after review:
-
-5. Selective Service paragraph rebuilt mechanism-first, so the NDAA § 535 fact
-   arrives as news rather than as the payoff to a rhetorical question. The
-   question is gone and so is "It JUST gets built for" — the "just" plus the
-   shrug was the sneer. "Conscription: pure obligation, with no read path back
-   to the person" is kept verbatim and on purpose: assertion was never the
-   problem, editorialising was, and this is the second-to-last section, which
-   has to land. Side effect: this drops a third instance of the vote refrain,
-   leaving two (description and the closing paragraph), which is the count
-   worth holding.
-6. "The price of building it right", paragraphs 2 and 3, rewritten from modal
-   exhortation into declarative specification — present tense, stating what the
-   system IS rather than what it should be. Every constraint survives; the
-   ~20 "should"s in those two paragraphs go to zero. Five remain in the
-   section, all in the opening paragraph and the closing one, where they set
-   and reassert the hypothetical mood. Keep them: pure present tense
-   throughout would start describing a system that exists.
-   A bulleted list was considered and rejected. Precedent exists — the
-   principles list in `introducing-the-urbanist-atlas` and the criteria lists
-   in `the-atlas-data-was-the-hard-part` — but a list reads cooler than prose,
-   and this is the peroration. Skimmability is the wrong thing to buy here.
-7. The exclusion objection is now answered, immediately before the EU
-   paragraph. Aadhaar was the obvious example and was rejected twice over: it
-   breaks the fixed country sweep (Italy → Portugal → US → US-immigration, also
-   the column order of all three diagrams) by adding a fifth country at the
-   close, and it breaks the evidence standard, since every other claim in the
-   post is either lived or statutory and that one would be neither. The
-   replacement calls back to the AIMA paragraph in "Where you live" — in-set,
-   already established, and lived. If that paragraph is ever cut or moved, this
-   one loses its referent.
-8. Retitled from "A Normalized Database of Citizens", which cold-read as though
-   the post ADVOCATED a citizen database — the one thing the last section
-   spends four paragraphs constraining, and the worst possible misread on a
-   share card showing no description. The inversion says the same thing from
-   the side that cannot be misread, and it keeps the technical spine visible
-   somewhere: the rendered topics are governance and advocacy, so
-   software-engineering never surfaces on the index and the title is the only
-   place a reader learns there is a normalization argument inside. The
-   description is unchanged and carries the other two jobs, the political
-   thesis and the personal frame.
-9. "Where you live" now says why the municipal level is the one that registers
-   you. This is the post's only tie to the scale the rest of the blog works at
-   — every other post touches a place you can walk, and this one is otherwise
-   entirely national and supranational. Appended to the registration paragraph
-   rather than set as its own, so that "The document that records it" keeps its
-   antecedent in the paragraph below.
-
-SLUG: renaming the file changed the slug, and both `preview_links` and
-`galley_notes` key on it. See the header note in
-docs/galley/a-normalized-database-of-citizens.md — that file keeps the old name
-deliberately. Outstanding review links carry the old slug INSIDE the signed
-payload, so they cannot be repointed and have to be re-minted.
-*/}
 ## Who you are: the identifier
 
 The Italian codice fiscale is a tax identification number. This number is intended to be sharable knowledge — so sharable, in fact, that the heuristics for calculating it are so explicitly defined that [online calculators exist](https://codicefiscale.expert/en) to determine what yours would be, should you request it from the Agenzia delle Entrate. Italian identity documents and citizen identifiers are far more formalized than the US equivalents. My codice fiscale identifies me permanently, and my identity card prints it without issuing it: the card carries the number, the tax agency owns it.
 
-The Portuguese Número de Identificação Fiscal (NIF) is the Portuguese tax identification number, analogous to the Italian codice fiscale. It is also not intended to be a secret, but that was unknown to me the day we arrived in Portugal and went to the pet store. They asked me for it, and I was extremely confused — why would a store want this? I assumed that this code was like my US Social Security number, and that it should be kept secret in all but the most important communications.
+The Portuguese Número de Identificação Fiscal (NIF) is the Portuguese tax identification number, analogous to the Italian codice fiscale. It is not intended to be a secret either, but I didn't know that the day we arrived in Portugal and went to the pet store. They asked me for it, and I was confused — why would a store want this? I assumed that this code was like my US Social Security number, and that it should be kept secret in all but the most important communications.
 
-Apparently not, and the reason turns out to be the thesis of this entire post. The number is linked to Finanças, the Portuguese tax authority, and giving it at checkout files that receipt into e-fatura, the invoice record Finanças keeps against my NIF. How it counts depends on what I bought: health, education, and housing can count toward deductions from the tax I owe, while receipts from restaurants, garages, and gyms earn a deduction based on a percentage of the value-added tax (IVA) I paid. Either way the state is holding the receipt, and it has the classification pre-filled as much as possible before I ever open my tax return — no physical shoebox of receipts to reconcile in the spring. The pet store was asking because *I* benefit.
+The answer was my first glimpse of what a public identifier could do for me. The number is linked to Finanças, the Portuguese tax authority, and giving it at checkout files that receipt into e-fatura, the invoice record Finanças keeps against my NIF. How it counts depends on what I bought: health, education, and housing can count toward deductions from the tax I owe, while receipts from restaurants, garages, and gyms earn a deduction based on a percentage of the value-added tax (IVA) I paid. Either way the state is holding the receipt, and it has the classification pre-filled as much as possible before I ever open my tax return — no physical shoebox of receipts to reconcile in the spring. The pet store was asking because *I* benefit.
 
 My instinct to guard these numbers came from growing up in the US. The Social Security number is the closest thing an American has to a unique identifier. It was never intended to be, though. From 1946 to 1972, the card itself displayed "NOT FOR IDENTIFICATION." Chris Hibbert, who maintained a long-running [SSN FAQ](https://web.archive.org/web/20240803013548/http://cpsr.org/issues/privacy/ssn-faq/), [told The Verge in 2012](https://www.theverge.com/2012/9/26/3384416/social-security-numbers-national-ID-identity-theft-nstic): "There has long been a confusion over whether the SSN is a secret (and so would be useful for verifying someone's identity) or a public identifier (and thus should be treated as well known)."
 
@@ -214,13 +90,13 @@ The US license has to prove both identity and residency at once, and it falls ap
 
 <CredentialSplit />
 
-US non-citizens, meanwhile, have a very different situation. USCIS issues several federal photo IDs. The permanent resident card (Form I-551, known colloquially as a green card) is the obvious example, and the Employment Authorization Document (Form I-766) is another.
+For US non-citizens, the answer is different. USCIS issues several federal photo IDs. The permanent resident card (Form I-551, known colloquially as a green card) is the obvious example, and the Employment Authorization Document (Form I-766) is another.
 
 8 U.S.C. § 1304(e) requires any registered non-citizen 18 or older to carry their registration document at all times, and failing to do so is a misdemeanor. No US citizen has a comparable duty to carry one. So the country with no national ID card does issue one — and only mandates carrying it for the people who are not citizens.
 
 ## Where you live: the register
 
-As an Italian citizen studying and legally residing in Portugal, signing a lease was only the first half of arriving. Free movement gives any EU citizen an unconditional right to be in Portugal for three months; past that, you are required to register your presence with the municipality you live in, within thirty days of the three-month mark. You register with the municipality, not with Portugal, and that is the level where the answer gets used. How many people a city believes live on a given street is the input to how often a bus runs down it, whether the school stays open, and whether the road gets designed for the people on it or the cars crossing it. I treated mine as an errand with a deadline. It is also the number the city plans from.
+As an Italian citizen studying and legally residing in Portugal, signing a lease was only the first half of arriving. Free movement gives any EU citizen an unconditional right to be in Portugal for three months; past that, you are required to register your presence with the municipality you live in, within thirty days of the three-month mark. I treated mine as an errand with a deadline. Registering at a municipal office also made the question feel less abstract: a city needs to know who lives there to plan services for them. A reliable picture of its residents matters for schools and transit as much as for paperwork.
 
 The document that records it is the Certificado de Registo de Cidadão da União Europeia (CRUE), Portugal's implementation of [Directive 2004/38/EC](https://eur-lex.europa.eu/eli/dir/2004/38/oj/eng) — the instrument that requires Italy to issue me an identity card or a passport also establishes my right to move to Portugal and live here. One directive, answering two of the three questions: what proves who I am, and where I live.
 
@@ -256,17 +132,17 @@ Every alternative put forward preserved the same rule: the federal government wo
 
 The contrast is clearest when I enter each country. Returning to the US as a citizen without Global Entry means a manual immigration queue. To make that experience frictionless, I have to apply, pay a fee, undergo a background check, give fingerprints, sit for an interview, and pay to renew every five years. Entering the EU as an EU citizen, I present my chip-enabled passport at an electronic gate. There is no separate trusted-traveler program to join because the credential and the citizen record are already part of the ordinary border system. In one system, trust in a citizen is manufactured one traveler at a time and sold. In the other, it is a property of the record.
 
-One federal register does reach citizens. Selective Service registers men ages 18 through 25, citizens and non-citizens alike, with criminal penalties for not registering — and beginning in December 2026 it will populate itself. Section 535 of the [FY2026 National Defense Authorization Act](https://www.govinfo.gov/app/details/PLAW-119publ60), signed in December 2025, makes registration automatic, with Selective Service assembling the roll from records other agencies already hold rather than waiting to be told. That is the propagation this entire post has described the absence of: one write, carried across agencies, with no form for anyone to file. So the machinery is buildable after all, and the country can build it without asking a single citizen for anything. It gets built for conscription: pure obligation, with no read path back to the person.
+One federal register does reach citizens. Selective Service requires most men ages 18 through 25, citizens and non-citizens alike, to register, with criminal penalties for failing to do so. Section 535 of the [FY2026 National Defense Authorization Act](https://www.govinfo.gov/app/details/PLAW-119publ60), signed in December 2025, makes registration automatic beginning in December 2026, with Selective Service assembling the roll from records other agencies already hold rather than waiting to be told. That is a narrower connection than a shared civic record, but it shows that the federal government can reuse information across agencies instead of asking people to submit it again. Here, it builds that connection to enforce an obligation: registration for possible conscription. The same capacity could also make ordinary public services easier to use.
 
 ## The price of building it right
 
-The US should build a federal civic identity system that works for everyone who lives here, citizens and non-citizens alike. I don't mean a master dossier of where everyone goes and what everyone does, I mean a narrow public utility that consists of one durable identity, a secure credential that proves who holds it, and a small set of core facts about a person that can be corrected once and used across public services. The federal government should be able to deliver a benefit, issue a document, or update an address without making an ordinary person carry the mismatch between its databases.
+The US should build a federal civic identity system that works for everyone who lives here, citizens and non-citizens alike. I don't mean a master dossier of where everyone goes and what everyone does. I mean a narrow public utility that consists of one durable identity, a secure credential that proves who holds it, and a small set of core facts about a person that can be corrected once and used across public services. The federal government should be able to deliver a benefit, issue a document, or update an address without making an ordinary person carry the mismatch between its databases.
 
-The limits are the system, not promises made after it exists. The law names the few facts the record may hold and the purposes for which each may be read; anything unnamed is not storable. An agency asking whether a person is over eighteen gets that answer, not the date of birth behind it. Nothing logs where the credential was presented, so there is no itinerary to subpoena. The identifier never doubles as an authenticator — that is the Social Security number's failure, written as a rule — and using a public service creates no commercial identity trail.
+In the system I want, those limits are built in from the start. The law names the few facts the record may hold and the purposes for which each may be read; anything outside those limits cannot be stored. An agency asking whether a person is over eighteen gets that answer, not the date of birth behind it. The system keeps no central history of where the credential was presented. Agencies keep only the audit records needed to account for their access, with limits on retention and reuse. The identifier never doubles as an authenticator — that is the Social Security number's failure, written as a rule — and using a public service creates no commercial identity trail.
 
-A person can read their own record, correct it, and appeal a refusal, with no more effort than the state spent writing it. Commercial access is prohibited unless the individual grants it. Law enforcement comes through specific legal process, never a general identity lookup. Independent oversight audits both the software and the agencies using it. A biometric used to issue a credential stays on the card, never becomes a searchable population database, and is deleted from the enrollment system once the credential ships.
+A person can read their own record and request a correction through an accessible process, with a clear deadline for a response and a timely appeal if it is refused. Commercial access is prohibited unless the individual grants it. Law enforcement comes through specific legal process, never a general identity lookup. Independent oversight audits both the software and the agencies using it. A biometric used to issue a credential stays on the card, never becomes a searchable population database, and is deleted from the enrollment system once the credential is issued.
 
-The objection to all of this is that a connected record becomes a condition of being served — that when the credential fails, the person disappears from the service, and it fails first for the people with the least standing to argue. That is the real failure mode, and it is not hypothetical to me. My wife's route through AIMA is the same architecture as mine with more of it left to interpretation, and every point left to interpretation is a point where someone gets to decide about her. A system like this is only as good as what it does for the person in the slower lane. That is what the constraints are for: not to make the record smaller, but to make it answerable to the person it describes.
+A connected record could also become a condition of being served: when the credential fails, the person loses access, and those with the least standing to argue bear the cost first. My wife's slower route through AIMA has shown me how much can depend on administrative interpretation. That is not the same as being denied a service because a credential fails, but it is why I would not trust a system whose only answer is to try the same record again. A person needs another way to establish eligibility and a human reviewer who can resolve a mismatch. Essential services must continue while a record is corrected or a failed credential is replaced. A system like this is only as good as what it does for the person in the slower lane.
 
 The EU is not a clean model, but it shows that these constraints can be written into the machinery. Member states are required to provide digital identity wallets by the end of 2026, with selective disclosure and control left to the person using one. I'll sign up the day mine ships. The [identity-card regulation](https://eur-lex.europa.eu/eli/reg/2025/1208/oj/eng) provides no basis for a centralized EU biometric database, restricts who may read fingerprints, and requires the biometric data used to produce a card to be erased within ninety days. Those rules still need enforcement, and they will be tested. That's what democratic control looks like: not assuming the state will behave, but deciding in law and architecture what it is allowed to do.
 

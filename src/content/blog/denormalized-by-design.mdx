@@ -1,5 +1,5 @@
 ---
-title: "A Normalized Database of Citizens"
+title: "Denormalized by Design"
 description: "America built much of the machinery of a population register, but mostly for people who cannot vote. I only saw the asymmetry clearly after moving to Portugal as an Italian citizen."
 pubDate: 2026-09-14T09:00:00+01:00
 tags: ["governance", "advocacy", "software-engineering", "personal"]
@@ -159,6 +159,28 @@ Same pass, three structural revisions after review:
    replacement calls back to the AIMA paragraph in "Where you live" — in-set,
    already established, and lived. If that paragraph is ever cut or moved, this
    one loses its referent.
+8. Retitled from "A Normalized Database of Citizens", which cold-read as though
+   the post ADVOCATED a citizen database — the one thing the last section
+   spends four paragraphs constraining, and the worst possible misread on a
+   share card showing no description. The inversion says the same thing from
+   the side that cannot be misread, and it keeps the technical spine visible
+   somewhere: the rendered topics are governance and advocacy, so
+   software-engineering never surfaces on the index and the title is the only
+   place a reader learns there is a normalization argument inside. The
+   description is unchanged and carries the other two jobs, the political
+   thesis and the personal frame.
+9. "Where you live" now says why the municipal level is the one that registers
+   you. This is the post's only tie to the scale the rest of the blog works at
+   — every other post touches a place you can walk, and this one is otherwise
+   entirely national and supranational. Appended to the registration paragraph
+   rather than set as its own, so that "The document that records it" keeps its
+   antecedent in the paragraph below.
+
+SLUG: renaming the file changed the slug, and both `preview_links` and
+`galley_notes` key on it. See the header note in
+docs/galley/a-normalized-database-of-citizens.md — that file keeps the old name
+deliberately. Outstanding review links carry the old slug INSIDE the signed
+payload, so they cannot be repointed and have to be re-minted.
 */}
 ## Who you are: the identifier
 
@@ -198,7 +220,7 @@ US non-citizens, meanwhile, have a very different situation. USCIS issues severa
 
 ## Where you live: the register
 
-As an Italian citizen studying and legally residing in Portugal, signing a lease was only the first half of arriving. Free movement gives any EU citizen an unconditional right to be in Portugal for three months; past that, you are required to register your presence with the municipality you live in, within thirty days of the three-month mark.
+As an Italian citizen studying and legally residing in Portugal, signing a lease was only the first half of arriving. Free movement gives any EU citizen an unconditional right to be in Portugal for three months; past that, you are required to register your presence with the municipality you live in, within thirty days of the three-month mark. You register with the municipality, not with Portugal, and that is the level where the answer gets used. How many people a city believes live on a given street is the input to how often a bus runs down it, whether the school stays open, and whether the road gets designed for the people on it or the cars crossing it. I treated mine as an errand with a deadline. It is also the number the city plans from.
 
 The document that records it is the Certificado de Registo de Cidadão da União Europeia (CRUE), Portugal's implementation of [Directive 2004/38/EC](https://eur-lex.europa.eu/eli/dir/2004/38/oj/eng) — the instrument that requires Italy to issue me an identity card or a passport also establishes my right to move to Portugal and live here. One directive, answering two of the three questions: what proves who I am, and where I live.
 

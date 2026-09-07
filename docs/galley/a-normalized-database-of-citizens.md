@@ -1,5 +1,13 @@
 # Review notes — a-normalized-database-of-citizens
 
+> **The post was renamed to `denormalized-by-design` after this round was pulled.**
+> This file keeps the old name on purpose: `galleyFile()` derives the path from the slug,
+> and the `galley_notes` rows behind these ids are still stored under the OLD slug. So
+> `just galley-close a-normalized-database-of-citizens --remote` is the command that
+> retires them — closing under the new slug would match nothing and report success.
+> `just galley denormalized-by-design` will return an empty round until the rows are
+> migrated or a new round is filed against the new slug.
+
 Pulled 2026-09-06T14:20:44.845Z from `production`.
 36 open notes, 2 reviewer(s).
 

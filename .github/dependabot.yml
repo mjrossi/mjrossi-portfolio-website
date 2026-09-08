@@ -73,6 +73,28 @@ updates:
         update-types:
           - version-update:semver-major
 
+      # typescript is here for mdx-analyzer, not for the build — nothing in this
+      # repo runs tsc, and docs/FILE-MAP.md has the full rationale. Every
+      # Volar-based language server (MDX, Astro, Vue, Svelte) embeds TypeScript's
+      # JavaScript Language Service API, and TypeScript 7 is the Go port: its
+      # lib/ holds native binaries and a tsc.js shim, with no typescript.js and
+      # no tsserverlibrary.js. Volar's loadTsdkByPath throws on that during
+      # initialize, so the server refuses to start and .mdx posts open on an RPC
+      # error instead of a language server. The TypeScript team's own position is
+      # that embedders "can only currently rely on TypeScript 6.0" until a
+      # replacement API ships; astro still devDepends on ^6.0.3 for this reason.
+      #
+      # PR #88 already made this exact bump and merged green, because typescript
+      # is invisible to CI by construction — the same property FILE-MAP.md
+      # documents as what makes this dependency easy to break silently. Nothing
+      # failed until a post was opened in an editor.
+      #
+      # Lift this when mdx-analyzer's Volar core supports TypeScript 7, and move
+      # the pin in package.json onto its new range in the same commit.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

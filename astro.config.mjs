@@ -1,6 +1,7 @@
 import { defineConfig, fontProviders } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 import mdx from '@astrojs/mdx';
+import { unified } from '@astrojs/markdown-remark';
 
 import cloudflare from "@astrojs/cloudflare";
 import remarkSourceAnchors from './src/lib/remark-source-anchors.js';
@@ -23,11 +24,30 @@ export default defineConfig({
     // exactly the drift that puts a draft inventory in a public file.
     sitemap({ filter: (page) => !isAdminPath(new URL(page).pathname) }),
   ],
-  // Applies to .md and .mdx alike: @astrojs/mdx extends the markdown config by
-  // default (extendMarkdownConfig), so the anchors the galley depends on are
-  // stamped on every post without configuring the integration separately.
+  // Applies to .md and .mdx alike, and names the processor rather than leaving
+  // it to be inferred.
+  //
+  // Astro's default markdown processor is `satteri()`, which does not run
+  // remark plugins at all. `unified()` is the remark/rehype one, and it is the
+  // only reason `data-src` exists: remark-source-anchors stamps the anchors
+  // every galley note is resolved against, so a post compiled by the wrong
+  // processor loses the entire review system while still rendering perfectly.
+  //
+  // This used to read `remarkPlugins: [remarkSourceAnchors]` with no processor
+  // named, which worked only through a deprecated shim in astro's config
+  // validation: seeing legacy `markdown.remarkPlugins`, it quietly swapped the
+  // default `satteri()` for `unified()` and migrated the plugins across, with
+  // a deprecation warning on every build as the only sign. When that shim goes,
+  // the processor silently reverts and the anchors vanish from a green build.
+  //
+  // @astrojs/mdx 8 makes naming it matter more, not less: it no longer carries
+  // its own MDX pipeline (that is why it shed @mdx-js/mdx, remark-gfm and a
+  // nested @astrojs/markdown-remark), and delegates .mdx compilation to this
+  // same processor. One declaration now covers both extensions, and
+  // @astrojs/markdown-remark is a real import here rather than a declared
+  // dependency the build only resolved by hoisting.
   markdown: {
-    remarkPlugins: [remarkSourceAnchors],
+    processor: unified({ remarkPlugins: [remarkSourceAnchors] }),
   },
   adapter: cloudflare({ imageService: 'compile' }),
   fonts: [

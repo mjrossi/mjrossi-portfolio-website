@@ -1,5 +1,15 @@
 # Review notes — a-normalized-database-of-citizens
 
+> **The post is now `denormalized-by-design`.** This review file retains the
+> original slug because the pulled notes belong to `a-normalized-database-of-citizens`.
+> Existing signed links contain that old slug and must be re-minted for the new one.
+> The old notes have not been migrated. The current `galley-close` command cannot
+> close them from this checkout: its source-file guard rejects the removed slug,
+> while passing the new slug does not select the old notes. Closing this round
+> requires a checkout containing the original source file (after the reviewed
+> revision has merged), or an explicit migration of the review history.
+> New review rounds use `denormalized-by-design`.
+
 Pulled 2026-09-06T14:20:44.845Z from `production`.
 36 open notes, 2 reviewer(s).
 

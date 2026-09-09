@@ -5,25 +5,41 @@ updates:
     schedule:
       interval: weekly
     groups:
-      # Astro majors move in lockstep (astro + its integrations share peer
-      # ranges); splitting them across PRs makes every PR fail ERESOLVE.
+      # Astro moves in lockstep (astro + its integrations share peer ranges);
+      # splitting them across PRs makes every PR fail ERESOLVE.
       #
       # `wrangler` belongs here too, even though it isn't an Astro package.
-      # @astrojs/cloudflare pulls @cloudflare/vite-plugin, which depends on a
-      # specific wrangler; when root wrangler drifts off that version npm stops
+      # @astrojs/cloudflare pulls @cloudflare/vite-plugin, which depends on an
+      # EXACT wrangler; when root wrangler drifts off that version npm stops
       # deduping the two and installs a second, nested wrangler with its own
       # workerd/miniflare (see the note below the groups for what that costs).
-      # A solo wrangler-major PR is exactly how they drift apart, so keep them
-      # in one PR where CI builds the combination. Minor/patch needs no rule:
-      # `npm-minor-patch` has no `patterns`, so it already sweeps both into a
-      # single PR.
-      astro-cloudflare-major:
+      # A solo wrangler PR is exactly how they drift apart, so keep them in one
+      # PR where CI builds the combination.
+      #
+      # This group deliberately has NO `update-types`, and that is the whole
+      # point of it. It used to say `major`, on the reasoning that minor/patch
+      # needed no rule because the pattern-less `npm-minor-patch` group already
+      # swept astro and wrangler into one PR. That holds only while every
+      # astro-family package moves by the SAME bump type. It doesn't take much
+      # for them not to: @astrojs/mdx 7→8 (major) and astro 7.2→7.3 (minor)
+      # opened as two PRs, and NEITHER was mergeable on its own —
+      #
+      #   - astro 7.3 dropped the `beginContentEntryCollection` export that
+      #     @astrojs/cloudflare 14.2.x imports, so the minor/patch PR failed to
+      #     build until the adapter went to 14.3.x, which that PR didn't touch
+      #     because `"@astrojs/cloudflare": "14"` was already satisfied;
+      #   - @astrojs/mdx 8 delegates .mdx compilation to the markdown processor
+      #     and peer-depends on @astrojs/markdown-remark ^7.3.0.
+      #
+      # Constraining the group by update type sorts packages by how far they
+      # happened to move rather than by what has to be installed together, which
+      # is the opposite of what a group is for. Everything else still falls
+      # through to `npm-minor-patch`, which is pattern-less and matches last.
+      astro-cloudflare:
         patterns:
           - astro
           - "@astrojs/*"
           - wrangler
-        update-types:
-          - major
       npm-minor-patch:
         update-types:
           - minor

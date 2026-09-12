@@ -199,10 +199,15 @@ export async function extendLinks(store, slug, exp) {
 /**
  * Revoke links for one post.
  *
- * ALWAYS scoped to the slug, even when an id is given. A mistyped id belonging
- * to another post therefore does nothing, rather than quietly withdrawing
- * someone else's link -- the failure mode that would be hardest to notice,
- * since the operator sees a successful command either way.
+ * ALWAYS scoped to the slug, which is the store's own contract: a caller holding
+ * a slug gets a statement that cannot reach past it.
+ *
+ * IT IS NO LONGER WHAT PROTECTS A MISTYPED ID AT THE CLI. Since the operator can
+ * pass an id alone, the slug reaching this function is usually DERIVED from the
+ * very row being filtered, which makes the clause tautological -- it can only
+ * match. What catches a wrong id is scripts/resolve-id.mjs refusing when the
+ * operator names a post the row disagrees with. Don't delete this clause; do
+ * stop citing it as the safety property.
  *
  * Already-revoked rows are left alone (`revoked_at IS NULL`), so re-running
  * does not rewrite the date a link was actually withdrawn.

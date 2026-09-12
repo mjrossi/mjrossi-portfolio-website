@@ -111,6 +111,12 @@ export async function closeNotes(store, slug, ids) {
  * you name what you mean. Same reasoning as revoking staying per-post while the
  * roster reads across all of them.
  *
+ * Scoped to the slug, which is this module's contract for a caller that holds
+ * one -- but NOT what protects a mistyped id at the CLI any more. `just
+ * galley-reopen <id>` derives the slug from the row it then filters, making the
+ * clause tautological there; the wrong-post refusal lives in
+ * scripts/resolve-id.mjs. Keep the clause, stop citing it as the safety property.
+ *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {string} slug
  * @param {string} id

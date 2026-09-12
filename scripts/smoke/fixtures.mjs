@@ -23,7 +23,7 @@ import {
   STALE_REVISION,
 } from './config.mjs';
 import { d1Migrate } from '../d1.mjs';
-import { clearLinks, extendLink, extendLinks, getLink, recordLinks } from '../links-db.mjs';
+import { clearLinks, extendLink, extendLinks, getLinkById, recordLinks } from '../links-db.mjs';
 import { clearNotes, closeNotes, listNotes, reopenNote, seedNotes } from '../notes-db.mjs';
 
 const LOCAL = { local: true };
@@ -251,7 +251,7 @@ export async function checkExtendRoundTrip() {
   );
   check(
     'extend: a refused extension leaves the old expiry in place',
-    (await getLink(EXTEND_SLUG, probe, LOCAL))?.exp === ceiling,
+    (await getLinkById(probe, LOCAL))?.exp === ceiling,
     'the row moved despite the UPDATE reporting no change',
   );
 
@@ -267,6 +267,21 @@ export async function checkExtendRoundTrip() {
     'extend: a revoked link cannot be extended back to life',
     revoked.length === 0,
     `got ${JSON.stringify(revoked)} — revoking is supposed to be final`,
+  );
+
+  // getLinkById is what `just preview-extend <id>` resolves through, so it has
+  // to answer for a row in ANY state -- the good refusals downstream (revoked,
+  // past the ceiling) all depend on finding the row and then rejecting it.
+  const revokedRow = await getLinkById(LINKS.extendRevoked.id, LOCAL);
+  check(
+    'getLinkById: finds a revoked row, and carries the slug that identifies it',
+    revokedRow?.slug === EXTEND_SLUG && revokedRow?.revoked_at != null,
+    `got ${JSON.stringify(revokedRow)} — resolution must reach a revoked link`,
+  );
+  check(
+    'getLinkById: an id that exists nowhere is null, not undefined',
+    (await getLinkById('0123456789abcdef', LOCAL)) === null,
+    'a missing row must be null so resolve-id can branch on it',
   );
 
   // `just preview-extend <slug> --all`, the command for "I pushed the date out".
@@ -292,7 +307,7 @@ export async function checkExtendRoundTrip() {
   );
   check(
     'extend --all: the row it reported moving really moved',
-    (await getLink(EXTEND_SLUG, LINKS.extendAllRoom.id, LOCAL))?.exp === target,
+    (await getLinkById(LINKS.extendAllRoom.id, LOCAL))?.exp === target,
     'the UPDATE reported a change the table does not show',
   );
   // Bulk scoping, asserted rather than argued. `--all` is the one statement here
@@ -300,10 +315,12 @@ export async function checkExtendRoundTrip() {
   // property worth pinning: crossSlug sits on a DIFFERENT slug at a far-future
   // expiry, and the live matrix reads it long after this runs. While these
   // fixtures shared a slug with it this check could not have been written — the
-  // --all above rewrote that very row, harmlessly but silently.
+  // --all above rewrote that very row, harmlessly but silently. Addressed by id
+  // since getLinkById replaced getLink; the slug in the name below is
+  // documentation, not a filter.
   check(
     'extend --all: leaves another post’s links alone',
-    (await getLink(OTHER_SLUG, LINKS.crossSlug.id, LOCAL))?.exp === FAR_FUTURE_EXP,
+    (await getLinkById(LINKS.crossSlug.id, LOCAL))?.exp === FAR_FUTURE_EXP,
     'a bulk extend reached across slugs — the cross-slug assertions below now ' +
       'depend on an expiry this statement moved',
   );

@@ -282,29 +282,32 @@ export async function clearLinks(store, slugs) {
 const COLUMNS = 'id, slug, reviewer, exp, max_exp, created_at, revoked_at';
 
 /**
- * One link, by post and id.
+ * One link, by id.
  *
- * Exists to EXPLAIN A REFUSAL, never to gate one -- extendLink and revokeLinks
- * both decide in their own statement, so nothing here is load-bearing and a
- * stale read cannot widen anything. `just preview-extend` calls it only after
- * an UPDATE has already changed nothing, to say which of the several silent
- * reasons applied.
+ * THE PRIMARY-KEY LOOKUP THAT MAKES THE SLUG OPTIONAL AT THE CLI. `slug` is a
+ * column on the row, not part of its identity, so resolving an id gives the post
+ * for free -- which is what lets `just preview-revoke <id>` work without being
+ * told which draft the link was minted for.
  *
- * Scoped by slug as well as id, like every other write in this file: an id
- * belonging to another post reads as "no such link" rather than answering about
- * a draft the operator did not name.
+ * Returns a row in ANY state -- live, expired, revoked, spent. That is
+ * deliberate and load-bearing: scripts/resolve-id.mjs hands the row to callers
+ * whose most useful refusals ("was revoked on …", "past the ceiling it was
+ * signed with …") exist only because the row was found and then rejected.
+ * Filtering to live rows here would flatten all of them into "no such link".
+ *
+ * Exists to EXPLAIN AND RESOLVE, never to gate. extendLink and revokeLinks each
+ * decide in their own statement, so nothing here is load-bearing for
+ * authorisation and a stale read cannot widen anything.
  *
  * @param {{ prepare: (sql: string) => any }} store
- * @param {string} slug
  * @param {string} id
  * @returns {Promise<Record<string, unknown> | null>}
  */
-export async function getLink(store, slug, id) {
-  checkSlug(slug);
+export async function getLinkById(store, id) {
   checkLinkId(id);
   return store
-    .prepare(`SELECT ${COLUMNS} FROM preview_links WHERE slug = ? AND id = ?`)
-    .bind(slug, id)
+    .prepare(`SELECT ${COLUMNS} FROM preview_links WHERE id = ?`)
+    .bind(id)
     .first();
 }
 

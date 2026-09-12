@@ -48,7 +48,7 @@ import { clampToPublication, isPublished } from '../src/lib/schedule.js';
 import { readPubDate } from './content.mjs';
 import { cli } from './cli.mjs';
 import { databaseLabel } from './database-target.mjs';
-import { extendLink, extendLinks, getLink, listLinks } from './links-db.mjs';
+import { extendLink, extendLinks, getLinkById, listLinks } from './links-db.mjs';
 
 const DEFAULT_HOURS = 48;
 
@@ -210,10 +210,15 @@ if (all) {
 
 if (changed.length === 0) {
   // Nothing moved. Read the row back to say which of the several silent reasons
-  // applied; this is the only thing getLink is for.
+  // applied; this is the only thing getLinkById is for here.
   let row;
   try {
-    row = await getLink(slug, id, { local: useLocal });
+    row = await getLinkById(id, { local: useLocal });
+    // Scoped to the named post by hand, since the read no longer is. Keeps this
+    // refusal identical to the slug-scoped getLink it replaced: an id belonging
+    // to another draft reads as missing rather than answering about a post the
+    // operator did not name.
+    if (row && row.slug !== slug) row = null;
   } catch (err) {
     die(err.message);
   }

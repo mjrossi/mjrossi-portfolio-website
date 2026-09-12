@@ -230,6 +230,30 @@ const COLUMNS =
   'quote, prefix, suffix, body, suggestion, created_at, closed_at';
 
 /**
+ * One note, by id.
+ *
+ * SELECTS `slug` ON TOP OF THE SHARED COLUMN LIST, and that is the whole reason
+ * it exists. Every other read here is already scoped to one post, so COLUMNS has
+ * never carried the slug; this is the read that has to answer *which* post, so
+ * `just galley-reopen <id>` and `just galley-close <id>` can be given an id and
+ * nothing else.
+ *
+ * Open or closed, either way. A closed note is the only kind worth re-opening,
+ * so filtering by state here would make the undo unreachable.
+ *
+ * @param {{ prepare: (sql: string) => any }} store
+ * @param {string} id
+ * @returns {Promise<Record<string, unknown> | null>}
+ */
+export async function getNoteById(store, id) {
+  checkNoteId(id);
+  return store
+    .prepare(`SELECT slug, ${COLUMNS} FROM galley_notes WHERE id = ?`)
+    .bind(id)
+    .first();
+}
+
+/**
  * Notes for one post, oldest first.
  *
  * Open only by default, because that is the working set: a closed note belongs

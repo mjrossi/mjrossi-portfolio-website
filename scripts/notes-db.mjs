@@ -107,6 +107,11 @@ export async function clearNotes(slugs, scope = {}, { local = false } = {}) {
 // ── reads ────────────────────────────────────────────
 
 /** @see src/lib/notes-store.js */
+export function getNoteById(id, { local = false } = {}) {
+  return store.getNoteById(at(local), id);
+}
+
+/** @see src/lib/notes-store.js */
 export function listNotes(slug, scope = {}, { local = false } = {}) {
   return store.listNotes(at(local), slug, scope);
 }

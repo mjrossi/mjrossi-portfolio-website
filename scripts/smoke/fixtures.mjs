@@ -24,7 +24,7 @@ import {
 } from './config.mjs';
 import { d1Migrate } from '../d1.mjs';
 import { clearLinks, extendLink, extendLinks, getLinkById, recordLinks } from '../links-db.mjs';
-import { clearNotes, closeNotes, listNotes, reopenNote, seedNotes } from '../notes-db.mjs';
+import { clearNotes, closeNotes, getNoteById, listNotes, reopenNote, seedNotes } from '../notes-db.mjs';
 
 const LOCAL = { local: true };
 
@@ -347,6 +347,23 @@ export async function checkExtendRoundTrip() {
  */
 export async function checkCloseRoundTrip() {
   const target = NOTES.current.id;
+
+  // The notes-side twin of getLinkById: `just galley-reopen <id>` resolves
+  // through this. It must reach a CLOSED note -- that is the only kind worth
+  // re-opening -- and it must carry the slug, which the shared read column list
+  // deliberately omits. NOTES.closed is seeded closed and nothing below touches
+  // it; the round-trip works on NOTES.current.
+  const closedRow = await getNoteById(NOTES.closed.id, LOCAL);
+  check(
+    'getNoteById: finds a closed note, and carries its slug',
+    closedRow?.slug === FIXTURE_SLUG && closedRow?.closed_at != null,
+    `got ${JSON.stringify(closedRow)} — a closed note must be resolvable`,
+  );
+  check(
+    'getNoteById: an id that exists nowhere is null, not undefined',
+    (await getNoteById('00000000-0000-4000-8000-000000000000', LOCAL)) === null,
+    'a missing row must be null so resolve-id can branch on it',
+  );
 
   const wrongPost = await closeNotes(OTHER_SLUG, [target], LOCAL);
   check(

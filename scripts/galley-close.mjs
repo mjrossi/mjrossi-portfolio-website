@@ -23,6 +23,13 @@
 // out of reach. An id the scan misses stays open, which is the direction that
 // loses nothing.
 //
+//   just galley-close <slug> --remote              # the round in docs/galley/<slug>.md
+//   just galley-close <note-id> --remote           # one note; the post comes off the row
+//   just galley-close <slug> <note-id> --remote    # the same, post asserted
+//
+// A note id is a UUID and a slug is [a-z0-9-]+, so the first positional's shape
+// says which was meant. `--note` stays as an alias. See scripts/resolve-id.mjs.
+//
 // RUN IT AFTER THE REVISION MERGES, not before. Closing first would retire notes
 // whose fixes are not in the file yet.
 
@@ -33,13 +40,14 @@ import { SLUG_RE } from '../src/lib/preview.js';
 import { cli, relativeToCwd } from './cli.mjs';
 import { databaseFlag, databaseLabel } from './database-target.mjs';
 import { NOTE_ID_RE, closeNotes, listNotes, noteIdsInFile } from './notes-db.mjs';
+import { resolveNote } from './resolve-id.mjs';
 
 const { die, resolveDatabase, requirePost } = cli('galley-close');
 
 // ── args ─────────────────────────────────────────────
 
 const argv = process.argv.slice(2);
-let slug = null;
+const positional = [];
 let local = false;
 let remote = false;
 let noteId = null;
@@ -59,27 +67,50 @@ for (let i = 0; i < argv.length; i++) {
     if (!from) die('--from requires a path');
   } else if (arg.startsWith('-')) {
     die(`unknown flag ${arg}`);
-  } else if (slug === null) {
-    slug = arg;
   } else {
-    die(`unexpected argument ${arg}`);
+    positional.push(arg);
   }
 }
 
-if (!slug) {
-  die('usage: just galley-close <slug> (--remote | --local) [--note ID] [--from PATH]');
+// WHAT THE FIRST POSITIONAL IS. A note id is a UUID and a slug is [a-z0-9-]+, so
+// the shape answers it -- no flag needed, and `--note` stays as an alias for the
+// operators and docs that use it.
+//
+//   <note-id>            close that one note; the post comes off the row
+//   <slug> <note-id>     the same, with the post asserted
+//   <slug>               close the round in docs/galley/<slug>.md
+let slug = null;
+
+if (noteId === null && positional.length === 1 && NOTE_ID_RE.test(positional[0])) {
+  [noteId] = positional;
+} else if (noteId !== null) {
+  if (positional.length > 1) die(`unexpected argument ${positional[1]}`);
+  slug = positional[0] ?? null;
+} else if (positional.length === 2 && NOTE_ID_RE.test(positional[1])) {
+  [slug, noteId] = positional;
+} else if (positional.length === 1) {
+  [slug] = positional;
+} else {
+  die('usage: just galley-close (<slug> | <note-id>) (--remote | --local) [--from PATH]');
 }
-if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
+
+if (slug !== null && !SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 if (noteId !== null && !NOTE_ID_RE.test(noteId)) {
   die(`invalid note id ${JSON.stringify(noteId)} — ids are printed in the pulled review file`);
 }
+// --from names a round file, which is a per-post artifact. There is no round to
+// read for a single note, and no file to read one out of.
 if (noteId !== null && from !== null) die('--note and --from are alternatives; pass one');
-
 const useLocal = resolveDatabase({ local, remote });
 
-// Validated against real content for the same reason preview-link.mjs does it: a
-// typo would otherwise report "no notes to close" for a post that has plenty,
-// which reads exactly like the round already being closed.
+// Closing ONE note derives its post; closing a round was given one. Either way
+// requirePost then validates against real content for the same reason
+// preview-link.mjs does it: a typo would otherwise report "no notes to close"
+// for a post that has plenty, which reads exactly like the round already being
+// closed.
+if (noteId !== null) {
+  ({ slug } = await resolveNote(die, noteId, { slug, local: useLocal }));
+}
 requirePost(slug);
 
 const where = databaseLabel(useLocal);
@@ -131,6 +162,10 @@ try {
 
 if (manifest) {
   console.error(`galley-close: ${shown} lists ${ids.length} note(s)`);
+} else {
+  // The post was DERIVED from the note, so say which one -- it is the only
+  // signal that a pasted id went where the operator meant it to.
+  console.error(`galley-close: note ${noteId} on ${slug}`);
 }
 console.error(`              ${closed.length} closed  (${where})`);
 
@@ -141,7 +176,7 @@ if (closed.length === 0) {
   console.error(
     manifest
       ? '              nothing changed — this round was already closed'
-      : '              nothing changed — that note is already closed, or belongs to another post',
+      : '              nothing changed — that note is already closed',
   );
 }
 

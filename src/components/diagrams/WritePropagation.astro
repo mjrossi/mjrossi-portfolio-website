@@ -54,8 +54,16 @@
 // The three bands deliberately share one skeleton — "you move" on the left,
 // targets on the right — so the only thing that varies between them is what
 // sits in the middle. Italy has a register there, Portugal has a key pointing
-// at a record that does not exist, and the US has nothing at all. Keep that
-// skeleton if you edit any band; the comparison is the whole diagram.
+// at a record that does not exist, and the US has no shared record and no
+// reliable propagation. Keep that skeleton if you edit any band; the
+// comparison is the whole diagram.
+//
+// The US band says "no reliable propagation", not "nothing propagates". The
+// register section of the post notes that a USPS change of address MAY reach
+// the IRS through NCOA, and cites the IRS telling you not to rely on it. That
+// path is deliberately not drawn: it reaches one of the five, unreliably, and
+// an edge would assert exactly the propagation the post says you cannot count
+// on. Don't draw it, and don't let the wording go back to an absolute.
 //
 // The missing canonical record is drawn with .dg-node--out, the same dashed
 // "present on the page, absent from the result" treatment RegionGraphNYC uses
@@ -86,12 +94,13 @@
       Entrate, INPS, INAIL, ISTAT and the Motorizzazione. Written once, and five copies
       are fed from it. In Portugal, three arrows leave "you move" and reach three
       separate owners — Finanças for tax, the câmara for residence, AIMA for
-      immigration — which all file against the same NIF join key, but the box
+      immigration — which all file against the same NIF, but the box
       that would hold a shared canonical record is drawn dashed and empty,
       because none exists. Three separate updates. In the United States, five arrows leave
       "you move" and reach the DMV, the IRS, the Social Security Administration,
-      a bank and a utility company, with nothing in between them and nothing
-      propagating. Five separate updates, and the copies drift apart.
+      a bank and a utility company, with no shared record between them and no
+      reliable propagation across all five. Five separate updates, and the
+      copies drift apart.
     </desc>
 
     <defs>
@@ -178,7 +187,7 @@
     <g class="dg-group">
       <rect x="416" y="208" width="104" height="104" class="dg-node dg-node--anchor" />
       <text x="468" y="254" class="dg-label">NIF</text>
-      <text x="468" y="273" class="dg-sub">one join key</text>
+      <text x="468" y="273" class="dg-sub">one stable key</text>
     </g>
 
     <path class="dg-node dg-node--out" d="M520 260 H 552" />
@@ -193,7 +202,7 @@
     <path class="dg-edge" d="M6 338 H 694" />
 
     {/* ================= US CITIZEN — no key, five writes ================= */}
-    <text x="6" y="358" class="dg-call dg-call--start">US citizen — no key, and nothing between the copies</text>
+    <text x="6" y="358" class="dg-call dg-call--start">US citizen — no key, no shared record between the copies</text>
 
     <g class="dg-group">
       <rect x="6" y="404" width="104" height="48" class="dg-node" />
@@ -217,15 +226,16 @@
     <text x="248" y="380" class="dg-note dg-note--start">— the New York address that never got updated</text>
 
     <text x="430" y="416" class="dg-call dg-call--start">five separate updates</text>
-    <text x="430" y="436" class="dg-note dg-note--start">nothing propagates between them,</text>
+    <text x="430" y="436" class="dg-note dg-note--start">no reliable propagation between them,</text>
     <text x="430" y="452" class="dg-note dg-note--start">so the copies drift — an update anomaly</text>
   </svg>
 
   <figcaption>
     Every band is the same move — you move house on the left, the records that
     need to know on the right — so the only thing that changes is what sits in
-    between. Italy has a register. Portugal has a join key pointing at a record
+    between. Italy has a register. Portugal has a key pointing at a record
     that doesn't exist; Finanças, the câmara and AIMA are three of its owners,
-    not all of them. The US has nothing in the middle at all.
+    not all of them. The US has no shared record in the middle, and nothing
+    that propagates reliably across all five.
   </figcaption>
 </figure>

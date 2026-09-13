@@ -20,7 +20,7 @@ just galley-close my-draft --remote                 # after the revision merges 
 
 **Authorisation is the preview token, extended.** A token is `<slug>.<exp>.<linkId>.<sig>` (view-only) or `<slug>.<exp>.<reviewer>.<linkId>.<sig>` (view + comment). The signed payload is every field except the signature, so the shape is authenticated: a view-only link can't have a reviewer spliced in, a review link can't be stripped back to look like a plain one, and neither can be repointed at a different allowlist row. Reviewer is read from the token, never from the request body, so a note can't be attributed to someone who didn't write it. Editors need no account and no GitHub.
 
-**A review link can be withdrawn, or given more time.** It is an ordinary preview link with a reviewer inside the signature, so it is recorded in `preview_links` and `just preview-revoke <slug> <id> --remote` takes it back — reading included, so the draft 404s for that link. `just preview-extend <slug> <id> --hours N --remote` goes the other way and leaves the reviewer's URL untouched, which is what a review round that ran long actually needs. `just preview-roster <slug> --remote` lists what is outstanding, and `just preview-roster-all --remote` lists every link across every post. See "Previewing a scheduled post" above for the full mechanism, the clock and its cap, the fail-closed behaviour, and the D1 dependency that minting now carries.
+**A review link can be withdrawn, or given more time.** It is an ordinary preview link with a reviewer inside the signature, so it is recorded in `preview_links` and `just preview-revoke <id> --remote` takes it back — reading included, so the draft 404s for that link. `just preview-extend <id> --hours N --remote` goes the other way and leaves the reviewer's URL untouched, which is what a review round that ran long actually needs. `just preview-roster <slug> --remote` lists what is outstanding, and `just preview-roster --remote` lists every link across every post. See "Previewing a scheduled post" above for the full mechanism, the clock and its cap, the fail-closed behaviour, and the D1 dependency that minting now carries.
 
 **Publishing closes the galley.** The review round ends when the post does: `BlogPost.astro` stops rendering the margin and `/api/galley` refuses both methods with `post_published` once `pubDate` has passed. Normally no link ever reaches those checks, because minting caps its expiry at publication — but that cap is a snapshot, and step 5 of the workflow below moves `pubDate` **earlier**, so a link outstanding from that move lands in exactly this state. Enforced in the endpoint as well as the layout, because the layout decides whether the margin is *drawn* and the endpoint decides whether a note can be *written*; a client that keeps posting after the chrome disappears has to meet the same rule. Smoke seeds `PUBLISHED_LINK_ID` — a live, un-revoked, unexpired review link on a post that is already public — and asserts the post still renders, the margin does not, and both `/api/galley` methods 403. Verified by fault injection: deleting either gate fails its own assertions and nothing else, and every other fixture points at the future-dated post, so without this one the suite would stay green through the bug.
 
@@ -53,7 +53,7 @@ just galley my-draft --remote                    # → docs/galley/my-draft.md, 
 # apply, PR, squash-merge
 just galley-close my-draft --remote              # the round is over
 just galley my-draft --remote --all              # closed notes, when you want the record
-just galley-reopen my-draft --note <id> --remote # undo a mis-close
+just galley-reopen <id> --remote                # undo a mis-close
 ```
 
 **`galley-close` reads the pulled file back, and that is the whole design.** The obvious rule — "close every note written against a revision I have since replaced" — is wrong the moment a second reviewer exists. Drift is a property of the *file*, not of whether anyone has read the note: apply r1's round and merge, and every note r2 filed in the meantime drifts too. A drift-based close would retire feedback nobody has looked at, silently, and the reviewer's margin would then show it as addressed. `docs/galley/<slug>.md` is what the author actually worked through, it is committed alongside the revision that answers it, and notes filed after that pull are out of reach by construction. The command says how many it left open and **who filed them**.
@@ -162,8 +162,8 @@ just preview-link smoke-scheduled-fixture --local \
 just galley smoke-scheduled-fixture --local  # → docs/galley/<slug>.md, with note ids
 just galley-close smoke-scheduled-fixture --local     # end the round
 just galley smoke-scheduled-fixture --local --all     # closed notes back again
-just preview-roster-all --local              # what you have minted locally
-just preview-extend smoke-scheduled-fixture <id> --local --hours 96   # same URL, more time
+just preview-roster --local              # what you have minted locally
+just preview-extend <id> --local --hours 96   # same URL, more time
 just preview-extend-all smoke-scheduled-fixture --local --hours 120   # after moving pubDate
 ```
 

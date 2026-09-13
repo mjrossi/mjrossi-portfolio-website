@@ -72,6 +72,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `src/lib/preview-links.js` — `isLinkActive(DB, id, now?)`: the allowlist lookup that makes a link revocable **and** extendable.
 - `src/lib/link-state.js` — `live` / `expired` / `revoked` / `spent` and the extend headroom, so the CLI and the Desk cannot disagree.
 - `src/lib/access.js` — Cloudflare Access JWT verification. **`aud` is the load-bearing claim** — Access signs per team, not per app.
+- `scripts/resolve-id.mjs` — an id → its row → the post it belongs to. **Where the cross-post check lives now**, since a slug derived from the row it filters can only match.
 - `src/lib/admin-path.js` — `isAdminPath`, shared by middleware and the sitemap filter, because three things must agree on the answer.
 - `src/lib/desk.js` — `deskIndex` (a **union**, not a filter) and `countdown` (calendar days in UTC, not elapsed time).
 - `src/lib/server.ts` — shared `/api/*` plumbing. `tryGetEnv()` is the fail-closed read; `refuse` **drains** the request body rather than cancelling it.
@@ -101,10 +102,10 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `scripts/content.mjs` — `resolvePostSource` and `readPubDate` (js-yaml **then** `coercePubDate`, same two steps as the build).
 - `scripts/dev-vars.mjs` — the one `.dev.vars` parser, shared by `preview-link.mjs` and `smoke.mjs` so signing and verifying agree.
 - `scripts/preview-link.mjs` — mints a link. **Records the row before printing the URL.** Sets both expiries; clamps the row to `pubDate`.
-- `scripts/preview-extend.mjs` — moves a live link's expiry in place. **The URL does not change.** `--all` for a slipped `pubDate`.
-- `scripts/preview-roster.mjs` — lists and revokes. **The only inventory of issued links there is.** `--all` lists across every post.
+- `scripts/preview-extend.mjs` — moves a live link's expiry in place, by link id. **The URL does not change.** `--all` for a slipped `pubDate`.
+- `scripts/preview-roster.mjs` — lists and revokes. **The only inventory of issued links there is.** No slug lists across every post.
 - `scripts/galley-pull.mjs` — pulls notes into `docs/galley/<slug>.md`. Open notes only unless `--all`; prints every note id.
-- `scripts/galley-close.mjs` — reads that file back and closes the ids in it. Run **after** the merge. `scripts/galley-reopen.mjs` is the undo.
+- `scripts/galley-close.mjs` — reads that file back and closes the ids in it, or one note by id. Run **after** the merge. `scripts/galley-reopen.mjs` is the undo.
 - `scripts/galley-preview.mjs` — `just galley-preview`: the margin against fixtures, no build/worker/DB. **Run `--stale` too.**
 - `scripts/gen-headers.mjs` — writes `dist/client/_headers` during the build.
 - `scripts/make-og.mjs`, `scripts/make-noise.mjs` — one-off regenerators. **The site card states identity only — never a fact about the present.**
@@ -233,9 +234,9 @@ Two unlocks, both resolved in `src/middleware.ts` and both **fail-closed**. **Fu
 
 ```sh
 npm run preview-link -- my-draft --remote              # 48h, mjrossi.com
-just preview-roster my-draft --remote                  # what is outstanding
-just preview-extend my-draft <id> --hours 96 --remote  # more time, same URL
-just preview-revoke my-draft <id> --remote             # take it back — reading included
+just preview-roster --remote                           # everything outstanding
+just preview-extend <id> --hours 96 --remote           # more time, same URL
+just preview-revoke <id> --remote                      # take it back — reading included
 ```
 
 **A signed link is scoped to the post's own URL and nothing else.** It does not add the draft to `/blog`, tag pages, or `/blog/rss.xml`. That is load-bearing rather than tidy: the feed is what triggers Buttondown's email, an irreversible send to real subscribers. `getPublishedPosts` therefore takes only a boolean `showScheduled`, and the per-slug signal (`Astro.locals.previewSlug`) is read solely by `src/pages/blog/[...slug].astro`. Smoke greps for exactly that **and** proves it live against a permanently future-dated fixture post.
@@ -291,7 +292,7 @@ Setup, once: `wrangler d1 migrations apply mjrossi-galley --remote`. If `--remot
 
 **It reads. It does not write.** Minting, extending, revoking, pulling and closing are all still `just` commands. That is not a stopgap: `galley-pull` writes `docs/galley/<slug>.md` into the repo and `galley-close` reads that same file back as its manifest, so both are git operations rather than database ones, and a button that skipped the file would break the one property that makes a close honest. Mint / extend / revoke *could* move here — they are pure D1 plus the signing key — but they would need a CSP carve-out (`form-action` is `'none'` site-wide), and read-only is what makes this page cost nothing.
 
-**`/admin` is the first deliberately unscoped surface in this repo, and that is the thing to hold on to.** Every other read path names one post by construction — a signed link grants one slug, `/api/galley` has no cross-post mode, `preview-roster --all` is justified only by running on a CLI already authenticated as you. The Desk lists every draft, every reviewer label and every note at once. What a leak would cost: draft titles, prose, reviewer initials and note text. What it would *not* cost: the ability to open a draft or mint a link — a link id is not a token, the HMAC is, and minting is not here at all.
+**`/admin` is the first deliberately unscoped surface in this repo, and that is the thing to hold on to.** Every other read path names one post by construction — a signed link grants one slug, `/api/galley` has no cross-post mode, an unscoped `preview-roster` is justified only by running on a CLI already authenticated as you. The Desk lists every draft, every reviewer label and every note at once. What a leak would cost: draft titles, prose, reviewer initials and note text. What it would *not* cost: the ability to open a draft or mint a link — a link id is not a token, the HMAC is, and minting is not here at all.
 
 #### The gate
 

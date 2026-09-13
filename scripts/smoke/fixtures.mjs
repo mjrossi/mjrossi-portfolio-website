@@ -23,8 +23,9 @@ import {
   STALE_REVISION,
 } from './config.mjs';
 import { d1Migrate } from '../d1.mjs';
-import { clearLinks, extendLink, extendLinks, getLink, recordLinks } from '../links-db.mjs';
-import { clearNotes, closeNotes, listNotes, reopenNote, seedNotes } from '../notes-db.mjs';
+import { clearLinks, extendLink, extendLinks, getLinkById, recordLinks } from '../links-db.mjs';
+import { clearNotes, closeNotes, getNoteById, listNotes, reopenNote, seedNotes } from '../notes-db.mjs';
+import { resolveLink, resolveNote } from '../resolve-id.mjs';
 
 const LOCAL = { local: true };
 
@@ -251,7 +252,7 @@ export async function checkExtendRoundTrip() {
   );
   check(
     'extend: a refused extension leaves the old expiry in place',
-    (await getLink(EXTEND_SLUG, probe, LOCAL))?.exp === ceiling,
+    (await getLinkById(probe, LOCAL))?.exp === ceiling,
     'the row moved despite the UPDATE reporting no change',
   );
 
@@ -267,6 +268,21 @@ export async function checkExtendRoundTrip() {
     'extend: a revoked link cannot be extended back to life',
     revoked.length === 0,
     `got ${JSON.stringify(revoked)} — revoking is supposed to be final`,
+  );
+
+  // getLinkById is what `just preview-extend <id>` resolves through, so it has
+  // to answer for a row in ANY state -- the good refusals downstream (revoked,
+  // past the ceiling) all depend on finding the row and then rejecting it.
+  const revokedRow = await getLinkById(LINKS.extendRevoked.id, LOCAL);
+  check(
+    'getLinkById: finds a revoked row, and carries the slug that identifies it',
+    revokedRow?.slug === EXTEND_SLUG && revokedRow?.revoked_at != null,
+    `got ${JSON.stringify(revokedRow)} — resolution must reach a revoked link`,
+  );
+  check(
+    'getLinkById: an id that exists nowhere is null, not undefined',
+    (await getLinkById('0123456789abcdef', LOCAL)) === null,
+    'a missing row must be null so resolve-id can branch on it',
   );
 
   // `just preview-extend <slug> --all`, the command for "I pushed the date out".
@@ -292,7 +308,7 @@ export async function checkExtendRoundTrip() {
   );
   check(
     'extend --all: the row it reported moving really moved',
-    (await getLink(EXTEND_SLUG, LINKS.extendAllRoom.id, LOCAL))?.exp === target,
+    (await getLinkById(LINKS.extendAllRoom.id, LOCAL))?.exp === target,
     'the UPDATE reported a change the table does not show',
   );
   // Bulk scoping, asserted rather than argued. `--all` is the one statement here
@@ -300,10 +316,12 @@ export async function checkExtendRoundTrip() {
   // property worth pinning: crossSlug sits on a DIFFERENT slug at a far-future
   // expiry, and the live matrix reads it long after this runs. While these
   // fixtures shared a slug with it this check could not have been written — the
-  // --all above rewrote that very row, harmlessly but silently.
+  // --all above rewrote that very row, harmlessly but silently. Addressed by id
+  // since getLinkById replaced getLink; the slug in the name below is
+  // documentation, not a filter.
   check(
     'extend --all: leaves another post’s links alone',
-    (await getLink(OTHER_SLUG, LINKS.crossSlug.id, LOCAL))?.exp === FAR_FUTURE_EXP,
+    (await getLinkById(LINKS.crossSlug.id, LOCAL))?.exp === FAR_FUTURE_EXP,
     'a bulk extend reached across slugs — the cross-slug assertions below now ' +
       'depend on an expiry this statement moved',
   );
@@ -330,6 +348,23 @@ export async function checkExtendRoundTrip() {
  */
 export async function checkCloseRoundTrip() {
   const target = NOTES.current.id;
+
+  // The notes-side twin of getLinkById: `just galley-reopen <id>` resolves
+  // through this. It must reach a CLOSED note -- that is the only kind worth
+  // re-opening -- and it must carry the slug, which the shared read column list
+  // deliberately omits. NOTES.closed is seeded closed and nothing below touches
+  // it; the round-trip works on NOTES.current.
+  const closedRow = await getNoteById(NOTES.closed.id, LOCAL);
+  check(
+    'getNoteById: finds a closed note, and carries its slug',
+    closedRow?.slug === FIXTURE_SLUG && closedRow?.closed_at != null,
+    `got ${JSON.stringify(closedRow)} — a closed note must be resolvable`,
+  );
+  check(
+    'getNoteById: an id that exists nowhere is null, not undefined',
+    (await getNoteById('00000000-0000-4000-8000-000000000000', LOCAL)) === null,
+    'a missing row must be null so resolve-id can branch on it',
+  );
 
   const wrongPost = await closeNotes(OTHER_SLUG, [target], LOCAL);
   check(
@@ -394,5 +429,43 @@ export async function checkCloseRoundTrip() {
     'close: the closed fixture is still closed',
     !openIds.includes(NOTES.closed.id),
     'the closed-round fixture leaked back into the open set',
+  );
+}
+
+/**
+ * scripts/resolve-id.mjs, wired to the real tables.
+ *
+ * THE DECISIONS ARE NOT TESTED HERE. Every refusal resolve() makes -- the id
+ * shape, the missing row, and above all the cross-post mismatch that is the
+ * whole of the review commands' scoping -- is decided from { id, slug, row } and
+ * needs no database to reach, so it is unit tested in src/lib/resolve-id.test.js
+ * against an injected `fetch`, where it runs under `npm test` rather than behind
+ * a build and a migrated D1. Same split, and the same reasoning, as
+ * src/lib/preview-links.js: the decision is unit tested, the wiring is here.
+ *
+ * WHAT IS LEFT IS THE HALF A STUB CANNOT ANSWER: that resolveLink and resolveNote
+ * really reach their tables, and that what comes back carries the slug the whole
+ * feature derives the post from. A seam that returned the right shape while the
+ * binder underneath it was pointed at the wrong column would pass every unit
+ * test in the file above. Two reads, both of rows nothing here mutates.
+ */
+export async function checkIdResolution() {
+  /** `die` as a value. Nothing below is expected to refuse, so this failing IS the failure. */
+  const boom = (message) => {
+    throw new Error(message);
+  };
+
+  const link = await resolveLink(boom, LINKS.crossSlug.id, LOCAL);
+  check(
+    'resolveLink: an id alone reaches preview_links and comes back with the post',
+    link.slug === OTHER_SLUG && link.row?.id === LINKS.crossSlug.id,
+    `got ${JSON.stringify(link)} — \`just preview-revoke <id>\` derives the post through this`,
+  );
+
+  const note = await resolveNote(boom, NOTES.closed.id, LOCAL);
+  check(
+    'resolveNote: an id alone reaches galley_notes and comes back with the post',
+    note.slug === FIXTURE_SLUG && note.row?.closed_at != null,
+    `got ${JSON.stringify(note)} — \`just galley-reopen <id>\` derives the post through this`,
   );
 }

@@ -15,6 +15,7 @@ import { checkWranglerConfig } from './smoke/wrangler.mjs';
 import {
   checkCloseRoundTrip,
   checkExtendRoundTrip,
+  checkIdResolution,
   clearFixtures,
   migrateLocalDb,
   seedLinks,
@@ -94,6 +95,9 @@ await setup('could not seed galley_notes fixtures', seedNotesFixtures);
 // what it changes, because the live matrices read those exact rows.
 await setup('extendLink round-trip failed', checkExtendRoundTrip);
 await setup('closeNotes round-trip failed', checkCloseRoundTrip);
+// Read-only, and last of the four, so it resolves rows in the states the two
+// round-trips above leave them in rather than in states nothing else sees.
+await setup('id resolution failed', checkIdResolution);
 
 // ── the runtime ────────────────────────────────────
 

@@ -169,7 +169,8 @@ export async function checkDesk() {
   );
 
   // A slug with no post is a state, not an error — it is exactly the link most
-  // in need of revoking and the reason preview-roster grew --all.
+  // in need of revoking, and the reason an unscoped roster exists at all (which
+  // `just preview-roster` with no slug is now the spelling of).
   const { res: gone } = await get(`${BASE}/admin/no-such-post-anywhere/`, token);
   checkStatus('desk: a slug with no post still renders its roster', gone, 200);
 

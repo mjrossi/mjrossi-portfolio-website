@@ -199,10 +199,15 @@ export async function extendLinks(store, slug, exp) {
 /**
  * Revoke links for one post.
  *
- * ALWAYS scoped to the slug, even when an id is given. A mistyped id belonging
- * to another post therefore does nothing, rather than quietly withdrawing
- * someone else's link -- the failure mode that would be hardest to notice,
- * since the operator sees a successful command either way.
+ * ALWAYS scoped to the slug, which is the store's own contract: a caller holding
+ * a slug gets a statement that cannot reach past it.
+ *
+ * IT IS NO LONGER WHAT PROTECTS A MISTYPED ID AT THE CLI. Since the operator can
+ * pass an id alone, the slug reaching this function is usually DERIVED from the
+ * very row being filtered, which makes the clause tautological -- it can only
+ * match. What catches a wrong id is scripts/resolve-id.mjs refusing when the
+ * operator names a post the row disagrees with. Don't delete this clause; do
+ * stop citing it as the safety property.
  *
  * Already-revoked rows are left alone (`revoked_at IS NULL`), so re-running
  * does not rewrite the date a link was actually withdrawn.
@@ -213,6 +218,11 @@ export async function extendLinks(store, slug, exp) {
  * nothing -- so without this the command that takes a link back reports success
  * either way. That is the wrong default for a withdrawal: the operator runs it
  * precisely when a link has gone astray and they need to know it is dead.
+ *
+ * An empty result means only that no row matched slug + id + not-already-revoked.
+ * WHICH of those missed is not something this statement can say, and not
+ * something a caller should infer from call order -- the row is the answer, and
+ * `RETURNING` above is why a caller already has it.
  *
  * `RETURNING` rather than a second SELECT so this stays one round-trip and
  * cannot race a concurrent revoke between the write and the read-back.
@@ -282,29 +292,32 @@ export async function clearLinks(store, slugs) {
 const COLUMNS = 'id, slug, reviewer, exp, max_exp, created_at, revoked_at';
 
 /**
- * One link, by post and id.
+ * One link, by id.
  *
- * Exists to EXPLAIN A REFUSAL, never to gate one -- extendLink and revokeLinks
- * both decide in their own statement, so nothing here is load-bearing and a
- * stale read cannot widen anything. `just preview-extend` calls it only after
- * an UPDATE has already changed nothing, to say which of the several silent
- * reasons applied.
+ * THE PRIMARY-KEY LOOKUP THAT MAKES THE SLUG OPTIONAL AT THE CLI. `slug` is a
+ * column on the row, not part of its identity, so resolving an id gives the post
+ * for free -- which is what lets `just preview-revoke <id>` work without being
+ * told which draft the link was minted for.
  *
- * Scoped by slug as well as id, like every other write in this file: an id
- * belonging to another post reads as "no such link" rather than answering about
- * a draft the operator did not name.
+ * Returns a row in ANY state -- live, expired, revoked, spent. That is
+ * deliberate and load-bearing: scripts/resolve-id.mjs hands the row to callers
+ * whose most useful refusals ("was revoked on …", "past the ceiling it was
+ * signed with …") exist only because the row was found and then rejected.
+ * Filtering to live rows here would flatten all of them into "no such link".
+ *
+ * Exists to EXPLAIN AND RESOLVE, never to gate. extendLink and revokeLinks each
+ * decide in their own statement, so nothing here is load-bearing for
+ * authorisation and a stale read cannot widen anything.
  *
  * @param {{ prepare: (sql: string) => any }} store
- * @param {string} slug
  * @param {string} id
  * @returns {Promise<Record<string, unknown> | null>}
  */
-export async function getLink(store, slug, id) {
-  checkSlug(slug);
+export async function getLinkById(store, id) {
   checkLinkId(id);
   return store
-    .prepare(`SELECT ${COLUMNS} FROM preview_links WHERE slug = ? AND id = ?`)
-    .bind(slug, id)
+    .prepare(`SELECT ${COLUMNS} FROM preview_links WHERE id = ?`)
+    .bind(id)
     .first();
 }
 

@@ -71,8 +71,8 @@ export async function clearLinks(slugs, { local = false } = {}) {
 // ── reads ────────────────────────────────────────────
 
 /** @see src/lib/links-store.js */
-export function getLink(slug, id, { local = false } = {}) {
-  return store.getLink(at(local), slug, id);
+export function getLinkById(id, { local = false } = {}) {
+  return store.getLinkById(at(local), id);
 }
 
 /** @see src/lib/links-store.js */

@@ -1,8 +1,12 @@
 // End a review round: mark the notes you pulled and applied as closed.
 //
-//   just galley-close my-draft --remote                    # the whole pulled round
-//   just galley-close my-draft --remote --note <id>        # one note
-//   just galley-close my-draft --remote --from path/to.md  # a pull written elsewhere
+//   just galley-close <slug> --remote                 # the round in docs/galley/<slug>.md
+//   just galley-close <note-id> --remote              # one note; the post comes off the row
+//   just galley-close <slug> <note-id> --remote       # the same, post asserted
+//   just galley-close <slug> --remote --from path.md  # a pull written elsewhere
+//
+// A note id is a UUID and a slug is [a-z0-9-]+, so the first positional's shape
+// says which was meant. `--note <id>` stays as an alias. See scripts/resolve-id.mjs.
 //
 // --remote or --local is REQUIRED; see scripts/database-target.mjs. Closing the
 // wrong database reports success while the reviewer's margin goes on showing
@@ -29,17 +33,19 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { galleyFile } from '../src/lib/galley-manifest.js';
+import { isoDay } from '../src/lib/galley-render.js';
 import { SLUG_RE } from '../src/lib/preview.js';
 import { cli, relativeToCwd } from './cli.mjs';
 import { databaseFlag, databaseLabel } from './database-target.mjs';
 import { NOTE_ID_RE, closeNotes, listNotes, noteIdsInFile } from './notes-db.mjs';
+import { resolveNote } from './resolve-id.mjs';
 
 const { die, resolveDatabase, requirePost } = cli('galley-close');
 
 // ── args ─────────────────────────────────────────────
 
 const argv = process.argv.slice(2);
-let slug = null;
+const positional = [];
 let local = false;
 let remote = false;
 let noteId = null;
@@ -59,27 +65,52 @@ for (let i = 0; i < argv.length; i++) {
     if (!from) die('--from requires a path');
   } else if (arg.startsWith('-')) {
     die(`unknown flag ${arg}`);
-  } else if (slug === null) {
-    slug = arg;
   } else {
-    die(`unexpected argument ${arg}`);
+    positional.push(arg);
   }
 }
 
-if (!slug) {
-  die('usage: just galley-close <slug> (--remote | --local) [--note ID] [--from PATH]');
+// WHAT THE FIRST POSITIONAL IS. A note id is a UUID and a slug is [a-z0-9-]+, so
+// the shape answers it -- no flag needed, and `--note` stays as an alias for the
+// operators and docs that use it.
+//
+//   <note-id>            close that one note; the post comes off the row
+//   <slug> <note-id>     the same, with the post asserted
+//   <slug>               close the round in docs/galley/<slug>.md
+let slug = null;
+
+if (noteId === null && positional.length === 1 && NOTE_ID_RE.test(positional[0])) {
+  [noteId] = positional;
+} else if (noteId !== null) {
+  if (positional.length > 1) die(`unexpected argument ${positional[1]}`);
+  slug = positional[0] ?? null;
+} else if (positional.length === 2 && NOTE_ID_RE.test(positional[1])) {
+  [slug, noteId] = positional;
+} else if (positional.length === 1) {
+  [slug] = positional;
+} else {
+  die('usage: just galley-close (<slug> | <note-id>) (--remote | --local) [--from PATH]');
 }
-if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
+
+if (slug !== null && !SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 if (noteId !== null && !NOTE_ID_RE.test(noteId)) {
   die(`invalid note id ${JSON.stringify(noteId)} — ids are printed in the pulled review file`);
 }
+// --from names a round file, which is a per-post artifact. There is no round to
+// read for a single note, and no file to read one out of.
 if (noteId !== null && from !== null) die('--note and --from are alternatives; pass one');
-
 const useLocal = resolveDatabase({ local, remote });
 
-// Validated against real content for the same reason preview-link.mjs does it: a
-// typo would otherwise report "no notes to close" for a post that has plenty,
-// which reads exactly like the round already being closed.
+// Closing ONE note derives its post; closing a round was given one. Either way
+// requirePost then validates against real content for the same reason
+// preview-link.mjs does it: a typo would otherwise report "no notes to close"
+// for a post that has plenty, which reads exactly like the round already being
+// closed.
+let resolvedNote = null;
+if (noteId !== null) {
+  resolvedNote = await resolveNote(die, noteId, { slug, local: useLocal });
+  ({ slug } = resolvedNote);
+}
 requirePost(slug);
 
 const where = databaseLabel(useLocal);
@@ -131,17 +162,28 @@ try {
 
 if (manifest) {
   console.error(`galley-close: ${shown} lists ${ids.length} note(s)`);
+} else {
+  // The post was DERIVED from the note, so say which one -- it is the only
+  // signal that a pasted id went where the operator meant it to.
+  console.error(`galley-close: note ${noteId} on ${slug}`);
 }
 console.error(`              ${closed.length} closed  (${where})`);
 
-// Every no-op is silent in SQL -- an id from another post is scoped away, an
-// already-closed one matches nothing, one that never existed matches nothing --
-// so say when nothing happened rather than reporting a successful close.
+// Every no-op is silent in SQL, so say when nothing happened rather than
+// reporting a successful close. On the --note path the row is already in hand,
+// so read the date off it rather than asserting the cause -- the same move
+// preview-roster makes for a revoke that changed nothing, and for the same
+// reason: which causes are reachable is a property of closeNotes' WHERE clause,
+// not something this line should have to know.
 if (closed.length === 0) {
+  // The row was read before the UPDATE, so a no-op here means it was already
+  // closed then. The fallback is for the one case that leaves: a close landing
+  // between the read and the write, where naming a date would invent one.
+  const closedAt = resolvedNote?.row?.closed_at;
   console.error(
     manifest
       ? '              nothing changed — this round was already closed'
-      : '              nothing changed — that note is already closed, or belongs to another post',
+      : `              nothing changed — that note was already closed${closedAt ? ` on ${isoDay(closedAt)}` : ''}`,
   );
 }
 

@@ -13,8 +13,8 @@
 // that the answer is not "the scheduled posts". A round can outlive its draft:
 // move a pubDate earlier, or publish while notes are still open, and the post is
 // live with feedback nobody has closed. A link can outlive its post entirely —
-// preview-roster grew `--all` because a link whose slug you have forgotten is
-// otherwise unrevocable. Both belong on this page, so the row set is a union
+// an unscoped roster exists because a link whose slug you have forgotten is
+// otherwise unrevocable (`just preview-roster` with no slug). Both belong on this page, so the row set is a union
 // rather than a filter over the collection.
 
 import { linkState } from './link-state.js';

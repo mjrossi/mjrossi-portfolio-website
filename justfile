@@ -109,9 +109,11 @@ galley-preview *flags:
 # ── review ───────────────────────────────────────────
 #
 # Everything to do with showing an unpublished draft to somebody and getting
-# their notes back. All of it is scoped to one post, all of it requires an
-# explicit --remote or --local, and all of it reads or writes the same D1
-# database (`just galley-migrate`).
+# their notes back. All of it requires an explicit --remote or --local, and all
+# of it reads or writes the same D1 database (`just galley-migrate`). Every
+# command resolves to one post: named for the post-shaped ones, derived from the
+# row for the ones given an id. The exception is a bare `just preview-roster`,
+# which is a read and is the inventory.
 #
 # One vocabulary for access: links are minted, listed, extended, and revoked
 # with the preview-* recipes whether or not they name a reviewer. The galley
@@ -156,36 +158,30 @@ galley-preview *flags:
 preview-link slug *flags:
     npm run preview-link -- {{slug}} {{flags}}
 
-# list every preview link minted for a post, with its state (live, expired, or
-# revoked). This is the ONLY inventory -- a token is recorded nowhere else, so
-# a link missing from this list cannot be revoked, only waited out.
+# list preview links with their state (live, expired, revoked, or spent). With a
+# slug, one post; with no slug, EVERY post grouped by draft. This is the ONLY
+# inventory -- a token is recorded nowhere else, so a link missing from this list
+# cannot be revoked, only waited out.
+#
+# The per-post scoping that matters in the worker -- handing someone one draft
+# must not hand them the rest -- does not reach a CLI already authenticated as
+# you. Without the unscoped listing, a link whose slug you have forgotten could
+# not be revoked at all: an inventory you can only query by knowing the answer is
+# not much of an inventory.
+#
+# Reading only. Revoking is `just preview-revoke <id>` / `just preview-revoke-all
+# <slug>`.
 #
 # --remote or --local is REQUIRED. Listing the wrong database answers "no links
 # minted" for one you never looked at, which is the most reassuring possible
 # wrong answer — see scripts/database-target.mjs.
-# usage: just preview-roster my-draft --remote
+# usage: just preview-roster --remote
+#        just preview-roster my-draft --remote
 #        just preview-roster my-draft --local
 [group('review')]
-[doc('list the preview links outstanding for one post (--remote|--local)')]
-preview-roster slug *flags:
-    npm run preview-roster -- {{slug}} {{flags}}
-
-# list EVERY preview link in the table, across all posts, grouped by post.
-#
-# The per-post scoping elsewhere is load-bearing in the worker — handing someone
-# one draft must not hand them the rest — but that does not reach a CLI already
-# authenticated as you. Without this, a link whose slug you have forgotten
-# cannot be revoked at all, only waited out: `just preview-roster` needs the
-# slug to answer, and a token is recorded nowhere else.
-#
-# Reading only. Revoking stays per-post (`just preview-revoke`), so a mistyped
-# id can never withdraw another draft's link.
-# usage: just preview-roster-all --remote
-#        just preview-roster-all --local
-[group('review')]
-[doc('list every preview link across all posts (--remote|--local)')]
-preview-roster-all *flags:
-    npm run preview-roster -- --all {{flags}}
+[doc('list preview links — one post, or every post when no slug is given (--remote|--local)')]
+preview-roster *args:
+    npm run preview-roster -- {{args}}
 
 # move a live link's expiry without minting a new one. THE URL DOES NOT CHANGE
 # — there is nothing to re-send, which is the whole point: before this, "give
@@ -201,12 +197,13 @@ preview-roster-all *flags:
 #
 # --remote or --local is REQUIRED. Extending the wrong database reports success
 # while the link the reviewer holds goes on expiring.
-# usage: just preview-extend my-draft a1b2c3d4e5f60718 --remote
-#        just preview-extend my-draft a1b2c3d4e5f60718 --hours 96 --remote
+# usage: just preview-extend a1b2c3d4e5f60718 --remote
+#        just preview-extend a1b2c3d4e5f60718 --hours 96 --remote
+#        just preview-extend my-draft a1b2c3d4e5f60718 --remote
 [group('review')]
 [doc('move the expiry of a live preview link — the URL is unchanged (--remote|--local)')]
-preview-extend slug id *flags:
-    npm run preview-extend -- {{slug}} {{id}} {{flags}}
+preview-extend *args:
+    npm run preview-extend -- {{args}}
 
 # re-clamp EVERY live link for a post. This is the command for "I pushed the
 # date out": a link's expiry is capped at the post's pubDate when it is minted,
@@ -225,13 +222,17 @@ preview-extend slug id *flags:
 preview-extend-all slug *flags:
     npm run preview-extend -- {{slug}} --all {{flags}}
 
-# revoke a preview link. Takes READING away as well as writing: middleware
-# refuses the whole grant, so the post 404s for that link. Rows are kept, so a
-# revoked link stays visible in `just preview-roster`.
+# revoke a preview link, by its id. Takes READING away as well as writing:
+# middleware refuses the whole grant, so the post 404s for that link. Rows are
+# kept, so a revoked link stays visible in `just preview-roster`.
 #
-# Always scoped to the named post, so a mistyped id belonging to another draft
-# does nothing rather than withdrawing someone else's link. Reports what it
-# actually withdrew — "nothing to revoke" is a distinct outcome from success.
+# THE POST IS DERIVED FROM THE LINK. A link id is 64 bits of getRandomValues and
+# preview_links is keyed on it, so naming the draft as well was redundant. Put a
+# slug in front of the id and it becomes an ASSERTION: if it disagrees with the
+# row, this refuses and names both posts, which is what a mistyped id runs into.
+#
+# Reports what it actually withdrew — "nothing to revoke" is a distinct outcome
+# from success.
 #
 # Revoking is final: a revoked row cannot be extended back to life. If the link
 # is fine and only the window is short, `just preview-extend` is the gentler
@@ -239,12 +240,23 @@ preview-extend-all slug *flags:
 #
 # --remote or --local is REQUIRED; revoking the wrong database leaves a live
 # link live while telling you it is gone.
-# usage: just preview-revoke my-draft a1b2c3d4e5f60718 --remote
-#        just preview-revoke my-draft --revoke-all --remote
+# usage: just preview-revoke a1b2c3d4e5f60718 --remote
+#        just preview-revoke my-draft a1b2c3d4e5f60718 --remote
 [group('review')]
-[doc('revoke one preview link, or --revoke-all for a post (--remote|--local)')]
-preview-revoke slug id *flags:
-    npm run preview-roster -- {{slug}} {{ if id == "--revoke-all" { "--revoke-all" } else { "--revoke " + id } }} {{flags}}
+[doc('revoke one preview link by its id — the post is derived (--remote|--local)')]
+preview-revoke *args:
+    npm run preview-roster -- --revoke {{args}}
+
+# revoke EVERY live link for a post. The bulk counterpart, and the one revoke
+# with no id to resolve through — so it has to be told which post.
+#
+# Mirrors `just preview-extend-all`. Neither this nor `just preview-revoke` can
+# reach the table at large; there is no cross-post revoke.
+# usage: just preview-revoke-all my-draft --remote
+[group('review')]
+[doc('revoke every live preview link for one post (--remote|--local)')]
+preview-revoke-all slug *flags:
+    npm run preview-roster -- {{slug}} --revoke-all {{flags}}
 
 # apply the D1 schema in migrations/ to the galley database. Run once against
 # --remote before the first real review round, and against --local whenever a
@@ -303,11 +315,11 @@ galley slug *flags:
 # --remote or --local is REQUIRED. Closing the wrong database reports success
 # while the reviewer's margin goes on showing every note you just applied.
 # usage: just galley-close my-draft --remote
-#        just galley-close my-draft --remote --note 1111...-...
+#        just galley-close 1111aaaa-2222-3333-4444-555566667777 --remote
 [group('review')]
 [doc('close the notes listed in docs/galley/<slug>.md — ends a round (--remote|--local)')]
-galley-close slug *flags:
-    npm run galley-close -- {{slug}} {{flags}}
+galley-close *args:
+    npm run galley-close -- {{args}}
 
 # put one closed note back. The undo for galley-close.
 #
@@ -316,11 +328,11 @@ galley-close slug *flags:
 # `just galley <slug> --all`, which lists closed notes with theirs.
 #
 # --remote or --local is REQUIRED.
-# usage: just galley-reopen my-draft --note 1111...-... --remote
+# usage: just galley-reopen 1111aaaa-2222-3333-4444-555566667777 --remote
 [group('review')]
 [doc('re-open one closed galley note (--remote|--local)')]
-galley-reopen slug *flags:
-    npm run galley-reopen -- {{slug}} {{flags}}
+galley-reopen *args:
+    npm run galley-reopen -- {{args}}
 
 # ── ops ──────────────────────────────────────────────
 #

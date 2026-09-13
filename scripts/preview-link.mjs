@@ -17,7 +17,7 @@
 //
 // EVERY link minted here is recorded in the preview_links allowlist, and
 // middleware refuses a token whose row is missing or revoked — so a link can be
-// withdrawn with `just preview-revoke <slug> <id>`, and `just preview-roster
+// withdrawn with `just preview-revoke <id>`, and `just preview-roster
 // <slug>` lists what is outstanding. The row is written BEFORE the URL prints:
 // a link that verifies but has no row looks exactly like a broken feature, so
 // a failed insert hands out nothing at all.
@@ -270,8 +270,8 @@ console.error(
 );
 console.error('  scope:    this post only — the link does not reveal anything else');
 console.error(`  link id:  ${linkId}`);
-console.error(`    revoke:  just preview-revoke ${slug} ${linkId} ${target}`);
-console.error(`    extend:  just preview-extend ${slug} ${linkId} --hours N ${target}\n`);
+console.error(`    revoke:  just preview-revoke ${linkId} ${target}`);
+console.error(`    extend:  just preview-extend ${linkId} --hours N ${target}\n`);
 
 // Said out loud, because it is the one case where a correct link is useless. A
 // post an hour from publication mints a link with an hour on it, which reads as

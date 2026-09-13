@@ -18,8 +18,8 @@
 // WHAT DOES NOT LIVE HERE, deliberately: argv parsing. Each script's flag loop
 // looks alike from a distance and is not alike up close — every one of them
 // carries refusal messages written for that command's specific mistake (`--hours
-// 0` is a revoke wearing the wrong name; `--all` with a slug; a reviewer label
-// that cannot be signed), and those messages are the most useful thing in the
+// 0` is a revoke wearing the wrong name; a lone positional that is not a link id;
+// a reviewer label that cannot be signed), and those messages are the most useful thing in the
 // file. A spec-driven parser general enough to keep them would be larger than the
 // six loops it replaced, and nothing in this repo executes these scripts under
 // test, so the drift would be silent. See docs/FILE-MAP.md on the operator surface.

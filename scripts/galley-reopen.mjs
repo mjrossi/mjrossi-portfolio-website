@@ -1,6 +1,7 @@
 // Put one closed note back into the working set. The undo for `just galley-close`.
 //
-//   just galley-reopen my-draft --note <id> --remote
+//   just galley-reopen <note-id> --remote
+//   just galley-reopen my-draft <note-id> --remote   # post asserted
 //
 // --remote or --local is REQUIRED; see scripts/database-target.mjs.
 //
@@ -13,18 +14,23 @@
 // Ids come from the pulled review file: `just galley <slug> --all` prints closed
 // notes with theirs. Without this command a mistaken close would be recoverable
 // only by hand-written SQL against a table nothing else in this repo updates.
+//
+// THE POST IS DERIVED FROM THE NOTE. galley_notes is keyed on a randomUUID, so
+// naming the post as well was redundant; a slug in front of the id is still
+// accepted and is then an assertion. See scripts/resolve-id.mjs.
 
 import { SLUG_RE } from '../src/lib/preview.js';
 import { cli } from './cli.mjs';
 import { databaseFlag, databaseLabel } from './database-target.mjs';
-import { NOTE_ID_RE, listNotes, reopenNote } from './notes-db.mjs';
+import { reopenNote } from './notes-db.mjs';
+import { resolveNote } from './resolve-id.mjs';
 
 const { die, resolveDatabase, requirePost } = cli('galley-reopen');
 
 // ── args ─────────────────────────────────────────────
 
 const argv = process.argv.slice(2);
-let slug = null;
+const positional = [];
 let local = false;
 let remote = false;
 let noteId = null;
@@ -36,24 +42,41 @@ for (let i = 0; i < argv.length; i++) {
   } else if (arg === '--remote') {
     remote = true;
   } else if (arg === '--note') {
+    // Kept as an alias for the positional. It was only ever a flag because the
+    // slug held the first positional slot, and that slot is free now.
     noteId = argv[++i];
     if (!noteId) die('--note requires a note id');
   } else if (arg.startsWith('-')) {
     die(`unknown flag ${arg}`);
-  } else if (slug === null) {
-    slug = arg;
   } else {
-    die(`unexpected argument ${arg}`);
+    positional.push(arg);
   }
 }
 
-if (!slug) die('usage: just galley-reopen <slug> --note <id> (--remote | --local)');
-if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
-if (noteId === null) die('--note <id> is required — ids are printed by `just galley <slug> --all`');
-if (!NOTE_ID_RE.test(noteId)) die(`invalid note id ${JSON.stringify(noteId)}`);
+// One positional is the note; two are <slug> <note>, with the slug asserted.
+// A --note flag fills the id, leaving at most a slug in front of it.
+let slug = null;
+if (noteId !== null) {
+  if (positional.length > 1) die(`unexpected argument ${positional[1]}`);
+  slug = positional[0] ?? null;
+} else if (positional.length === 1) {
+  [noteId] = positional;
+} else if (positional.length === 2) {
+  [slug, noteId] = positional;
+} else {
+  die('usage: just galley-reopen <note-id> (--remote | --local)');
+}
+
+if (slug !== null && !SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 
 const useLocal = resolveDatabase({ local, remote });
+const where = databaseLabel(useLocal);
 
+// The post comes off the note. requirePost then validates it against real
+// content exactly as before -- a row naming a post that no longer exists is
+// worth saying out loud rather than reopening into.
+let row;
+({ slug, row } = await resolveNote(die, noteId, { slug, local: useLocal }));
 requirePost(slug);
 
 // ── reopen ───────────────────────────────────────────
@@ -65,24 +88,17 @@ try {
   die(err.message);
 }
 
-const where = databaseLabel(useLocal);
-
-// A no-op has three causes that look identical in SQL, so read the row back to
-// say which. Same approach as preview-extend.mjs explaining its refusals: the
-// operator ran this because something was wrong, and "nothing happened" is not
-// an answer they can act on.
+// A no-op now has exactly one cause. "No such note" and "wrong post" are both
+// settled by resolveNote before the UPDATE runs, and the row it returned says
+// which -- so this needs no second read, where it used to list every note on the
+// post to find one by id.
 if (!changed) {
-  let all;
-  try {
-    all = await listNotes(slug, { includeClosed: true }, { local: useLocal });
-  } catch (err) {
-    die(err.message);
-  }
-  const row = all.find((note) => note.id === noteId);
-  if (!row) {
-    die(`no note ${noteId} on ${slug} (${where}) — check the id, and the database`);
-  }
-  die(`note ${noteId} is already open (${where}) — nothing to do`);
+  die(
+    row.closed_at == null
+      ? `note ${noteId} is already open (${where}) — nothing to do`
+      : `the update matched no row for note ${noteId} (${where}), and the row itself looks closed.\n` +
+          `  Re-run just galley ${slug} --all ${databaseFlag(useLocal)} to see its current state.`,
+  );
 }
 
 console.error(`galley-reopen: note ${noteId} re-opened on ${slug} (${where})`);

@@ -61,11 +61,11 @@ Any response with either unlock active gets `Cache-Control: no-store` and `X-Rob
 
 ```sh
 just preview-roster my-draft --remote                              # what is outstanding, and its state
-just preview-roster-all --remote                                   # every link, across all posts
-just preview-extend my-draft a1b2c3d4e5f60718 --hours 96 --remote  # more time, same URL
+just preview-roster --remote                                   # every link, across all posts
+just preview-extend a1b2c3d4e5f60718 --hours 96 --remote  # more time, same URL
 just preview-extend-all my-draft --hours 120 --remote              # after moving pubDate — every link, same URLs
-just preview-revoke my-draft a1b2c3d4e5f60718 --remote             # take one back
-just preview-revoke my-draft --revoke-all --remote                 # take back every live link
+just preview-revoke a1b2c3d4e5f60718 --remote             # take one back
+just preview-revoke-all my-draft --remote                 # take back every live link
 ```
 
 **Revoking removes reading as well as writing** — the post 404s for that link. Taking a draft back from someone should take the draft, not just the comment box. Rows are never deleted, so a withdrawn link stays listed as `revoked <date>` rather than vanishing from the inventory. Revoking is final: a revoked row cannot be extended back to life.
@@ -82,7 +82,7 @@ Moving `pubDate` **earlier** is the case the cap cannot see, since it is a snaps
 
 That is what makes short windows cheap: **mint the window you actually mean.** `--hours 48` for a couple of days' reading, not the default doubled "just in case", because more time no longer means a new link. Revocation still needs someone to notice a link went astray before it helps, and a shorter window is what limits the damage in the meantime.
 
-**The roster is the only inventory that exists.** A token is recorded nowhere else, so a link missing from it cannot be revoked, only waited out. `just preview-roster <slug>` answers for one post; **`just preview-roster-all` answers for every post**, which is the one to reach for when you can't remember which draft a link was minted for — without it, a forgotten slug meant a link you could not withdraw at all. Live rows show their remaining headroom as `· extend to <date>`.
+**The roster is the only inventory that exists.** A token is recorded nowhere else, so a link missing from it cannot be revoked, only waited out. `just preview-roster <slug>` answers for one post; **a bare `just preview-roster` answers for every post**. Forgetting which draft a link was minted for costs nothing now: the listing finds it, and `just preview-revoke <id>` withdraws it without the slug at all. Live rows show their remaining headroom as `· extend to <date>`.
 
 **Minting now needs D1, and this is the accepted cost.** `just preview-link` writes its row before printing the URL — a link that verifies but has no row is refused on arrival, which looks exactly like the feature being broken, so a failed insert hands out nothing at all. That means minting against production needs an API token carrying **D1:Edit**, and minting for local work needs `--local` against a migrated database. While D1 is unavailable, no preview link works. That failure is recoverable and immediately visible; links that cannot be withdrawn are neither. `npm run dev` is unaffected — it shows scheduled posts outright, so preview links were never the local mechanism.
 

@@ -83,6 +83,11 @@ function placeholders(n) {
  * to say which. `RETURNING` rather than a second SELECT so this stays one
  * round-trip and cannot race a concurrent close.
  *
+ * An empty result means only that no row matched slug + id + not-already-closed.
+ * WHICH of those missed is not something this statement can say, and a caller
+ * holding the row (galley-close resolves one before it writes) can read the
+ * answer off it rather than reasoning about which causes its own path admits.
+ *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {string} slug
  * @param {string[]} ids
@@ -110,6 +115,12 @@ export async function closeNotes(store, slug, ids) {
  * re-opening is the correction, so the correction should be the one that makes
  * you name what you mean. Same reasoning as revoking staying per-post while the
  * roster reads across all of them.
+ *
+ * Scoped to the slug, which is this module's contract for a caller that holds
+ * one -- but NOT what protects a mistyped id at the CLI any more. `just
+ * galley-reopen <id>` derives the slug from the row it then filters, making the
+ * clause tautological there; the wrong-post refusal lives in
+ * scripts/resolve-id.mjs. Keep the clause, stop citing it as the safety property.
  *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {string} slug
@@ -228,6 +239,30 @@ export async function clearNotes(store, slugs, { reviewer = null } = {}) {
 const COLUMNS =
   'id, revision_hash, reviewer, kind, src_start, src_end, ' +
   'quote, prefix, suffix, body, suggestion, created_at, closed_at';
+
+/**
+ * One note, by id.
+ *
+ * SELECTS `slug` ON TOP OF THE SHARED COLUMN LIST, and that is the whole reason
+ * it exists. Every other read here is already scoped to one post, so COLUMNS has
+ * never carried the slug; this is the read that has to answer *which* post, so
+ * `just galley-reopen <id>` and `just galley-close <id>` can be given an id and
+ * nothing else.
+ *
+ * Open or closed, either way. A closed note is the only kind worth re-opening,
+ * so filtering by state here would make the undo unreachable.
+ *
+ * @param {{ prepare: (sql: string) => any }} store
+ * @param {string} id
+ * @returns {Promise<Record<string, unknown> | null>}
+ */
+export async function getNoteById(store, id) {
+  checkNoteId(id);
+  return store
+    .prepare(`SELECT slug, ${COLUMNS} FROM galley_notes WHERE id = ?`)
+    .bind(id)
+    .first();
+}
 
 /**
  * Notes for one post, oldest first.

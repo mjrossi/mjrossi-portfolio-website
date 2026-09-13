@@ -1,11 +1,17 @@
 // Move the expiry of a preview link that already exists.
 //
-//   npm run preview-extend -- my-draft a1b2c3d4e5f60718 --remote
-//   npm run preview-extend -- my-draft a1b2c3d4e5f60718 --remote --hours 96
+//   npm run preview-extend -- a1b2c3d4e5f60718 --remote
+//   npm run preview-extend -- a1b2c3d4e5f60718 --remote --hours 96
+//   npm run preview-extend -- my-draft a1b2c3d4e5f60718 --remote   # post asserted
 //   npm run preview-extend -- my-draft --all --remote --hours 96
-//   npm run preview-extend -- my-draft a1b2c3d4e5f60718 --local
 //
 // --remote or --local is REQUIRED; see scripts/database-target.mjs.
+//
+// THE POST IS DERIVED FROM THE LINK, not supplied. A link id is 64 bits of
+// getRandomValues and `preview_links` is keyed on it, so naming the draft as well
+// was always redundant. A slug in front of the id is still accepted and is then
+// an ASSERTION: if it disagrees with the row, this refuses and names both posts.
+// See scripts/resolve-id.mjs for where that check sits and why.
 //
 // THE URL DOES NOT CHANGE. That is the entire point of this command: there is
 // nothing to re-send, and the reviewer never learns their link was about to
@@ -43,12 +49,14 @@
 // ever honour. Extending is what you do when somebody is waiting, so "nothing
 // happened" is not a usable answer.
 
+import { isoDay } from '../src/lib/galley-render.js';
 import { LINK_ID_RE, SLUG_RE } from '../src/lib/preview.js';
 import { clampToPublication, isPublished } from '../src/lib/schedule.js';
 import { readPubDate } from './content.mjs';
 import { cli } from './cli.mjs';
 import { databaseLabel } from './database-target.mjs';
-import { extendLink, extendLinks, getLink, listLinks } from './links-db.mjs';
+import { extendLink, extendLinks, listLinks } from './links-db.mjs';
+import { resolveLink } from './resolve-id.mjs';
 
 const DEFAULT_HOURS = 48;
 
@@ -62,8 +70,7 @@ function iso(sec) {
 // ── args ─────────────────────────────────────────────
 
 const argv = process.argv.slice(2);
-let slug = null;
-let id = null;
+const positional = [];
 let hours = DEFAULT_HOURS;
 let local = false;
 let remote = false;
@@ -88,30 +95,47 @@ for (let i = 0; i < argv.length; i++) {
     }
   } else if (arg.startsWith('-')) {
     die(`unknown flag ${arg}`);
-  } else if (slug === null) {
-    slug = arg;
-  } else if (id === null) {
-    id = arg;
   } else {
-    die(`unexpected argument ${arg}`);
+    positional.push(arg);
   }
 }
 
-if (!slug || (!id && !all)) {
+// WHAT THE POSITIONALS MEAN. Two shapes, and --all is what tells them apart:
+// it is the only mode whose subject is a post rather than a link.
+//
+//   --all      <slug>            re-clamp every live link for that post
+//   (default)  <id>              one link; the post comes off the row
+//   (default)  <slug> <id>       the same, with the post asserted
+//
+// A lone positional that is not a link id is REFUSED rather than read as a slug.
+// Guessing would turn `just preview-extend my-draft` -- a plausible typo for the
+// --all form -- into "no link my-draft", which blames the id for a missing flag.
+let slug = null;
+let id = null;
+
+if (all) {
+  if (positional.length !== 1) {
+    die('usage: npm run preview-extend -- <slug> --all (--remote | --local) [--hours N]');
+  }
+  slug = positional[0];
+} else if (positional.length === 1) {
+  id = positional[0];
+  if (!LINK_ID_RE.test(id)) {
+    die(
+      `expected a link id, got ${JSON.stringify(id)}.\n` +
+        '  Ids are 16 lowercase hex characters — `just preview-roster` lists them.\n' +
+        '  To move every link for a post instead, add --all.',
+    );
+  }
+} else if (positional.length === 2) {
+  [slug, id] = positional;
+} else {
   die(
-    'usage: npm run preview-extend -- <slug> (<link-id> | --all) (--remote | --local) [--hours N]',
+    'usage: npm run preview-extend -- (<link-id> | <slug> --all) (--remote | --local) [--hours N]',
   );
 }
-if (all && id) die(`pass either a link id or --all, not both (got ${JSON.stringify(id)})`);
-if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
-// Checked here as well as in links-store so the message names the constraint
-// rather than surfacing a validation error from two modules down.
-if (id && !LINK_ID_RE.test(id)) {
-  die(
-    `invalid link id ${JSON.stringify(id)} — ids are 16 lowercase hex characters, ` +
-      'as printed by `just preview-link` and listed by `just preview-roster`.',
-  );
-}
+
+if (slug !== null && !SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 
 // Which database, decided explicitly. See scripts/database-target.mjs for why
 // there is no default: extending the wrong one reports success while the link
@@ -119,6 +143,14 @@ if (id && !LINK_ID_RE.test(id)) {
 const useLocal = resolveDatabase({ local, remote });
 
 const where = databaseLabel(useLocal);
+
+// The post comes off the row when it was not named. Everything below -- the
+// pubDate read, the clamp, the slug-scoped UPDATE -- is unchanged; it is simply
+// no longer the operator's job to supply what the table already knows.
+let resolvedRow = null;
+if (!all) {
+  ({ slug, row: resolvedRow } = await resolveLink(die, id, { slug, local: useLocal }));
+}
 
 // ── how far the clock can go ─────────────────────────
 //
@@ -209,27 +241,14 @@ if (all) {
 }
 
 if (changed.length === 0) {
-  // Nothing moved. Read the row back to say which of the several silent reasons
-  // applied; this is the only thing getLink is for.
-  let row;
-  try {
-    row = await getLink(slug, id, { local: useLocal });
-  } catch (err) {
-    die(err.message);
-  }
+  // No second read: resolveLink already fetched this row, and a "no such link"
+  // branch is unreachable here -- resolution would have died before the UPDATE
+  // ran. What is left are the reasons a row that EXISTS refused to move.
+  const row = resolvedRow;
 
-  if (!row) {
-    die(
-      `no link ${id} for ${slug} in the ${where} database.\n` +
-        `  Links are scoped to their own post, so an id belonging to another draft reads\n` +
-        '  as missing here. `just preview-roster-all ' +
-        `${useLocal ? '--local' : '--remote'}` +
-        '` lists every link across every post.',
-    );
-  }
   if (row.revoked_at) {
     die(
-      `link ${id} was revoked on ${new Date(row.revoked_at).toISOString().slice(0, 10)} ` +
+      `link ${id} was revoked on ${isoDay(row.revoked_at)} ` +
         `(${where}).\n  Revoking is final — mint a fresh link with just preview-link instead.`,
     );
   }
@@ -266,7 +285,7 @@ const row = changed[0];
 const limit = clampToPublication(row.max_exp, pubDate);
 const headroom = limit > row.exp ? iso(limit) : null;
 
-console.error(`preview-extend: ${slug} ${row.id} now expires ${iso(row.exp)} (${where})\n`);
+console.error(`preview-extend: ${row.id} on ${slug} now expires ${iso(row.exp)} (${where})\n`);
 console.error(`  database: ${where}`);
 console.error(`  post:     ${slug}`);
 console.error(`  link id:  ${row.id}`);

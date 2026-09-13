@@ -106,6 +106,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `scripts/preview-roster.mjs` — lists and revokes. **The only inventory of issued links there is.** No slug lists across every post.
 - `scripts/galley-pull.mjs` — pulls notes into `docs/galley/<slug>.md`. Open notes only unless `--all`; prints every note id.
 - `scripts/galley-close.mjs` — reads that file back and closes the ids in it, or one note by id. Run **after** the merge. `scripts/galley-reopen.mjs` is the undo.
+- `scripts/post-rename.mjs` — the database half of a slug rename: **moves** the notes, **revokes** the links. Runs after the `git mv` and checks it happened. Refuses a published post.
 - `scripts/galley-preview.mjs` — `just galley-preview`: the margin against fixtures, no build/worker/DB. **Run `--stale` too.**
 - `scripts/gen-headers.mjs` — writes `dist/client/_headers` during the build.
 - `scripts/make-og.mjs`, `scripts/make-noise.mjs` — one-off regenerators. **The site card states identity only — never a fact about the present.**
@@ -266,6 +267,8 @@ just galley-close my-draft --remote                 # after the revision merges 
 **Git holds the post. D1 holds the conversation about the post.** Do not migrate posts into the database — `Figure`/`diagrams/*`, `astro:assets` and Zod frontmatter validation all run at build time, and all three would have to be rebuilt at runtime.
 
 **The galley does not hand out access.** Links are minted, listed, extended and revoked with `just preview-link` / `preview-roster` / `preview-extend` / `preview-revoke` — one vocabulary for who may see a draft, whether or not they may comment. That is why there is no `galley-link`.
+
+**Renaming a post takes its notes with it, and kills its links.** A slug is a filename, so retitling a draft is a `git mv` — and both tables key on the slug. `just post-rename <old> <new> --remote`, in the same commit as the move. Notes are moved; links are **revoked**, never moved, because `preview_links.slug` mirrors the signed payload and the slug is inside the token's HMAC. Slugs are frozen at publication: there is no post-level redirect here, and the command refuses a live post.
 
 **Publishing closes the galley.** `BlogPost.astro` stops rendering the margin and `/api/galley` refuses both methods with `post_published` once `pubDate` has passed. Enforced in both places, because the layout decides whether the margin is *drawn* and the endpoint decides whether a note can be *written*.
 

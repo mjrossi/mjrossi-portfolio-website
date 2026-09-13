@@ -16,6 +16,7 @@ import {
   checkCloseRoundTrip,
   checkExtendRoundTrip,
   checkIdResolution,
+  checkRenameRoundTrip,
   clearFixtures,
   migrateLocalDb,
   seedLinks,
@@ -95,7 +96,10 @@ await setup('could not seed galley_notes fixtures', seedNotesFixtures);
 // what it changes, because the live matrices read those exact rows.
 await setup('extendLink round-trip failed', checkExtendRoundTrip);
 await setup('closeNotes round-trip failed', checkCloseRoundTrip);
-// Read-only, and last of the four, so it resolves rows in the states the two
+// Seeds and clears its own pair of slugs, so it neither reads nor disturbs the
+// fixtures above — which is what lets it move whole slugs around this late.
+await setup('renameNotes round-trip failed', checkRenameRoundTrip);
+// Read-only, and last of the five, so it resolves rows in the states the
 // round-trips above leave them in rather than in states nothing else sees.
 await setup('id resolution failed', checkIdResolution);
 

@@ -18,13 +18,23 @@ import {
   NOW_SEC,
   OTHER_SLUG,
   PUBLISHED_SLUG,
+  RENAME_FROM_SLUG,
+  RENAME_TO_SLUG,
   SMOKE_REVIEWER,
   SMOKE_REVIEWER_TWO,
   STALE_REVISION,
 } from './config.mjs';
 import { d1Migrate } from '../d1.mjs';
 import { clearLinks, extendLink, extendLinks, getLinkById, recordLinks } from '../links-db.mjs';
-import { clearNotes, closeNotes, getNoteById, listNotes, reopenNote, seedNotes } from '../notes-db.mjs';
+import {
+  clearNotes,
+  closeNotes,
+  getNoteById,
+  listNotes,
+  renameNotes,
+  reopenNote,
+  seedNotes,
+} from '../notes-db.mjs';
 import { resolveLink, resolveNote } from '../resolve-id.mjs';
 
 const LOCAL = { local: true };
@@ -119,7 +129,14 @@ export const UNRECORDED_LINK_ID = '99998888aaaabbbb';
 
 // Every slug this file writes rows for. Used by both cleanups, which have to
 // stay identical or a fixture outlives the run that made it.
-const FIXTURE_SLUGS = [FIXTURE_SLUG, OTHER_SLUG, EXTEND_SLUG, PUBLISHED_SLUG];
+const FIXTURE_SLUGS = [
+  FIXTURE_SLUG,
+  OTHER_SLUG,
+  EXTEND_SLUG,
+  PUBLISHED_SLUG,
+  RENAME_FROM_SLUG,
+  RENAME_TO_SLUG,
+];
 
 /**
  * wrangler dev does NOT apply migrations on startup — it just hands the worker
@@ -430,6 +447,110 @@ export async function checkCloseRoundTrip() {
     !openIds.includes(NOTES.closed.id),
     'the closed-round fixture leaked back into the open set',
   );
+}
+
+/**
+ * The renameNotes round-trip: a post's review history following its slug.
+ *
+ * Runs beside checkCloseRoundTrip and for the same reason — the CLI path shells
+ * out to `wrangler d1 execute`, so the only place this statement executes under
+ * test is a migrated local database, which is what smoke has.
+ *
+ * Two properties are worth pinning, and neither is visible in the SQL.
+ *
+ * CONVERGENCE. `just post-rename` performs two writes against two wrangler
+ * invocations and cannot be atomic, so it is idempotent instead: a run
+ * interrupted between moving the notes and revoking the links is repaired by
+ * running it again. That is only true while a second rename is a no-op, which is
+ * a property of the WHERE clause and would survive as a comment long after it
+ * stopped being true.
+ *
+ * CLOSED STAYS CLOSED. A rename moves a whole history, most of which is finished
+ * rounds. `SET slug = ?` touching closed_at — or a "helpful" reset of it — would
+ * reopen every retired note at once and put them all back in the next pull.
+ *
+ * Self-contained: seeds its own pair of slugs, clears them afterwards, and reads
+ * the fixture post only to prove it was left alone.
+ */
+export async function checkRenameRoundTrip() {
+  // Fixed, like every other fixture id, and outside the ranges NOTES uses.
+  const CLOSED_AT = 1_700_000_000_000;
+  const moving = [
+    {
+      id: '44444444-4444-4444-8444-444444444444',
+      slug: RENAME_FROM_SLUG,
+      revisionHash: FIXTURE_REVISION,
+      reviewer: SMOKE_REVIEWER,
+      srcStart: 3,
+      srcEnd: 4,
+      quote: 'smoke rename open note quote',
+      body: 'smoke: open note that must follow the slug',
+    },
+    {
+      id: '55555555-5555-4555-8555-555555555555',
+      slug: RENAME_FROM_SLUG,
+      revisionHash: STALE_REVISION,
+      reviewer: SMOKE_REVIEWER,
+      srcStart: 5,
+      srcEnd: 6,
+      quote: 'smoke rename closed note quote',
+      body: 'smoke: closed note that must follow the slug and stay closed',
+      closedAt: CLOSED_AT,
+    },
+  ];
+
+  try {
+    await seedNotes(moving, LOCAL);
+
+    const untouchedBefore = (await listNotes(FIXTURE_SLUG, { includeClosed: true }, LOCAL)).length;
+
+    const moved = await renameNotes(RENAME_FROM_SLUG, RENAME_TO_SLUG, LOCAL);
+    check(
+      'rename: reports the notes it moved, split open and closed',
+      moved.open === 1 && moved.closed === 1,
+      `got ${JSON.stringify(moved)} — the operator is told how much history moved`,
+    );
+
+    const arrived = await listNotes(RENAME_TO_SLUG, { includeClosed: true }, LOCAL);
+    check(
+      'rename: both notes arrive under the new slug',
+      arrived.length === 2,
+      `got ${arrived.length} — a rename that loses notes orphans a review round`,
+    );
+
+    const left = await listNotes(RENAME_FROM_SLUG, { includeClosed: true }, LOCAL);
+    check(
+      'rename: nothing is left behind under the old slug',
+      left.length === 0,
+      `got ${left.length} — a partial move is worse than none, since the pull looks complete`,
+    );
+
+    // THE ASSERTION THIS CHECK EXISTS FOR, alongside the repeat below.
+    const stillClosed = await getNoteById(moving[1].id, LOCAL);
+    check(
+      'rename: a closed note stays closed, with the date it was closed on',
+      stillClosed?.closed_at === CLOSED_AT,
+      `got ${JSON.stringify(stillClosed?.closed_at)} — a rename must not reopen finished rounds`,
+    );
+
+    const again = await renameNotes(RENAME_FROM_SLUG, RENAME_TO_SLUG, LOCAL);
+    check(
+      'rename: running it a second time moves nothing',
+      again.open === 0 && again.closed === 0,
+      `got ${JSON.stringify(again)} — post-rename is not atomic, so it has to be repeatable`,
+    );
+
+    check(
+      'rename: another post’s notes are untouched',
+      (await listNotes(FIXTURE_SLUG, { includeClosed: true }, LOCAL)).length === untouchedBefore,
+      'a rename reached past the slug it was given',
+    );
+  } finally {
+    // The live matrices below read the fixture post, not these — but a crashed
+    // run would otherwise leave rows that the NEXT run's seed collides with on a
+    // fixed id. clearFixtures sweeps both slugs too, for the same reason.
+    await clearNotes([RENAME_FROM_SLUG, RENAME_TO_SLUG], { reviewer: SMOKE_REVIEWER }, LOCAL);
+  }
 }
 
 /**

@@ -47,8 +47,9 @@
 // plain URL doesn't. Nothing needs doing about a spent link; the label exists so
 // the roster's answer to "what is outstanding?" stays true.
 
+import { isoDay } from '../src/lib/galley-render.js';
 import { linkState } from '../src/lib/link-state.js';
-import { LINK_ID_RE, SLUG_RE } from '../src/lib/preview.js';
+import { SLUG_RE } from '../src/lib/preview.js';
 import { readPubDate } from './content.mjs';
 import { cli } from './cli.mjs';
 import { databaseLabel } from './database-target.mjs';
@@ -76,9 +77,14 @@ for (let i = 0; i < argv.length; i++) {
     remote = true;
   } else if (arg === '--all') {
     // Retained as an alias: listing every post is what no slug means now. Kept
-    // so `npm run preview-roster -- --all` out of shell history still works —
-    // but refused below next to a slug or a revoke, where it would once have
-    // been a modifier and would now silently widen the answer.
+    // so `npm run preview-roster -- --all` out of shell history still works.
+    //
+    // It is an ASSERTION that no post was named, not a mode, which is why
+    // nothing below reads it except the two guards -- and why it must not be
+    // wired back into `listAll`. Doing that is what made `--all` win over a
+    // slug beside it and silently widen the answer. It cannot be refused in
+    // this loop instead: the positionals are not all in yet, so `--all my-draft`
+    // and `my-draft --all` would behave differently.
     all = true;
   } else if (arg === '--revoke') {
     // A BOOLEAN, with the id as a positional. It used to take its value inline,
@@ -158,6 +164,17 @@ const useLocal = resolveDatabase({ local, remote });
 
 const where = databaseLabel(useLocal);
 
+/**
+ * A link's state as a clause, for the one sentence that has to explain a no-op.
+ *
+ * Only `revoked` is reachable today -- resolveLink settles "no such link" and
+ * "belongs to another post" before the UPDATE, and revokeLinks' clause leaves
+ * nothing else -- but this reads the classification rather than asserting it, so
+ * narrowing that clause later changes the sentence instead of falsifying it.
+ */
+const describe = (info) =>
+  info.state === 'revoked' ? `already revoked on ${isoDay(info.revokedAt)}` : info.state;
+
 try {
   // Branch on the FLAG, not on the id it collected: `--revoke ''` is an empty
   // string, which is falsy, and would otherwise skip the revoke entirely and
@@ -182,13 +199,16 @@ try {
     // before the UPDATE runs, so this can name the date instead of listing the
     // possibilities -- and the row saying so is already in hand.
     if (revoked.length === 0) {
-      const revokedAt = resolved?.row?.revoked_at;
-      console.error(
-        revoke
-          ? `preview-roster: nothing to revoke — link ${revokeId} for ${slug} was already revoked` +
-              `${revokedAt ? ` on ${new Date(revokedAt).toISOString().slice(0, 10)}` : ''} (${where})`
-          : `preview-roster: nothing to revoke — no live links for ${slug} (${where})`,
-      );
+      // READ THE ROW, don't reason about it. Which causes are reachable is a
+      // property of revokeLinks' WHERE clause, and narrowing that clause later
+      // -- refusing to revoke a spent link, say, as preview-extend already
+      // refuses a published post -- would leave an asserted "already revoked"
+      // printing a confident falsehood. linkState is the same classifier the
+      // rows below and the Desk use, so this cannot disagree with either.
+      const why = revoke
+        ? `link ${revokeId} for ${slug} is ${describe(linkState(resolved.row))}`
+        : `no live links for ${slug}`;
+      console.error(`preview-roster: nothing to revoke — ${why} (${where})`);
     } else {
       const what = revoked.length === 1 ? 'link' : 'links';
       console.error(`preview-roster: revoked ${revoked.length} ${what} (${revoked.join(', ')})`);
@@ -237,9 +257,6 @@ try {
     return pubDates.get(slug);
   }
 
-  /** Just the date, for the two labels that carry one. */
-  const day = (date) => date.toISOString().slice(0, 10);
-
   /**
    * One link, as a line. Shared so both modes render identically.
    *
@@ -258,9 +275,9 @@ try {
     const info = linkState(row, { pubDate: publicationOf(row.slug), now });
     const state =
       info.state === 'revoked'
-        ? `revoked ${day(info.revokedAt)}`
+        ? `revoked ${isoDay(info.revokedAt)}`
         : info.state === 'spent'
-          ? `spent (published ${day(info.publishedAt)})`
+          ? `spent (published ${isoDay(info.publishedAt)})`
           : info.state;
     // A view-only link has no reviewer. Shown as a dash rather than blank so
     // the column stays readable and "who holds this?" has a visible answer.
@@ -269,7 +286,7 @@ try {
     // Headroom, shown only where it is actionable — linkState returns null for
     // every case where extending would do nothing, and the absence of this
     // suffix is the answer.
-    const ceiling = info.extendTo ? `  · extend to ${day(info.extendTo)}` : '';
+    const ceiling = info.extendTo ? `  · extend to ${isoDay(info.extendTo)}` : '';
     return `  ${row.id}  ${who.padEnd(14)}  expires ${expires}  ${state}${ceiling}`;
   }
 

@@ -33,6 +33,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { galleyFile } from '../src/lib/galley-manifest.js';
+import { isoDay } from '../src/lib/galley-render.js';
 import { SLUG_RE } from '../src/lib/preview.js';
 import { cli, relativeToCwd } from './cli.mjs';
 import { databaseFlag, databaseLabel } from './database-target.mjs';
@@ -105,8 +106,10 @@ const useLocal = resolveDatabase({ local, remote });
 // preview-link.mjs does it: a typo would otherwise report "no notes to close"
 // for a post that has plenty, which reads exactly like the round already being
 // closed.
+let resolvedNote = null;
 if (noteId !== null) {
-  ({ slug } = await resolveNote(die, noteId, { slug, local: useLocal }));
+  resolvedNote = await resolveNote(die, noteId, { slug, local: useLocal });
+  ({ slug } = resolvedNote);
 }
 requirePost(slug);
 
@@ -167,15 +170,20 @@ if (manifest) {
 console.error(`              ${closed.length} closed  (${where})`);
 
 // Every no-op is silent in SQL, so say when nothing happened rather than
-// reporting a successful close. WHICH no-ops are possible differs by path: the
-// manifest can list an id from another post, one already closed, or one that
-// never existed, because it is a file someone can edit. A single note by id has
-// only one cause left -- resolveNote settled the other two before the UPDATE.
+// reporting a successful close. On the --note path the row is already in hand,
+// so read the date off it rather than asserting the cause -- the same move
+// preview-roster makes for a revoke that changed nothing, and for the same
+// reason: which causes are reachable is a property of closeNotes' WHERE clause,
+// not something this line should have to know.
 if (closed.length === 0) {
+  // The row was read before the UPDATE, so a no-op here means it was already
+  // closed then. The fallback is for the one case that leaves: a close landing
+  // between the read and the write, where naming a date would invent one.
+  const closedAt = resolvedNote?.row?.closed_at;
   console.error(
     manifest
       ? '              nothing changed — this round was already closed'
-      : '              nothing changed — that note is already closed',
+      : `              nothing changed — that note was already closed${closedAt ? ` on ${isoDay(closedAt)}` : ''}`,
   );
 }
 

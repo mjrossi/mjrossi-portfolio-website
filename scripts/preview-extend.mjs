@@ -49,6 +49,7 @@
 // ever honour. Extending is what you do when somebody is waiting, so "nothing
 // happened" is not a usable answer.
 
+import { isoDay } from '../src/lib/galley-render.js';
 import { LINK_ID_RE, SLUG_RE } from '../src/lib/preview.js';
 import { clampToPublication, isPublished } from '../src/lib/schedule.js';
 import { readPubDate } from './content.mjs';
@@ -247,7 +248,7 @@ if (changed.length === 0) {
 
   if (row.revoked_at) {
     die(
-      `link ${id} was revoked on ${new Date(row.revoked_at).toISOString().slice(0, 10)} ` +
+      `link ${id} was revoked on ${isoDay(row.revoked_at)} ` +
         `(${where}).\n  Revoking is final — mint a fresh link with just preview-link instead.`,
     );
   }

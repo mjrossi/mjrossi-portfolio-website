@@ -83,10 +83,10 @@ function placeholders(n) {
  * to say which. `RETURNING` rather than a second SELECT so this stays one
  * round-trip and cannot race a concurrent close.
  *
- * All three stay reachable through the MANIFEST path, where the ids come out of
- * a hand-editable file. Closing a single note by id reaches only the last of
- * them: scripts/resolve-id.mjs settles "no such note" and "wrong post" before
- * this runs. See scripts/galley-close.mjs, which says which of the two it is.
+ * An empty result means only that no row matched slug + id + not-already-closed.
+ * WHICH of those missed is not something this statement can say, and a caller
+ * holding the row (galley-close resolves one before it writes) can read the
+ * answer off it rather than reasoning about which causes its own path admits.
  *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {string} slug

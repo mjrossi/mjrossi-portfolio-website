@@ -26,6 +26,14 @@
 //
 // NOT IN cli.mjs, which is deliberately DB-free: giving it a store import would
 // pull the wrangler transport into every script that only wants `die`.
+//
+// `fetch` IS A TEST SEAM, and nothing else -- the same arrangement, and the same
+// reasoning, as `exec` in scripts/d1-store.mjs and the duck-typed store
+// src/lib/preview-links.js takes. Every refusal below is decided from { id, slug,
+// row } and needs no database to reach; without a seam the only way to exercise
+// the one that matters would be a migrated D1 and a wrangler subprocess per case,
+// which puts the cross-post invariant behind `npm run build && npm run smoke`
+// rather than behind `npm test`. See src/lib/resolve-id.test.js.
 
 import { LINK_ID_RE } from '../src/lib/preview.js';
 import { NOTE_ID_RE } from '../src/lib/galley-manifest.js';
@@ -88,10 +96,10 @@ async function resolve({ die, id, slug, local, shape, shapeHint, noun, missingHi
  *
  * @param {(message: string) => never} die
  * @param {string} id
- * @param {{ slug?: string | null, local?: boolean }} [opts]
+ * @param {{ slug?: string | null, local?: boolean, fetch?: typeof getLinkById }} [opts]
  * @returns {Promise<{ id: string, slug: string, row: Record<string, unknown> }>}
  */
-export function resolveLink(die, id, { slug = null, local = false } = {}) {
+export function resolveLink(die, id, { slug = null, local = false, fetch = getLinkById } = {}) {
   return resolve({
     die,
     id,
@@ -103,7 +111,7 @@ export function resolveLink(die, id, { slug = null, local = false } = {}) {
       'and listed by `just preview-roster`.',
     noun: 'link',
     missingHint: 'just preview-roster <target> lists every link across every post.',
-    fetch: getLinkById,
+    fetch,
   });
 }
 
@@ -112,10 +120,10 @@ export function resolveLink(die, id, { slug = null, local = false } = {}) {
  *
  * @param {(message: string) => never} die
  * @param {string} id
- * @param {{ slug?: string | null, local?: boolean }} [opts]
+ * @param {{ slug?: string | null, local?: boolean, fetch?: typeof getNoteById }} [opts]
  * @returns {Promise<{ id: string, slug: string, row: Record<string, unknown> }>}
  */
-export function resolveNote(die, id, { slug = null, local = false } = {}) {
+export function resolveNote(die, id, { slug = null, local = false, fetch = getNoteById } = {}) {
   return resolve({
     die,
     id,
@@ -126,6 +134,6 @@ export function resolveNote(die, id, { slug = null, local = false } = {}) {
       'ids are UUIDs, printed in the pulled review file and by `just galley <slug> --all`.',
     noun: 'note',
     missingHint: 'just galley <slug> --all <target> lists every note on a post, closed ones included.',
-    fetch: getNoteById,
+    fetch,
   });
 }

@@ -14,6 +14,7 @@
     "galley": "node scripts/galley-pull.mjs",
     "galley-close": "node scripts/galley-close.mjs",
     "galley-reopen": "node scripts/galley-reopen.mjs",
+    "post-rename": "node scripts/post-rename.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {

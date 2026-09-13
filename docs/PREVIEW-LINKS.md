@@ -53,6 +53,8 @@ The token's signed `exp` is a **ceiling**, not the working expiry — see "Every
 
 Any response with either unlock active gets `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`, **overriding** whatever was set. This is the one place middleware overrides rather than setting-if-absent — a cached or indexed draft is precisely the failure being avoided.
 
+**Renaming the post kills every outstanding link, silently.** The slug is inside the signed payload, so a token minted for `old-slug` verifies against a URL that no longer exists and the grant resolves to nothing — while the row, which mirrors that payload rather than the post, goes on reading as `live` in the roster. `just post-rename` revokes them for exactly this reason and prints the lines to re-mint; it does not rewrite `preview_links.slug`, because a row describing a link that cannot exist is worse than a dead one. See "Renaming a post takes its notes with it" in [GALLEY.md](GALLEY.md).
+
 ## Every link is revocable and extendable, and that is what `preview_links` is for
 
 **And every link ends when its post does.** `just preview-link` caps the row's `exp` at the post's `pubDate`, so a link expires exactly as the post goes live — no gap, no overlap. That is the answer to "what happens to outstanding links after the scheduled time": nothing needs doing. The galley closes, `no-store` lifts, and `just preview-roster` reports the row as `spent (published <date>)` rather than `live`.

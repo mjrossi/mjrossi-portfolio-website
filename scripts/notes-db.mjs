@@ -67,6 +67,21 @@ export function reopenNote(slug, id, { local = false } = {}) {
 }
 
 /**
+ * Move a post's notes to a new slug. NOT local-only.
+ *
+ * Unlike seedNotes and clearNotes below, this is a real operation against a real
+ * database: a draft renamed in production has its notes in production. The guard
+ * that matters is not which database was chosen but whether the rename actually
+ * happened on disk, and that is a question about the working tree — so it lives
+ * in scripts/post-rename.mjs with the rest of the preconditions.
+ *
+ * @see src/lib/notes-store.js
+ */
+export function renameNotes(from, to, { local = false } = {}) {
+  return store.renameNotes(at(local), from, to);
+}
+
+/**
  * Insert notes directly. LOCAL ONLY, and a test fixture.
  *
  * Production notes are written by src/pages/api/galley.ts through the D1

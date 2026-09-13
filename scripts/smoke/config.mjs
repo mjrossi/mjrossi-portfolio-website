@@ -32,6 +32,13 @@ export const OTHER_SLUG = 'some-other-draft';
 // are read at a far-future expiry long afterwards — see the `extend --all:
 // leaves another post's links alone` assertion, which pins exactly that.
 export const EXTEND_SLUG = 'a-third-draft';
+// The two ends of a slug rename, and a pair of their own on purpose. The rename
+// round-trip MOVES every note from one slug to the other, so pointing either end
+// at a slug another fixture reads would hand that fixture's notes to a different
+// post halfway through the run — silently, and only for the assertions that come
+// after it.
+export const RENAME_FROM_SLUG = 'a-draft-before-rename';
+export const RENAME_TO_SLUG = 'a-draft-after-rename';
 
 // A post that is ALREADY PUBLISHED, for the other end of a link's life: minting
 // caps a link's expiry at pubDate, but that cap is a snapshot, and moving

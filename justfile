@@ -334,6 +334,26 @@ galley-close *args:
 galley-reopen *args:
     npm run galley-reopen -- {{args}}
 
+# move a post's review history after you rename its slug.
+#
+# RUN IT AFTER THE `git mv`, in the same commit. A post's slug is its filename,
+# so renaming the file looks complete — but galley_notes and preview_links both
+# key on the slug and neither follows, silently.
+#
+# Notes are MOVED. Links are REVOKED, not moved: the slug is inside the token's
+# HMAC, so every outstanding link died the moment the file did, and revoking is
+# how the roster stops claiming otherwise. It prints the `just preview-link`
+# lines to re-issue them; it does not run them.
+#
+# Refuses a published post — a live URL has nothing to redirect it here.
+#
+# --remote or --local is REQUIRED.
+# usage: just post-rename old-slug new-slug --remote
+[group('review')]
+[doc('move a renamed post’s notes and revoke its dead links (--remote|--local)')]
+post-rename *args:
+    npm run post-rename -- {{args}}
+
 # ── ops ──────────────────────────────────────────────
 #
 # The unrelated remainder: secrets, deploys, and cleaning up after a smoke run

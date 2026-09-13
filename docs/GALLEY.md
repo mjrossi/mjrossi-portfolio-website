@@ -62,6 +62,24 @@ Run it **after** the merge. Closing first retires notes whose fixes are not in t
 
 Smoke covers the scoping with three seeded notes (open-and-current, open-but-stale under a *second* reviewer, and closed) plus a `closeNotes`/`reopenNote` round-trip in `fixtures.mjs` — the only place `notes-db.mjs` SQL runs under test. Without those fixtures there is nothing for a regression to expose: every note the live matrix writes is open and current by construction, so dropping the `closed_at` filter would leave the suite entirely green.
 
+## Renaming a post takes its notes with it
+
+A slug is a filename, so retitling a draft is a `git mv` — and `galley_notes` keys on the slug, which means the review history detaches from the post with nothing to say so. `just galley <new>` reports no notes; `just galley <old>` cannot resolve a post to pull for. This has happened: `denormalized-by-design` left 86 notes behind under `a-normalized-database-of-citizens`.
+
+```sh
+git mv src/content/blog/old-slug.mdx src/content/blog/new-slug.mdx
+git mv docs/galley/old-slug.md docs/galley/new-slug.md
+just post-rename old-slug new-slug --remote       # same commit
+```
+
+**Notes are moved; links are revoked.** The slug is inside the preview token's HMAC, so every outstanding link died the moment the file moved — `preview_links.slug` mirrors the signed payload, and rewriting it would describe a link that cannot exist. The command revokes them so `just preview-roster` stops listing dead links as live, then prints the `just preview-link` lines to re-issue them. It never mints: that stays one command.
+
+`closed_at` is not in the `SET` clause. A rename moves a whole history, most of which is finished rounds, and reopening them would put every retired note back into the next pull at once.
+
+**It runs after the `git mv`, and checks that it happened**: the new post must resolve, the old slug must no longer name one, and `docs/galley/<old>.md` must already have moved — nothing can re-pull that file under a slug that names no post, so left in place it reads as an open round forever. A **published** post is refused outright: its URL is public and this repo has no post-level redirect (`RETIRED` in `src/lib/tags.js` is tags only). Slugs are frozen at publication.
+
+Two populated slugs is refused too — that is a merge of two review histories, not a rename, and nothing downstream could separate them again. The condition is deliberately *both* populated rather than "the destination has notes": after the notes move the destination always has them, and re-running is the only repair there is, since the two writes are two `wrangler` invocations and cannot share a transaction. `checkRenameRoundTrip` in `fixtures.mjs` pins that a second run moves nothing, and that a closed note arrives closed.
+
 ## A note is refused if its page has moved
 
 `src` is a line range the client reads from `data-src` in the HTML **it currently has loaded**, while the endpoint used to stamp the note with the hash of whatever the server held. A reviewer holding a post open across a revision therefore filed the *old* revision's anchors under the *new* revision's hash — a note that looked perfectly fresh, that the drift machinery had no reason to question, and whose line numbers pointed at prose it was never about. That is the one way a note could be silently wrong rather than visibly stale, and it is the normal case for a second reviewer.
@@ -183,7 +201,8 @@ Three things that will otherwise cost you time:
 2. PR → squash-merge to `main` with a future `pubDate` (~3 weeks out). One commit; hidden on every surface.
 3. `just preview-link my-draft --remote --reviewer <initials>` per editor.
 4. `just galley my-draft --remote` → apply → **one revision PR per review round** → merge → `just galley-close my-draft --remote`. Close last: it retires the notes listed in the pulled file, and running it before the merge would retire notes whose fixes are not in the file yet. If another reviewer is still going, the close names what it left open — pull again rather than closing twice.
-5. Set `pubDate` to the real date. **If you moved it later, run `just preview-extend-all my-draft --hours N --remote`** — outstanding links are still capped at the old date and would lapse mid-review, and this re-clamps them without changing a URL. If you moved it earlier, there is nothing to do: the links simply end sooner, and the galley closes on its own.
+5. Retitled it along the way? `git mv` both files and `just post-rename old new --remote` in the same commit, before minting anything else — see "Renaming a post takes its notes with it".
+6. Set `pubDate` to the real date. **If you moved it later, run `just preview-extend-all my-draft --hours N --remote`** — outstanding links are still capped at the old date and would lapse mid-review, and this re-clamps them without changing a URL. If you moved it earlier, there is nothing to do: the links simply end sooner, and the galley closes on its own.
 
 `main` gets ~2–4 commits per post. That is deliberate: the revision commits carry the editorial reasoning, and squashing them into the original post commit would destroy the most useful part of the history.
 

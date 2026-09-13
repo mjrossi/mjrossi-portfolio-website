@@ -142,6 +142,59 @@ export async function reopenNote(store, slug, id) {
 }
 
 /**
+ * Move every note from one slug to another. The database half of a post rename.
+ *
+ * A post's slug is its filename, so renaming the file is a `git mv` and nothing
+ * else — and this table keeps no other handle on the post. Without this, the
+ * review history detaches: `just galley <new>` reports no notes, `just galley
+ * <old>` cannot resolve a post to pull for, and nothing anywhere says why.
+ *
+ * NOT THE SAME DECISION AS preview_links. That table's `slug` MIRRORS THE SIGNED
+ * PAYLOAD — the slug is inside the token's HMAC — so rewriting it would describe
+ * a link that cannot exist, and a roster entry that is confidently wrong is worse
+ * than a dead one. Links are revoked by a rename, not moved. Nothing here has an
+ * equivalent: a note is about the post, and `revision_hash` already carries the
+ * only staleness question a reader has.
+ *
+ * UNSCOPED BY STATE, deliberately. A rename moves the whole history, most of
+ * which is finished rounds, and `closed_at` is not in the SET clause — a closed
+ * note arrives closed, on the date it was closed. Reopening them would put every
+ * retired note back into the next pull at once.
+ *
+ * RETURNS THE SPLIT rather than a total, because the two halves mean different
+ * things to the operator: open notes are a round still owed an answer, closed
+ * ones are the record. `RETURNING` rather than a second SELECT, like closeNotes,
+ * so this stays one round-trip and cannot race a concurrent close.
+ *
+ * A second call moves nothing, and callers depend on that: `just post-rename`
+ * spans two wrangler invocations and so cannot be atomic, leaving re-running it
+ * as the repair for an interrupted run.
+ *
+ * @param {{ prepare: (sql: string) => any }} store
+ * @param {string} from
+ * @param {string} to
+ * @returns {Promise<{ open: number, closed: number }>} notes this call moved
+ */
+export async function renameNotes(store, from, to) {
+  checkSlug(from, 'from slug');
+  checkSlug(to, 'to slug');
+  if (from === to) {
+    throw new Error(`notes-store: renameNotes was given the same slug twice (${from})`);
+  }
+  const { results } = await store
+    .prepare('UPDATE galley_notes SET slug = ? WHERE slug = ? RETURNING closed_at')
+    .bind(to, from)
+    .all();
+  let open = 0;
+  let closed = 0;
+  for (const row of results) {
+    if (row.closed_at === null || row.closed_at === undefined) open += 1;
+    else closed += 1;
+  }
+  return { open, closed };
+}
+
+/**
  * Insert notes directly. A TEST FIXTURE.
  *
  * Production notes are written by src/pages/api/galley.ts through the D1 binding,

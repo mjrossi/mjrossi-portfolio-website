@@ -25,6 +25,7 @@ import {
 import { d1Migrate } from '../d1.mjs';
 import { clearLinks, extendLink, extendLinks, getLinkById, recordLinks } from '../links-db.mjs';
 import { clearNotes, closeNotes, getNoteById, listNotes, reopenNote, seedNotes } from '../notes-db.mjs';
+import { resolveLink, resolveNote } from '../resolve-id.mjs';
 
 const LOCAL = { local: true };
 
@@ -428,5 +429,111 @@ export async function checkCloseRoundTrip() {
     'close: the closed fixture is still closed',
     !openIds.includes(NOTES.closed.id),
     'the closed-round fixture leaked back into the open set',
+  );
+}
+
+/**
+ * scripts/resolve-id.mjs, against the real local database.
+ *
+ * WHY THIS EXISTS AT ALL. The cross-post invariant used to be a `WHERE slug = ?`
+ * clause, and a clause is hard to half-delete: drop a term and the statement
+ * still has to parse. It now lives in an `if` in imperative code — and once the
+ * slug being compared is DERIVED from the row, the clause underneath it can only
+ * match, so the store-level scoping assertions above no longer stand in for it.
+ * Deleting the mismatch check would otherwise fail nothing.
+ *
+ * Read-only, so it can run after the two round-trips above without caring what
+ * they left behind. `die` is a parameter rather than an import, which is the
+ * whole reason this is assertable without a subprocess: hand it a thrower and
+ * the refusals become values.
+ */
+export async function checkIdResolution() {
+  /** @type {(message: string) => never} */
+  const boom = (message) => {
+    throw new Error(message);
+  };
+
+  /** The refusal text, or null if the call was allowed through. */
+  const refusalOf = async (run) => {
+    try {
+      await run();
+      return null;
+    } catch (err) {
+      return err.message;
+    }
+  };
+
+  // The positive path: no slug named, so the row's own slug is the answer. This
+  // is the whole feature — `just preview-revoke <id>` knowing which post it is
+  // about — and every refusal below is only interesting because this works.
+  const link = await resolveLink(boom, LINKS.crossSlug.id, LOCAL);
+  check(
+    'resolveLink: an id alone derives the post it belongs to',
+    link.slug === OTHER_SLUG && link.row?.id === LINKS.crossSlug.id,
+    `got ${JSON.stringify(link)} — the id could not name its own post`,
+  );
+
+  // A slug in front of the id is an assertion, and an assertion that holds must
+  // not change the outcome.
+  const asserted = await resolveLink(boom, LINKS.crossSlug.id, { slug: OTHER_SLUG, local: true });
+  check(
+    'resolveLink: a slug that agrees with the row passes through',
+    asserted.slug === OTHER_SLUG,
+    `got ${JSON.stringify(asserted)} — the old <slug> <id> form must still work`,
+  );
+
+  // THE ONE THAT MATTERS. A named post the row disagrees with, refused by name
+  // in both directions so the operator can tell a typo from a wrong paste.
+  const mismatch = await refusalOf(() =>
+    resolveLink(boom, LINKS.crossSlug.id, { slug: EXTEND_SLUG, local: true }),
+  );
+  check(
+    'resolveLink: a slug that disagrees with the row is refused, naming both posts',
+    mismatch?.includes(OTHER_SLUG) && mismatch?.includes(EXTEND_SLUG),
+    `got ${JSON.stringify(mismatch)} — this check is the whole of the CLI's cross-post scoping`,
+  );
+
+  const missingLink = await refusalOf(() => resolveLink(boom, '0123456789abcdef', LOCAL));
+  check(
+    'resolveLink: an id with no row is refused as missing, not resolved to nothing',
+    missingLink?.includes('0123456789abcdef') && missingLink?.includes('preview-roster'),
+    `got ${JSON.stringify(missingLink)} — a missing row must say how to find the real id`,
+  );
+
+  // Shape is refused before the database is opened, so a pasted slug never
+  // reaches a lookup that would report it as a missing id.
+  const badShape = await refusalOf(() => resolveLink(boom, EXTEND_SLUG, LOCAL));
+  check(
+    'resolveLink: something that is not an id shape is refused as such',
+    badShape?.includes('invalid link id'),
+    `got ${JSON.stringify(badShape)} — a slug in the id position must not read as a missing link`,
+  );
+
+  // The notes side, same three properties. NOTES.closed is seeded closed and
+  // checkCloseRoundTrip restores everything it touches, so this resolves a row
+  // in the state `just galley-reopen <id>` actually meets.
+  const note = await resolveNote(boom, NOTES.closed.id, LOCAL);
+  check(
+    'resolveNote: an id alone derives the post, for a closed note',
+    note.slug === FIXTURE_SLUG && note.row?.closed_at != null,
+    `got ${JSON.stringify(note)} — reopen resolves through this, and only closed notes are worth reopening`,
+  );
+
+  const noteMismatch = await refusalOf(() =>
+    resolveNote(boom, NOTES.closed.id, { slug: OTHER_SLUG, local: true }),
+  );
+  check(
+    'resolveNote: a slug that disagrees with the row is refused, naming both posts',
+    noteMismatch?.includes(FIXTURE_SLUG) && noteMismatch?.includes(OTHER_SLUG),
+    `got ${JSON.stringify(noteMismatch)} — galley-close and galley-reopen scope through this`,
+  );
+
+  const missingNote = await refusalOf(() =>
+    resolveNote(boom, '00000000-0000-4000-8000-000000000000', LOCAL),
+  );
+  check(
+    'resolveNote: an id with no row is refused as missing',
+    missingNote?.includes('no note') && missingNote?.includes('just galley'),
+    `got ${JSON.stringify(missingNote)} — a missing note must say how to list the real ids`,
   );
 }

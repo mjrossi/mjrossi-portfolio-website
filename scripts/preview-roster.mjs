@@ -12,7 +12,8 @@
 // NO SLUG LISTS EVERY LINK, across all posts. That is a read, and the per-post
 // scoping that matters elsewhere does not reach a CLI already authenticated as
 // you -- an inventory you can only query by knowing the answer is not much of an
-// inventory. `--all` is kept as a no-op alias for what the absent slug now says.
+// inventory. `--all` is kept as an alias for what the absent slug now says, and
+// is refused next to anything that names a post: it is a synonym, not a modifier.
 //
 // Revoking still resolves to exactly one post: --revoke takes an id and derives
 // the post from its row, --revoke-all takes a slug. Neither can reach the table
@@ -74,8 +75,10 @@ for (let i = 0; i < argv.length; i++) {
   } else if (arg === '--remote') {
     remote = true;
   } else if (arg === '--all') {
-    // Retained as a no-op alias: listing every post is what no slug means now.
-    // Kept so `npm run preview-roster -- --all` out of shell history still works.
+    // Retained as an alias: listing every post is what no slug means now. Kept
+    // so `npm run preview-roster -- --all` out of shell history still works —
+    // but refused below next to a slug or a revoke, where it would once have
+    // been a modifier and would now silently widen the answer.
     all = true;
   } else if (arg === '--revoke') {
     // A BOOLEAN, with the id as a positional. It used to take its value inline,
@@ -118,6 +121,17 @@ if (revoke) {
 
 if (slug !== null && !SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 if (revoke && revokeAll) die('pass either --revoke or --revoke-all, not both');
+// `--all` now says exactly what an absent slug says, so pairing it with
+// something that names a post is a contradiction rather than a refinement. The
+// slug-scoped form used to be refused outright and still is: an inventory that
+// silently answers a wider question than it was asked is the most reassuring
+// possible wrong answer, and this list is the only inventory there is.
+if (all && (revoke || revokeAll)) {
+  die('--all lists; it does not revoke — use --revoke <link-id> or --revoke-all <slug>');
+}
+if (all && slug !== null) {
+  die(`--all lists every post — drop the slug to mean that, or drop --all to list ${slug}`);
+}
 // Revoking one link resolves to a post; revoking in bulk has to be told one.
 // Neither can reach the whole table, which is the scoping that matters -- see
 // the header, and scripts/resolve-id.mjs on where the per-id check lives now.
@@ -130,8 +144,9 @@ if (revokeAll && slug === null) {
 }
 
 // No slug and no revoke is the whole table. `--all` said this before and is kept
-// as an alias; the absence of a slug says it now.
-const listAll = (!revoke && !revokeAll && slug === null) || all;
+// as an alias; the absence of a slug says it now. The guards above have already
+// refused every way the two could disagree, so this reads either one.
+const listAll = !revoke && !revokeAll && slug === null;
 
 // Which database, decided explicitly. See scripts/database-target.mjs.
 const useLocal = resolveDatabase({ local, remote });
@@ -144,23 +159,34 @@ const useLocal = resolveDatabase({ local, remote });
 const where = databaseLabel(useLocal);
 
 try {
-  if (revokeId || revokeAll) {
+  // Branch on the FLAG, not on the id it collected: `--revoke ''` is an empty
+  // string, which is falsy, and would otherwise skip the revoke entirely and
+  // fall through to a listing that dies on a null slug. Resolution refuses the
+  // shape and says so.
+  if (revoke || revokeAll) {
     // The post comes off the row. revokeLinks still scopes its UPDATE by slug --
     // see scripts/resolve-id.mjs on why that clause is no longer what protects a
     // mistyped id, and why it stays anyway.
-    if (revokeId) {
-      ({ slug } = await resolveLink(die, revokeId, { slug, local: useLocal }));
+    let resolved = null;
+    if (revoke) {
+      resolved = await resolveLink(die, revokeId, { slug, local: useLocal });
+      ({ slug } = resolved);
     }
     const revoked = await revokeLinks(slug, { id: revokeId }, { local: useLocal });
-    // Said out loud, because both no-op cases are otherwise indistinguishable
-    // from success: an id that belongs to a different post is scoped away by
-    // revokeLinks, and --revoke-all against a slug whose links are already
-    // revoked matches nothing. Someone withdrawing a link that has gone astray
-    // needs to know it is dead, not infer it from a table they have to re-read.
+    // Said out loud, because a no-op is otherwise indistinguishable from success,
+    // and someone withdrawing a link that has gone astray needs to know it is
+    // dead rather than infer it from a table they have to re-read.
+    //
+    // On the id path there is now exactly ONE cause left: the link was already
+    // revoked. No such link and wrong post are both settled by resolveLink
+    // before the UPDATE runs, so this can name the date instead of listing the
+    // possibilities -- and the row saying so is already in hand.
     if (revoked.length === 0) {
+      const revokedAt = resolved?.row?.revoked_at;
       console.error(
-        revokeId
-          ? `preview-roster: nothing to revoke — no live link ${revokeId} for ${slug} (${where})`
+        revoke
+          ? `preview-roster: nothing to revoke — link ${revokeId} for ${slug} was already revoked` +
+              `${revokedAt ? ` on ${new Date(revokedAt).toISOString().slice(0, 10)}` : ''} (${where})`
           : `preview-roster: nothing to revoke — no live links for ${slug} (${where})`,
       );
     } else {

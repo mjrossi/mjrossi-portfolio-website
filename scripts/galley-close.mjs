@@ -1,8 +1,12 @@
 // End a review round: mark the notes you pulled and applied as closed.
 //
-//   just galley-close my-draft --remote                    # the whole pulled round
-//   just galley-close my-draft --remote --note <id>        # one note
-//   just galley-close my-draft --remote --from path/to.md  # a pull written elsewhere
+//   just galley-close <slug> --remote                 # the round in docs/galley/<slug>.md
+//   just galley-close <note-id> --remote              # one note; the post comes off the row
+//   just galley-close <slug> <note-id> --remote       # the same, post asserted
+//   just galley-close <slug> --remote --from path.md  # a pull written elsewhere
+//
+// A note id is a UUID and a slug is [a-z0-9-]+, so the first positional's shape
+// says which was meant. `--note <id>` stays as an alias. See scripts/resolve-id.mjs.
 //
 // --remote or --local is REQUIRED; see scripts/database-target.mjs. Closing the
 // wrong database reports success while the reviewer's margin goes on showing
@@ -22,13 +26,6 @@
 // the revision that answers it, and notes filed after that pull are structurally
 // out of reach. An id the scan misses stays open, which is the direction that
 // loses nothing.
-//
-//   just galley-close <slug> --remote              # the round in docs/galley/<slug>.md
-//   just galley-close <note-id> --remote           # one note; the post comes off the row
-//   just galley-close <slug> <note-id> --remote    # the same, post asserted
-//
-// A note id is a UUID and a slug is [a-z0-9-]+, so the first positional's shape
-// says which was meant. `--note` stays as an alias. See scripts/resolve-id.mjs.
 //
 // RUN IT AFTER THE REVISION MERGES, not before. Closing first would retire notes
 // whose fixes are not in the file yet.
@@ -169,9 +166,11 @@ if (manifest) {
 }
 console.error(`              ${closed.length} closed  (${where})`);
 
-// Every no-op is silent in SQL -- an id from another post is scoped away, an
-// already-closed one matches nothing, one that never existed matches nothing --
-// so say when nothing happened rather than reporting a successful close.
+// Every no-op is silent in SQL, so say when nothing happened rather than
+// reporting a successful close. WHICH no-ops are possible differs by path: the
+// manifest can list an id from another post, one already closed, or one that
+// never existed, because it is a file someone can edit. A single note by id has
+// only one cause left -- resolveNote settled the other two before the UPDATE.
 if (closed.length === 0) {
   console.error(
     manifest

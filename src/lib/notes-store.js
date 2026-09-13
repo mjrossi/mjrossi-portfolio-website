@@ -83,6 +83,11 @@ function placeholders(n) {
  * to say which. `RETURNING` rather than a second SELECT so this stays one
  * round-trip and cannot race a concurrent close.
  *
+ * All three stay reachable through the MANIFEST path, where the ids come out of
+ * a hand-editable file. Closing a single note by id reaches only the last of
+ * them: scripts/resolve-id.mjs settles "no such note" and "wrong post" before
+ * this runs. See scripts/galley-close.mjs, which says which of the two it is.
+ *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {string} slug
  * @param {string[]} ids

@@ -219,6 +219,12 @@ export async function extendLinks(store, slug, exp) {
  * either way. That is the wrong default for a withdrawal: the operator runs it
  * precisely when a link has gone astray and they need to know it is dead.
  *
+ * THE FIRST OF THOSE TWO IS UNREACHABLE FROM THE CLI, where scripts/resolve-id.mjs
+ * refuses a disagreeing slug before this runs -- which is what lets preview-roster
+ * report an empty result as "already revoked on <date>" rather than listing the
+ * possibilities. It stays stated here because this is the store's contract with
+ * any caller holding a slug, not a description of that one command's paths.
+ *
  * `RETURNING` rather than a second SELECT so this stays one round-trip and
  * cannot race a concurrent revoke between the write and the read-back.
  *

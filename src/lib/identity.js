@@ -32,7 +32,7 @@
 // there — so there is no shared value to lift, only a shared shape.
 
 /** The masthead tagline. Also the spine of `SITE_DESCRIPTION` below. */
-export const TAGLINE = 'Software engineer turning toward sustainable urban mobility';
+export const TAGLINE = 'Software engineer, now studying how cities move people';
 
 /**
  * The Urbanist Lexicon's own line: the tagline of the periodical's masthead on

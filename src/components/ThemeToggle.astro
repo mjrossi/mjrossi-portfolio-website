@@ -1,12 +1,30 @@
 ---
-// Auto · Light · Dark. Rendered `hidden`: /scripts/theme.js reveals it and
-// keeps aria-pressed in sync, so a reader without JavaScript never meets a
-// control that does nothing — they get their system theme via
-// prefers-color-scheme instead. Rendered twice per page (nav and footer); the
-// script binds every instance, so both drive the same stored choice.
+// Auto · Light · Dark, as three small glyphs: a half-filled disc (follow the
+// system), a sun, a moon. Rendered ONCE, in the masthead folio beside the
+// edition — the one line of chrome that is on screen at every width, so the
+// switch is at the top of the page on a phone without a second copy anywhere.
+//
+// Rendered `hidden`: /scripts/theme.js reveals it and keeps aria-pressed in
+// sync, so a reader without JavaScript never meets a control that does nothing
+// — they get their system theme via prefers-color-scheme instead. Icon-only, so
+// each button carries its own aria-label, and a title for the pointer.
 ---
 <div class="theme-toggle" role="group" aria-label="Colour theme" hidden>
-  <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
-  <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
-  <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+  <button type="button" data-theme-choice="auto" aria-pressed="true" aria-label="Match system theme" title="Match system">
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <circle cx="8" cy="8" r="5.75" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M8 2.25a5.75 5.75 0 0 1 0 11.5Z" fill="currentColor"/>
+    </svg>
+  </button>
+  <button type="button" data-theme-choice="light" aria-pressed="false" aria-label="Light theme" title="Light">
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M8 1v1.75M8 13.25V15M1 8h1.75M13.25 8H15M3.05 3.05l1.24 1.24M11.71 11.71l1.24 1.24M3.05 12.95l1.24-1.24M11.71 4.29l1.24-1.24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <button type="button" data-theme-choice="dark" aria-pressed="false" aria-label="Dark theme" title="Dark">
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path d="M13.5 9.6A5.75 5.75 0 1 1 6.4 2.5a4.5 4.5 0 0 0 7.1 7.1Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </svg>
+  </button>
 </div>

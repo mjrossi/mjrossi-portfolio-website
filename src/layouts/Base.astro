@@ -128,7 +128,10 @@ const frontHref = isLexicon ? '/blog' : '/';
         ) : (
           <span class="masthead-folio-left">Lisbon, Portugal</span>
         )}
-        <span class="masthead-meta-edition">{edition.label}</span>
+        <span class="masthead-folio-right">
+          <span class="masthead-meta-edition">{edition.label}</span>
+          <ThemeToggle />
+        </span>
       </div>
       {isFront ? (
         <h1 class="masthead-name">
@@ -165,7 +168,6 @@ const frontHref = isLexicon ? '/blog' : '/';
       </div>
       <div class="nav-contact">
         <ContactLinks />
-        <ThemeToggle />
       </div>
     </div>
   </nav>
@@ -225,7 +227,6 @@ const frontHref = isLexicon ? '/blog' : '/';
       <div class="colophon-strip">
         <span class="broadsheet-colophon">{SET_IN} · {BUILT_WITH}</span>
         <span>mjrossi.com · Lisbon, Portugal</span>
-        <ThemeToggle />
       </div>
     </div>
   </footer>

@@ -27,7 +27,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `src/layouts/BlogPost.astro` — post chrome. Gates the subscribe card, previous/next **and** the galley on publication.
 - `src/layouts/Desk.astro` — the Desk's chrome and **all** of its CSS (`is:global`), imported only by `/admin` so it never reaches a public bundle.
 - `src/components/ContactLinks.astro` — inline-SVG icon row; rendered twice per page (nav + footer), both asserted by smoke.
-- `src/components/ThemeToggle.astro` — Auto · Light · Dark, rendered `hidden` twice (nav + footer) and revealed by `theme.js`.
+- `src/components/ThemeToggle.astro` — Auto · Light · Dark as three glyphs, rendered `hidden` **once**, in the masthead folio (on screen at every width), and revealed by `theme.js`.
 - `src/components/BlogPostEntry.astro` — shared post card for the index and tag pages. Deliberately carries **no** chip row.
 - `src/components/Figure.astro` — `<figure>` around `astro:assets` `<Image>` with an optional caption; imported by `.mdx` posts.
 - `src/components/diagrams/*.astro` — per-post hand-authored inline SVG. One post each, not site chrome; styling via `.dg-*` in `global.css`.

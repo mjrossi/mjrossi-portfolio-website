@@ -3,410 +3,269 @@
   Buttondown → Settings → Web design → Custom CSS.
   ─────────────────────────────────────────────────────────────────────────
 
-  Pairs with the email CSS at docs/buttondown-email-custom.css and the
-  RSS template at docs/buttondown-rss-template.md. This file styles the
-  hosted ARCHIVE page on Buttondown's domain (the page anyone lands on
-  if they reach the newsletter at buttondown.com/<account> or similar
-  instead of mjrossi.com/blog).
+  Styles the two pages Buttondown hosts for The Urbanist Lexicon:
+  buttondown.com/theurbanistlexicon (the subscribe page) and
+  buttondown.com/theurbanistlexicon/archive (the list of mailings). There are
+  no per-email pages to style — every archive entry links to its post on
+  mjrossi.com, because the feed's <link> is the canonical URL.
 
-  Unlike the email CSS, this runs in a browser, so we can use modern
-  features (oklch, CSS variables, flexbox) and reference the same color
-  tokens and typography stack as the live site (src/styles/global.css).
+  Pairs with docs/buttondown-email-custom.css (the emails themselves) and
+  docs/buttondown-rss-template.md. Source of truth lives here; the dashboard
+  is the copy that serves. Drift is the operator's responsibility.
 
-  ─── Iteration loop ───
-  Buttondown's archive HTML structure isn't fully documented; the rules
-  below combine generic-element styling (body, h1, a) with Buttondown
-  selector guesses based on common newsletter-platform conventions.
-  After pasting, inspect the live archive page and refine any selectors
-  that don't match. Generic-element rules will catch most of the styling
-  even without precise class hooks.
+  ─── How Buttondown's theme works, and why the first version did nothing ───
+  Buttondown's stylesheet is driven by its OWN custom properties —
+  --font-brand, --font-prose, --color-background, --color-foreground,
+  --color-action… — and its own class names. The first version of this file
+  defined the site's variable names (--font, --font-serif), which Buttondown
+  never reads, and styled guessed elements (header, time, article,
+  .archive-item) that are not in its markup. Where a guess did match an
+  element, a Buttondown class rule usually beat it: `p, li` set
+  font-family: var(--font-prose) on every paragraph, so a font set on body
+  never reached the text. The page rendered as Buttondown's stock theme.
 
-  Source of truth lives here. Buttondown's dashboard is the copy that
-  actually serves the archive. Drift is the operator's responsibility.
+  So this file does two things only:
+    1. Sets Buttondown's variables to the Lexicon Family's Paper tokens.
+       That one block recolours and re-fonts everything Buttondown draws,
+       including the modals its app script mounts later.
+    2. Overrides the handful of Buttondown classes whose SHAPE differs from
+       the family core: the masthead band, the wordmark, nav labels, the list
+       rules, square corners, and hover in colour rather than a background.
+
+  Selectors were read off the live pages on 2026-10-18. This custom CSS is
+  emitted in <head> after subscriber_facing_modern_css, so a rule here beats
+  one there at equal specificity. It loads BEFORE subscriber_facing_app.css;
+  that file holds only Vue-scoped modal and dropdown rules, which do not
+  collide with anything here.
+
+  Buttondown's own `!important` rules (.archive__button) are matched with
+  `!important` here; nowhere else needs it.
+
+  Night: Buttondown's dark mode is off for this newsletter (`--dark_mode:
+  false`), so the page is Paper only, which is what this file assumes. If
+  dark mode is ever enabled, set the `--color-*-dark` variables to the Night
+  tokens in src/styles/global.css as well.
+
+  To check a change before pasting: save the live archive page, replace the
+  second <style> block in <head> with this file, and open it in a browser.
 */
 
-/* ──── Web fonts (same as the site) ────
-   Buttondown's archive page loads from buttondown.com / *.buttondown.email
-   — using @import here pulls the fonts in via Google Fonts at page-load
-   time. Falls back to the system stack gracefully if blocked. */
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap');
+/* ──── Web fonts ────
+   Buttondown loads Source Serif 4 itself (it is the newsletter's body font
+   setting); Fraunces and Inter are the site's display and UI faces. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..700,0..100;1,9..144,400..700,0..100&family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..600;1,8..60,400..600&display=swap');
 
-/* ──── Design tokens — mirror src/styles/global.css :root ──── */
+/* ──── 1. Buttondown's variables, set to the family's Paper tokens ──── */
 
 :root {
-  --bg: oklch(97.5% 0.008 75);
-  --bg2: oklch(93.5% 0.014 75);
-  --border: oklch(87% 0.014 75);
-  --text: oklch(20% 0.01 75);
-  --muted: oklch(50% 0.012 75);
+  /* Site tokens this file uses directly (src/styles/global.css :root). */
+  --lx-text-2: #3a312a;
+  --lx-band: oklch(93% 0.04 70);
+  --lx-band-border: oklch(84% 0.06 70);
+  --lx-rule: oklch(80% 0.05 70);
+  --lx-tagline: oklch(46% 0.07 60);
+  --lx-hover: #7a4a1a;
+  --lx-serif: Fraunces, Georgia, 'Times New Roman', serif;
 
-  --accent: #8f5520;
-  --accent-surname: #b8702f;
-  --accent-band: oklch(93% 0.04 70);
-  --accent-band-border: oklch(84% 0.06 70);
-  --accent-rule: oklch(80% 0.05 70);
-  --accent-tagline: oklch(46% 0.07 60);
-  --accent-hover: #7a4a1a;
+  /* Buttondown's: chrome (nav, dates, footer) in Inter, prose in Source
+     Serif 4, as on the site. */
+  --font-brand: Inter, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-prose: 'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
 
-  --font: 'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
-  --font-serif: Fraunces, Georgia, 'Times New Roman', serif;
-  --font-ui: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-
-  --max: 780px;
-  --pad: clamp(1rem, 4vw, 2rem);
+  --color-background: oklch(97.5% 0.008 75);        /* --bg */
+  --color-background-card: oklch(93.5% 0.014 75);   /* --bg2 */
+  --color-background-offset: oklch(87% 0.014 75);   /* --border */
+  --color-foreground: oklch(20% 0.01 75);           /* --text */
+  /* Buttondown's two "offset" greys are both --muted: its second, lighter
+     grey would fall under 4.5:1 for the small text it is used on. */
+  --color-foreground-offset: oklch(50% 0.012 75);
+  --color-foreground-offset-2: oklch(50% 0.012 75);
+  --color-action: #8f5520;                          /* --accent */
 }
 
-/* ──── Reset + base ──── */
+/* ──── 2. Shapes that differ from the family core ──── */
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+/* Masthead: the amber band with the newspaper double rule under it (1px, a
+   4px gap, then 2px). Buttondown's header is sticky with a hairline that
+   only appears on scroll; the band carries its own rule from the start. */
+.header-navigation-container,
+.header-navigation-container.is-scrolled {
+  background-color: var(--lx-band);
+  border-bottom: 1px solid var(--lx-band-border);
+  margin-bottom: 4px;
 }
 
-html {
-  -webkit-text-size-adjust: 100%;
-  scroll-behavior: smooth;
-  scrollbar-gutter: stable;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 17px;
-  line-height: 1.7;
-}
-
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-/* ──── Typography ──── */
-
-h1,
-h2,
-h3,
-h4 {
-  font-family: var(--font-serif);
-  color: var(--text);
-  line-height: 1.2;
-  margin: 0 0 0.5em;
-}
-
-h1 {
-  font-size: clamp(1.8rem, 4vw, 2.4rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-h2 {
-  font-size: 1.4rem;
-  font-weight: 600;
-}
-
-h3 {
-  font-size: 1.15rem;
-  font-weight: 600;
-}
-
-p {
-  margin: 0 0 1em;
-}
-
-a {
-  color: var(--accent);
-  text-decoration: underline;
-  text-decoration-color: var(--accent-rule);
-  text-underline-offset: 2px;
-  transition: color 0.15s ease, text-decoration-color 0.15s ease;
-}
-
-a:hover {
-  color: var(--accent-hover);
-  text-decoration-color: var(--accent);
-}
-
-hr {
-  border: 0;
-  border-top: 1px solid var(--accent-rule);
-  margin: 2rem auto;
-  width: 4rem;
-}
-
-blockquote {
-  margin: 1.5rem 0;
-  padding-left: 1rem;
-  border-left: 2px solid var(--accent-rule);
-  color: var(--muted);
-  font-style: italic;
-}
-
-code,
-pre {
-  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-  font-size: 0.92em;
-  background: var(--bg2);
-  border-radius: 2px;
-}
-
-code {
-  padding: 0.1em 0.3em;
-}
-
-pre {
-  padding: 1rem;
-  overflow-x: auto;
-  border: 1px solid var(--border);
-}
-
-pre code {
-  background: transparent;
-  padding: 0;
-}
-
-img {
-  max-width: 100%;
-  height: auto;
-  display: block;
-  border: 1px solid var(--border);
-}
-
-/* ──── Page layout — Buttondown wraps content in their own containers;
-       these selectors hit the common ones plus the body fallback. ──── */
-
-body > * {
-  max-width: var(--max);
-  margin-inline: auto;
-  padding-inline: var(--pad);
-}
-
-main,
-.content,
-.archive,
-.archive-container {
-  max-width: var(--max);
-  margin: 0 auto;
-  padding: 2.5rem var(--pad) 4rem;
-}
-
-/* ──── Site masthead — Buttondown shows the newsletter name + description
-       at the top of the archive. Style as the broadsheet would. ──── */
-
-header,
-.archive-header,
-.newsletter-header {
-  background: var(--accent-band);
-  border-bottom: 1px solid var(--accent-band-border);
-  padding: 1.5rem var(--pad);
-  margin: 0 0 2rem;
-  max-width: none;
-  position: relative;
-}
-
-header::after,
-.archive-header::after,
-.newsletter-header::after {
+.header-navigation-container::after {
   content: '';
   position: absolute;
   left: 0;
   right: 0;
   bottom: -4px;
-  height: 1px;
-  background: var(--accent-band-border);
+  height: 2px;
+  background: var(--lx-band-border);
   pointer-events: none;
 }
 
-header h1,
-.archive-header h1,
-.newsletter-header h1 {
-  font-family: var(--font-serif);
-  font-size: clamp(2rem, 5vw, 3rem);
+/* The wordmark: Fraunces, in the periodical's own casing — Buttondown
+   uppercases it. One colour: "Lexicon" in the surname amber would need a
+   <span> this markup does not have. */
+.header-brand {
+  font-family: var(--lx-serif);
+  font-size: 1.5rem;
   font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  text-transform: none;
+  font-variation-settings: 'opsz' 144, 'SOFT' 30;
 }
 
-header p,
-.archive-header p,
-.newsletter-header p {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 1.05rem;
-  color: var(--accent-tagline);
-  margin: 0.6rem 0 0;
+/* Nav labels: the family's tracked uppercase Inter, hover in colour only. */
+.header-navigation-link {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--lx-text-2);
+  border-radius: 0;
+  transition: color 0.15s ease;
 }
 
-/* ──── Archive list — typical pattern: a list of past emails with date
-       and title. Selectors are conventional guesses; refine after
-       inspecting the live page. ──── */
-
-ul,
-ol {
-  padding-left: 1.4rem;
+.header-navigation-link:hover {
+  background-color: transparent;
+  color: var(--color-action);
 }
 
-.email,
-.email-summary,
-.archive-item,
-article {
-  border-bottom: 1px solid var(--border);
-  padding: 1.25rem 0;
-  margin: 0;
+/* Subscribe: a button, so radius-xs; no grow-on-hover. Buttondown's own
+   hover rule is !important, so this one has to be too. */
+.header-navigation-link--subscribe {
+  color: var(--color-background);
+  border-radius: 2px;
+  transition: background-color 0.15s ease;
 }
 
-.email:last-child,
-.email-summary:last-child,
-.archive-item:last-child,
-article:last-child {
-  border-bottom: 0;
+.header-navigation-link--subscribe:hover {
+  transform: none;
+  color: var(--color-background);
+  background-color: var(--lx-hover) !important;
 }
 
-.email h2,
-.email-summary h2,
-.archive-item h2,
-article h2,
-.email h3,
-.archive-item h3 {
-  font-family: var(--font-serif);
+/* Links: Buttondown tints a background behind every hovered link. */
+a:hover {
+  background-color: transparent;
+}
+
+/* ──── Archive list ──── */
+
+/* Each mailing: date over title over description. Square, and the hover is
+   the title turning amber rather than a tinted card. */
+.email-link {
+  border-radius: 0;
+}
+
+.email-link:hover {
+  background-color: transparent;
+}
+
+.email-link:hover .email-title {
+  color: var(--color-action);
+}
+
+.email-title {
+  font-family: var(--lx-serif);
   font-size: 1.3rem;
   font-weight: 600;
-  margin: 0 0 0.25rem;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--color-foreground);
+  transition: color 0.15s ease;
 }
 
-.email a,
-.email-summary a,
-.archive-item a,
-article a {
-  text-decoration: none;
-  color: var(--text);
-}
-
-.email a:hover,
-.archive-item a:hover,
-article a:hover {
-  color: var(--accent);
-}
-
-time,
-.email-date,
-.archive-item time,
-.publish-date {
-  font-family: var(--font-ui);
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  display: block;
-  margin-bottom: 0.25rem;
-}
-
-/* ──── Subscribe form — Buttondown shows one on the archive ──── */
-
-form,
-.subscribe-form,
-.subscribe {
-  margin: 2rem 0;
-  padding: 1.25rem var(--pad);
-  background: var(--accent-band);
-  border: 1px solid var(--accent-band-border);
-  border-radius: 2px;
-  max-width: 32rem;
-}
-
-input[type='email'],
-input[type='text'] {
-  width: 100%;
-  padding: 0.6rem 0.75rem;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  font: inherit;
-  font-size: 1rem;
-}
-
-input[type='email']:focus-visible,
-input[type='text']:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-color: var(--accent);
-}
-
-button,
-input[type='submit'] {
-  margin-top: 0.75rem;
-  padding: 0.6rem 1.4rem;
-  background: var(--accent);
-  color: #fff;
-  border: 1px solid var(--accent);
-  border-radius: 2px;
-  font-family: var(--font-ui);
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.05em;
+.email-metadata {
+  font-size: 10.5px;
   font-weight: 600;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
 }
 
-button:hover,
-input[type='submit']:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+/* Prose, not chrome: `.email-list` sets the whole list in --font-brand, and
+   the description is a <div>, so Buttondown's `p, li` rule never reaches it. */
+.email-description {
+  font-family: var(--font-prose);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--lx-text-2);
+}
+
+/* Siblings are separated by a 1px --border rule across the column.
+   Buttondown draws its <hr> half-width with no border, so it is invisible. */
+.email-list hr {
+  width: 100%;
+  height: 0;
+  border: 0;
+  border-top: 1px solid var(--color-background-offset);
+}
+
+/* ──── Subscribe page ──── */
+
+.newsletter-name {
+  font-family: var(--lx-serif);
+  font-size: clamp(2.4rem, 7vw, 3.4rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  font-variation-settings: 'opsz' 144, 'SOFT' 30;
+}
+
+/* The periodical's tagline: italic Fraunces in --accent-tagline. */
+.newsletter-description,
+.newsletter-description p {
+  font-family: var(--lx-serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.1rem;
+  color: var(--lx-tagline);
+}
+
+.card {
+  border-radius: 0;
+}
+
+/* Square field and button: radius-xs on both, the field edge in --muted so
+   it clears 3:1 as a control boundary. */
+:is(#subscribe-form, .subscribe-form, .subscribe-modal-body) input[type=email] {
+  border-color: var(--color-foreground-offset);
+  border-radius: 2px;
+}
+
+.archive__button {
+  border-radius: 2px !important;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+}
+
+.archive__button:hover {
+  background-color: var(--lx-hover) !important;
 }
 
 /* ──── Footer ──── */
 
-footer,
-.archive-footer,
-.site-footer {
-  border-top: 1px solid var(--border);
-  margin-top: 3rem;
-  padding: 1.5rem var(--pad) 2rem;
-  font-family: var(--font-ui);
-  font-size: 0.85rem;
-  color: var(--muted);
-  text-align: center;
+.footer {
+  border-top: 1px solid var(--color-background-offset);
 }
 
-footer a,
-.archive-footer a,
-.site-footer a {
-  color: var(--muted);
-  text-decoration: underline;
-  text-decoration-color: var(--border);
+.footer a {
+  color: var(--color-foreground-offset);
 }
 
-footer a:hover,
-.archive-footer a:hover,
-.site-footer a:hover {
-  color: var(--accent);
-  text-decoration-color: var(--accent);
+.footer a:hover {
+  color: var(--color-action);
 }
 
-/* ──── Mobile tuning ──── */
+/* ──── Focus and motion ──── */
 
-@media (max-width: 520px) {
-  body {
-    font-size: 16px;
-  }
-
-  header h1,
-  .archive-header h1,
-  .newsletter-header h1 {
-    font-size: 1.9rem;
-  }
-
-  main,
-  .content,
-  .archive,
-  .archive-container {
-    padding-top: 1.5rem;
-  }
+:focus-visible {
+  outline: 2px solid var(--color-action);
+  outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -415,8 +274,5 @@ footer a:hover,
   *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
-  }
-  html {
-    scroll-behavior: auto;
   }
 }

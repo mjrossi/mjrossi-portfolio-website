@@ -455,12 +455,15 @@ async function checkSubscribe() {
   // Happy path needs a real Turnstile token (or Turnstile's documented test
   // secret in .dev.vars) so it's not in CI.
   //
-  // Astro's built-in CSRF protection (security.checkOrigin) rejects POSTs
-  // without a matching Origin at the framework layer, so the assertions below
-  // pass an Origin header to exercise our handler rather than Astro's
-  // middleware. (A missing Origin would correctly 403 — that's the desired
-  // browser-facing behavior, just not what we're asserting here.)
+  // Astro's built-in CSRF protection (security.checkOrigin) rejects cross-site
+  // form POSTs at the framework layer, so the assertions below pass a
+  // same-origin Origin header to exercise our handler rather than Astro's
+  // middleware. Since Astro 7.4 the check reads Sec-Fetch-Site first and falls
+  // back to Origin, and a request carrying *neither* is let through — no
+  // browser sends a cross-site POST without one, so that request is not a
+  // CSRF vector. The two CSRF cases therefore send what a browser would.
   const ORIGIN = { Origin: BASE };
+  const FORM = { 'Content-Type': 'application/x-www-form-urlencoded' };
   const jsonPost = (body) => ({
     method: 'POST',
     headers: { ...ORIGIN, 'Content-Type': 'application/json' },
@@ -481,9 +484,15 @@ async function checkSubscribe() {
     { name: '400 on missing turnstile token', init: jsonPost({ email: 'a@b.co' }), expect: 400 },
     {
       // JSON POSTs require browser preflight and reach the handler regardless,
-      // so this assertion specifically targets the form-style attack vector.
-      name: '403 on form-encoded POST w/o Origin (CSRF guard)',
-      init: { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'email=a@b.co' },
+      // so these two target the form-style attack vector — one per branch of
+      // Astro's check, so neither can regress unnoticed.
+      name: '403 on cross-site form POST, Sec-Fetch-Site (CSRF guard)',
+      init: { method: 'POST', headers: { ...FORM, 'Sec-Fetch-Site': 'cross-site' }, body: 'email=a@b.co' },
+      expect: 403,
+    },
+    {
+      name: '403 on cross-site form POST, foreign Origin (CSRF guard)',
+      init: { method: 'POST', headers: { ...FORM, Origin: 'https://evil.example' }, body: 'email=a@b.co' },
       expect: 403,
     },
     {

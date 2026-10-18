@@ -119,7 +119,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
 
   <!-- editorial pull quote in the lower half -->
   <text x="${PAD}" y="${QUOTE_Y}"              class="quote" fill="${TEXT}">Building at the intersection of software,</text>
-  <text x="${PAD}" y="${QUOTE_Y + QUOTE_LH}"   class="quote" fill="${TEXT}">cities, and the way people move.</text>
+  <text x="${PAD}" y="${QUOTE_Y + QUOTE_LH}"   class="quote" fill="${TEXT}">cities, and the streets in between.</text>
 
   <!-- footer divider rule -->
   <rect x="${PAD}" y="${FOOTER_RULE_Y}" width="${W - PAD * 2}" height="1" fill="${BORDER}"/>

@@ -133,7 +133,7 @@ const tag = blog.html.match(/href="\/blog\/tag\/([^"/]+)\//)?.[1];
 - Every static asset in `dist/client/` (existence checks)
 - CSS design token values in the built bundle (`--accent`, `--max`)
 - `/api/contact` redirect contract (302, Location header, Cache-Control)
-- `/api/subscribe` sad-path matrix (405, 415, 400/invalid email, 400/missing token, 403/CSRF, 200/honeypot)
+- `/api/subscribe` sad-path matrix (405, 415, 400/invalid email, 400/missing token, 403/CSRF via Sec-Fetch-Site and via Origin, 200/honeypot)
 - Payload size guard (2.5KB token not rejected as 413)
 - Newsletter form scoping (present on `/blog`, absent on `/`)
 - CSP header presence and correctness on HTML responses

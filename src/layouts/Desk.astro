@@ -37,7 +37,7 @@ const { admin } = Astro.locals;
 {/* noindex as well as the X-Robots-Tag header middleware sets. Belt and braces,
     and free: the header is the one that matters, but a meta tag survives a
     response someone has saved to disk. */}
-<Base title={title} description="Operator desk" noindex={true}>
+<Base title={title} description="Operator desk" noindex={true} themeScript={false}>
   <div class="page desk">
     <header class="desk-header">
       {back && (

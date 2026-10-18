@@ -14,11 +14,19 @@ import { SECURITY_HEADERS } from '../src/lib/security-headers.js';
 
 // The non-CSP headers come from src/lib/security-headers.js so this file and
 // src/middleware.ts can't drift — same reason the CSP lives in csp.js.
+// /scripts/theme.js is the one render-blocking asset: Base.astro loads it
+// synchronously in <head> on every page. Cloudflare's static-asset default is
+// to revalidate on every request, which put a 304 round-trip in front of every
+// first paint. An hour matches the HTML's own max-age, so a change to the
+// script reaches readers on the same schedule as the pages that load it.
 const HEADERS = `/*
   Content-Security-Policy: ${CSP}
 ${Object.entries(SECURITY_HEADERS)
   .map(([name, value]) => `  ${name}: ${value}`)
   .join('\n')}
+
+/scripts/theme.js
+  Cache-Control: public, max-age=3600
 `;
 
 const outDir = resolve('dist/client');

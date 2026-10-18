@@ -13,7 +13,7 @@ import sharp from 'sharp';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { TAGLINE, SET_IN } from '../src/lib/identity.js';
+import { CARD_TAGLINE, SET_IN } from '../src/lib/identity.js';
 
 const W = 1200;
 const H = 630;
@@ -28,7 +28,7 @@ const ACCENT_TAGLINE = '#7c512c';   // --accent-tagline
 const TEXT = '#2a2520';
 const MUTED = '#7d7369';
 const ACCENT = '#8f5520';
-const ACCENT_SURNAME = '#c97d3e';
+const ACCENT_SURNAME = '#b8702f';
 const BORDER = '#dbd0c2';
 
 const PAD = 72;
@@ -115,11 +115,11 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <line x1="${PAD}" y1="${RULE_Y}" x2="${W - PAD}" y2="${RULE_Y}" stroke="${RULE}" stroke-width="1"/>
 
   <!-- tagline, centered under the rule -->
-  <text x="${W/2}" y="${TAGLINE_Y}" text-anchor="middle" class="tagline" fill="${ACCENT_TAGLINE}">${escapeXml(TAGLINE)}</text>
+  <text x="${W/2}" y="${TAGLINE_Y}" text-anchor="middle" class="tagline" fill="${ACCENT_TAGLINE}">${escapeXml(CARD_TAGLINE)}</text>
 
   <!-- editorial pull quote in the lower half -->
   <text x="${PAD}" y="${QUOTE_Y}"              class="quote" fill="${TEXT}">Building at the intersection of software,</text>
-  <text x="${PAD}" y="${QUOTE_Y + QUOTE_LH}"   class="quote" fill="${TEXT}">cities, and the way people move.</text>
+  <text x="${PAD}" y="${QUOTE_Y + QUOTE_LH}"   class="quote" fill="${TEXT}">cities, and the streets in between.</text>
 
   <!-- footer divider rule -->
   <rect x="${PAD}" y="${FOOTER_RULE_Y}" width="${W - PAD * 2}" height="1" fill="${BORDER}"/>

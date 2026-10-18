@@ -39,19 +39,20 @@
   post body's h1 with the masthead font — currently a non-issue because
   the RSS-to-email template uses linked titles, not headed posts).
 
-  ─── Color tokens (hex from src/styles/global.css :root oklch) ───
-    --bg                  → #f8f4ec  (warm cream page bg)
-    --bg2                 → #ece2cf  (slightly darker surface)
-    --border              → #d6cdb8  (hairline divider)
-    --text                → #2a2520  (primary text)
-    --muted               → #807565  (secondary text)
+  ─── Color tokens (sRGB of src/styles/global.css :root oklch, converted
+       exactly; recompute if a token moves) ───
+    --bg                  → #faf6f1  (warm cream page bg)
+    --bg2                 → #efe8df  (slightly darker surface)
+    --border              → #dad3ca  (hairline divider)
+    --text                → #191511  (primary text)
+    --muted               → #67625c  (secondary text)
     --accent              → #8f5520  (link, action)
-    --accent-surname      → #c97d3e  (the "Rossi" highlight)
-    --accent-band         → #eed8b8  (masthead band — unused below; keep
+    --accent-surname      → #b8702f  (display-only, ≥24px: unused below)
+    --accent-band         → #fae4cc  (masthead band — unused below; keep
                                        palette docs intact for consistency)
-    --accent-band-border  → #d6b889  (band edge — same)
-    --accent-rule         → #c8a983  (hairline rule — used on hr)
-    --accent-tagline      → #9c6f3d  (italic tagline color)
+    --accent-band-border  → #e4c4a1  (band edge — same)
+    --accent-rule         → #d3b99b  (hairline rule — used on hr)
+    --accent-tagline      → #754e2e  (italic tagline color)
 */
 
 /* ──── Web fonts ────
@@ -69,8 +70,8 @@
 body {
   margin: 0;
   padding: 0;
-  background: #f8f4ec;
-  color: #2a2520;
+  background: #faf6f1;
+  color: #191511;
   font-family: 'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
   font-size: 17px;
   line-height: 1.7;
@@ -93,13 +94,16 @@ a:hover {
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #2a2520;
+  color: #191511;
   display: block;
   margin: 0 0 18px;
 }
 
+/* --accent, not --accent-surname: this word is 11px, and the surname amber
+   is display-only (24px and up). On the white card it is 3.9:1, under the
+   4.5:1 small text needs; --accent is 6.0:1. */
 .masthead-publication-accent {
-  color: #c97d3e;
+  color: #8f5520;
 }
 
 /* ──── Article title (h1) + dek — the typographic lead inside the card ──── */
@@ -110,7 +114,7 @@ h1 {
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.15;
-  color: #2a2520;
+  color: #191511;
   margin: 0 0 10px;
 }
 
@@ -119,7 +123,7 @@ h1 {
    not a link; keep the dark text color so it doesn't compete with body
    links. Hover swap to accent for clients that support it. */
 h1 a {
-  color: #2a2520;
+  color: #191511;
   text-decoration: none;
 }
 
@@ -132,7 +136,7 @@ h1 a:hover {
   font-style: italic;
   font-size: 17px;
   line-height: 1.5;
-  color: #807565;
+  color: #67625c;
   margin: 0 0 18px;
 }
 
@@ -141,12 +145,12 @@ h1 a:hover {
 .masthead-byline {
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   display: block;
-  color: #807565;
+  color: #67625c;
   margin: -6px 0 14px;
 }
 
 .masthead-byline a {
-  color: #807565;
+  color: #67625c;
   text-decoration: underline;
 }
 
@@ -154,7 +158,7 @@ h1 a:hover {
 
 hr {
   border: 0;
-  border-top: 1px solid #c8a983;
+  border-top: 1px solid #d3b99b;
   margin: 18px 0;
   height: 1px;
 }
@@ -164,7 +168,7 @@ hr {
 small {
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   font-size: 12px;
-  color: #807565;
+  color: #67625c;
   line-height: 1.5;
 }
 
@@ -180,6 +184,6 @@ small {
 
 .footer-meta a,
 .footer-colophon a {
-  color: #807565;
+  color: #67625c;
   text-decoration: underline;
 }

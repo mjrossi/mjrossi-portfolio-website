@@ -12,62 +12,66 @@ import { nowUpdatedLabel } from '../lib/now.js';
 // plain newest-first pick featured "Scheduled-post fixture (not a real post)"
 // on every preview deploy.
 //
-// TWO entries, not one. With one, the front page was three short blocks above a
-// bottom-pinned footer and left a 512px void on a tall display — it read as
-// unfinished. Two is also just a better pointer at a periodical: the latest
-// issue and the one before it.
+// TWO entries, not one: the latest issue and the one before it is a better
+// pointer at a periodical than a single headline. (It was first doubled because
+// one entry left a 512px void under the old full-width grid; in the rail it
+// is simply the right length.)
 const latest = await getLatestPosts(2, { showScheduled: Astro.locals.showScheduled });
 ---
 
 <Base title="Matthew Rossi">
 
-  <section class="broadsheet-body">
+  <div class="spread">
     <div class="col-about">
       <span class="section-label">About</span>
-      <p class="dropcap">I grew up outside Detroit — a place built almost entirely around the car. The near-total absence of alternatives made the connection between transportation and daily life hard to ignore. That stuck with me, and eventually became a serious interest in how cities move people and what happens when they can't.</p>
-      <p>I spent thirteen years in software engineering, working across payments, financial services, and cloud infrastructure, and am now shifting focus to urban mobility.</p>
+      <p class="dropcap">I grew up outside Detroit — a place built almost entirely around the car. When the car wouldn't start, you weren't going to work, or to the grocery store, or to that appointment. That kind of missing option stuck with me long before I had words for it.</p>
+      <p>At twenty-three I moved to Chicago and sold my car, and it felt more like freedom than the car ever had. I spent the next thirteen years as a software engineer — payments, banking, cloud infrastructure — while the way cities move people went from a weekend interest to the lens I see everything through.</p>
+      <p>Now I'm making it my primary focus.</p>
     </div>
-    <div class="broadsheet-gutter" aria-hidden="true"></div>
-    <div class="col-now">
-      <span class="section-label">Now</span>
-      <span class="section-updated">{nowUpdatedLabel()}</span>
-      <img
-        src="/profile-avatar.webp"
-        alt="Matthew Rossi"
-        class="avatar"
-        width="64"
-        height="64"
-        loading="lazy"
-        decoding="async"
-      />
-      <p>I live in Lisbon, with five years as a Senior Software Engineer at <a href="https://www.heroku.com" target="_blank" rel="noopener noreferrer">Heroku (Salesforce)</a> in New York now behind me.</p>
-      <p>I've just started the <strong>EIT Urban Mobility Master's Program (SUMT)</strong> — a two-year double degree, first at Técnico Lisboa here in Lisbon, then at UPC BarcelonaTech in Barcelona.</p>
-    </div>
-  </section>
 
-  {latest.length > 0 && (
-    <section class="lexicon-teaser" aria-labelledby="lexicon-teaser-label">
-      <span class="section-label" id="lexicon-teaser-label">From the Lexicon</span>
-      {latest.map((post) => (
-        <article class="lexicon-teaser-item">
-          <h2 class="lexicon-teaser-title">
-            <a href={`/blog/${post.id}/`}>{post.data.title}</a>
-          </h2>
-          <p class="lexicon-teaser-meta">
-            {/* Only reachable where scheduled posts are visible at all — a
-                preview host or `astro dev` — and it is what says a featured
-                post isn't live yet. Keyed off isPublished, like every other
-                badge. */}
-            {!isPublished(post.data.pubDate) && <span class="post-scheduled">Scheduled</span>}
-            <time datetime={isoDate(post.data.pubDate)}>{dateFormatter.format(post.data.pubDate)}</time>
-            <span class="meta-sep" aria-hidden="true">·</span>
-            <span>{postReadingTime(post)}</span>
-          </p>
-          <p class="lexicon-teaser-excerpt">{post.data.description}</p>
-        </article>
-      ))}
-      <a class="lexicon-teaser-more" href="/blog">More issues →</a>
-    </section>
-  )}
+    <aside class="rail" aria-label="Now and latest writing">
+      <section class="rail-block col-now" aria-labelledby="now-label">
+        <span class="section-label" id="now-label">Now</span>
+        <span class="section-updated">{nowUpdatedLabel()}</span>
+        <img
+          src="/profile-avatar.webp"
+          alt="Matthew Rossi"
+          class="avatar"
+          width="64"
+          height="64"
+          loading="lazy"
+          decoding="async"
+        />
+        <p>I live in Lisbon, and since September I've been a student again: the <strong>EIT Urban Mobility master's (SUMT)</strong>, a two-year double degree — this year at Técnico Lisboa, next year at UPC BarcelonaTech in Barcelona.</p>
+      </section>
+
+      {latest.length > 0 && (
+        <section class="rail-block amber" aria-labelledby="lexicon-teaser-label">
+          <div class="lexicon-teaser">
+            <span class="section-label" id="lexicon-teaser-label">From the Lexicon</span>
+            {latest.map((post) => (
+              <article class="lexicon-teaser-item">
+                <h2 class="lexicon-teaser-title">
+                  <a href={`/blog/${post.id}/`}>{post.data.title}</a>
+                </h2>
+                <p class="lexicon-teaser-meta">
+                  {/* Only reachable where scheduled posts are visible at all — a
+                      preview host or `astro dev` — and it is what says a featured
+                      post isn't live yet. Keyed off isPublished, like every other
+                      badge. */}
+                  {!isPublished(post.data.pubDate) && <span class="post-scheduled">Scheduled</span>}
+                  <time datetime={isoDate(post.data.pubDate)}>{dateFormatter.format(post.data.pubDate)}</time>
+                  <span class="meta-sep" aria-hidden="true">·</span>
+                  <span>{postReadingTime(post)}</span>
+                </p>
+                <p class="lexicon-teaser-excerpt">{post.data.description}</p>
+              </article>
+            ))}
+            <a class="lexicon-teaser-more" href="/blog">More issues →</a>
+          </div>
+        </section>
+      )}
+    </aside>
+  </div>
 
 </Base>

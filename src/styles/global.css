@@ -1648,7 +1648,9 @@ em {
   font-size: 3.4rem;
   line-height: 0.85;
   padding: 0.35rem 0.4rem 0 0;
-  color: var(--accent-surname);
+  /* Family core: drop caps take --accent, as the home page's does.
+     --accent-surname is for the display words (the wordmarks, the colophon). */
+  color: var(--accent);
 }
 
 /* …but not when a figure opens the post. `:first-of-type` finds the first

@@ -133,7 +133,7 @@ Shared with Urbanist Atlas as the **Lexicon Family** — one paper, one amber, t
 
 Don't publish to the artifact without coordinating: both repos' agents write to it.
 
-**Two themes from one set of token names.** Paper (the values below) is `:root`. Night redefines the same tokens under `:root[data-theme="dark"]` and again under `prefers-color-scheme: dark` guarded by `:root:not([data-theme="light"])`, both inside `@media screen` so print always gets Paper — keep the two Night blocks identical (smoke compares them). Every colour resolves through a token, so a new rule never needs its own dark override; a literal colour in a new rule is the bug. Night's `--accent` is `#d9955a` (≥6.4:1 on every ground); `--accent-surname` is display-size only (≥24px) in both themes — about 3:1 on Paper's `--bg`, and 2.6:1 on the masthead band, which the core accepts as the family's signature.
+**Two themes from one set of token names.** Paper (the values below) is `:root`. Night redefines the same tokens under `:root[data-theme="dark"]` and again under `prefers-color-scheme: dark` guarded by `:root:not([data-theme="light"])`, both inside `@media screen` so print always gets Paper — keep the two Night blocks identical (smoke compares them). Every colour resolves through a token, so a new rule never needs its own dark override; a literal colour in a new rule is the bug. Night's `--accent` is `#d9955a` (≥6.4:1 on every ground); `--accent-surname` is display-size only (≥24px) in both themes — Paper's `#b8702f` is 3.6:1 on `--bg` and 3.15:1 on the masthead band, clear of the 3:1 floor on every ground it sits on.
 
 CSS custom properties at `:root` in `src/styles/global.css` (warm-amber Broadsheet palette, light cream background):
 
@@ -141,7 +141,7 @@ CSS custom properties at `:root` in `src/styles/global.css` (warm-amber Broadshe
 - `--border` — hairline rules and dividers.
 - `--text`, `--muted` — primary and secondary text.
 - `--accent` `#8f5520`, `--accent-hover` `#7a4a1a` — link color (AA against `--bg`).
-- `--accent-surname` `#c97d3e` — the "Rossi" highlight in the masthead name.
+- `--accent-surname` `#b8702f` — the "Rossi" highlight in the masthead name.
 - `--accent-band`, `--accent-band-border`, `--accent-rule`, `--accent-tagline` — masthead band, double-rule borders, hairlines, and the italic tagline color.
 - `--font` (Source Serif 4) — body. `--font-serif` (Fraunces) — display. `--font-ui` (Inter) — nav and meta. All loaded via Astro's `Font` integration (`astro.config.mjs`) and exposed as CSS variables. `--font-mono` is a **system stack with no webfont** — it is used at 0.82em inside running prose, which is not a size worth a network request.
 - `--text-2`, `--rule-strong` — ported from Atlas (`--ink-2`, `--rule-strong`): secondary ink, and the nav/tag frame.

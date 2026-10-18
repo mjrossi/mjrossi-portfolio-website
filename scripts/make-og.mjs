@@ -28,7 +28,7 @@ const ACCENT_TAGLINE = '#7c512c';   // --accent-tagline
 const TEXT = '#2a2520';
 const MUTED = '#7d7369';
 const ACCENT = '#8f5520';
-const ACCENT_SURNAME = '#c97d3e';
+const ACCENT_SURNAME = '#b8702f';
 const BORDER = '#dbd0c2';
 
 const PAD = 72;

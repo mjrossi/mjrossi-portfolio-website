@@ -6,7 +6,9 @@
   --muted: oklch(50% 0.012 75);
 
   --accent: #8f5520;
-  --accent-surname: #c97d3e;
+  /* Display size only (≥24px): 3.6:1 on --bg, 3.15:1 on the band. Was
+     #c97d3e, which was 2.6:1 on the band the wordmark sits on. */
+  --accent-surname: #b8702f;
   --accent-band: oklch(93% 0.04 70);
   --accent-band-border: oklch(84% 0.06 70);
   --accent-rule: oklch(80% 0.05 70);
@@ -470,6 +472,7 @@ a.masthead-name-link:hover .surname {
 }
 
 .theme-toggle button {
+  position: relative;
   appearance: none;
   display: inline-flex;
   align-items: center;
@@ -483,6 +486,16 @@ a.masthead-name-link:hover .surname {
   color: var(--muted);
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Family core: the hit box is 24×24 while the visual box stays 22×18, so the
+   folio row never grows. Without it the toggle met WCAG 2.5.8 only through
+   the spacing exception (centres ~24.4px apart), and on a phone it is the
+   only theme control. Neighbouring boxes stay 0.4px apart at the 0.15rem gap. */
+.theme-toggle button::before {
+  content: '';
+  position: absolute;
+  inset: -3px -1px;
 }
 
 .theme-toggle button:hover {

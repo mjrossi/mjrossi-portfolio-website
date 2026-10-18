@@ -46,7 +46,7 @@
     --text                → #2a2520  (primary text)
     --muted               → #807565  (secondary text)
     --accent              → #8f5520  (link, action)
-    --accent-surname      → #c97d3e  (the "Rossi" highlight)
+    --accent-surname      → #b8702f  (the "Rossi" highlight)
     --accent-band         → #eed8b8  (masthead band — unused below; keep
                                        palette docs intact for consistency)
     --accent-band-border  → #d6b889  (band edge — same)
@@ -99,7 +99,7 @@ a:hover {
 }
 
 .masthead-publication-accent {
-  color: #c97d3e;
+  color: #b8702f;
 }
 
 /* ──── Article title (h1) + dek — the typographic lead inside the card ──── */

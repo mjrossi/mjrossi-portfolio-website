@@ -114,6 +114,7 @@ html {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+  border-radius: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -194,9 +195,9 @@ body {
   align-items: center;
   gap: 0.25rem 1.5rem;
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: 0.656rem; /* 10.5px — the Family core folio */
   font-weight: 600;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--accent-tagline);
   margin-bottom: 0.85rem;
@@ -303,12 +304,12 @@ a.masthead-name-link:hover .surname {
   position: relative;
   display: flex;
   align-items: center;
-  height: 52px;
-  padding: 0 1.1rem;
+  height: 48px;
+  padding: 0 16px;
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text-2);
   text-decoration: none;
@@ -388,20 +389,35 @@ a.masthead-name-link:hover .surname {
   display: block;
 }
 
-/* Five ruled cells and the contact cluster do not share a row below ~1024px;
-   the contact links are in the footer at every width. */
+/* Five ruled cells and the contact cluster do not share a row below ~1024px
+   (measured: the row needs 901px of content width, which the sheet only gives
+   from ~980px). The Family core shows the cluster from 900px; this site's
+   later breakpoint is a recorded Local variation in CLAUDE.md. The contact
+   links are in the footer at every width. */
 @media (max-width: 1023px) {
   .nav-contact {
     display: none;
   }
 }
 
+/* The Family core's nav cell steps up at 720px. Declared before the tablet
+   band below so that band's tighter cells win between 720 and 819px. */
+@media (min-width: 720px) {
+  .broadsheet-nav-inner .page-links a {
+    height: 56px;
+    padding: 0 22px;
+    font-size: 11.5px;
+    letter-spacing: 0.22em;
+  }
+}
+
 /* Between the phone row (which scrolls, 639px and down) and the full row, the
-   cells must fit the sheet unaided: at desktop padding and tracking with the
-   numerals they need ~653px, so from 640px to ~695px (classic scrollbars) the
-   page itself scrolled sideways and clipped Blog. Tighter cells and no
-   numerals until there is room for them. Re-measure scrollWidth at 640px if
-   the labels, padding or tracking change. */
+   cells must fit the sheet unaided: at the core's 22px padding and 0.22em
+   tracking with numerals they need ~725px, so without this band the page
+   scrolled sideways and clipped Blog (it did, at 640–695px, before this rule).
+   Tighter cells and no numerals until there is room: 476px here, against
+   589px available at 640px; 725px against 754px at 820px. Re-measure
+   scrollWidth at 640 and 820px if the labels, padding or tracking change. */
 @media (min-width: 640px) and (max-width: 819px) {
   .broadsheet-nav-inner .page-links a {
     padding: 0 0.8rem;
@@ -1151,9 +1167,7 @@ em {
   .broadsheet-nav-inner .page-links a {
     flex: 0 0 auto;
     scroll-snap-align: start;
-    height: 44px;
-    padding: 0 0.8rem;
-    letter-spacing: 0.14em;
+    padding: 0 12px;
   }
 
   /* The numerals are a broadsheet conceit; next to five short labels in a
@@ -1336,15 +1350,16 @@ em {
 .tag-chip {
   display: inline-flex;
   align-items: center;
+  height: 26px;
   font-family: var(--font-ui);
-  font-size: 0.66rem;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text-2);
   border: 1px solid var(--rule-strong);
   border-radius: 0;
-  padding: 0.3rem 0.6rem;
+  padding: 0 10px;
   text-decoration: none;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }

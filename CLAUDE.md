@@ -156,6 +156,7 @@ Where this site deliberately departs from the Family core. Anything not listed h
 - **Two mastheads.** The core masthead carries one identity; this site fills it two ways — `author` on non-blog routes, `lexicon` (author as byline) on every blog route — because the blog is a periodical within the site (see "Blog"). Atlas has one wordmark.
 - **Kicker on interior pages only.** Not on `/`, `/blog`, tag pages or posts: the two fronts are where a breadcrumb would start, and posts and tag pages already carry their own back links.
 - **Site-foot columns** are Pages / The Lexicon / Elsewhere — this site's own navigation, not the artifact's example set.
+- **Nav contact cluster from 1024px, not the core's 900px.** Five ruled cells plus four contact icons need 901px of row width, which this sheet only has from ~980px; at 900px the row would overflow. Atlas's nav carries four cells and a status line, so the core's breakpoint suits it and not this site. The tablet nav band is 640–819px here, which is the core rule measured for this site rather than a variation.
 
 Section labels: `font-variant-caps: all-small-caps` with letter-spacing. Experience and education entries use `.entry` / `.entry-header` / `.entry-meta` / `.company` / `.role` / `.date`. Interior pages use `.page` / `.page-header` / `.page-meta`.
 

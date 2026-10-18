@@ -3,7 +3,7 @@ import Base from '../layouts/Base.astro';
 import PageHeader from '../components/PageHeader.astro';
 ---
 
-<Base title="Privacy" description="What this site collects and who it shares with.">
+<Base title="Privacy" crumbs={[{ label: 'Front', href: '/' }, { label: 'Privacy' }]} description="What this site collects and who it shares with.">
 
   <div class="page">
     <PageHeader title="Privacy" description="A short, plain account of what this site collects and who it shares with." />

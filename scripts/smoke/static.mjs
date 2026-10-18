@@ -12,7 +12,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { check, stripComments } from './check.mjs';
 import { DIST, FIXTURE_SLUG, GALLEY_WRITE_QUOTA, PUBLISHED_SLUG } from './config.mjs';
-import { BUILT_WITH, SET_IN, TAGLINE } from '../../src/lib/identity.js';
+import { BUILT_WITH, CARD_TAGLINE, LEXICON_TAGLINE, SET_IN, TAGLINE } from '../../src/lib/identity.js';
 
 /** Read and comment-strip a source file, or return '' if it isn't there. */
 function source(path) {
@@ -119,7 +119,7 @@ export function checkSourceGuards() {
   );
 
   // The galley's client JS is the site's SECOND carve-out from the no-client-JS
-  // rule, and the narrower of the two: it may only ship on a response that
+  // rule, and the narrowest of the three: it may only ship on a response that
   // middleware has already forced to no-store + noindex. That holds because
   // BlogPost.astro gates it on previewReviewer AND a previewSlug matching the
   // post being rendered. Dropping either half would put review chrome — and a
@@ -221,6 +221,17 @@ export function checkSourceGuards() {
         'pattern for the same reason: it was left out by a comment alone, and a comment ' +
         'is not a check',
     );
+    // The masthead's TAGLINE is allowed a fact about the present ("now
+    // studying"); the page re-renders on every request and follows it. The
+    // card is cached indefinitely, so it says CARD_TAGLINE instead. `\b`
+    // keeps CARD_TAGLINE, LEXICON_TAGLINE and ACCENT_TAGLINE from matching.
+    check(
+      'make-og.mjs: the site card says CARD_TAGLINE, not the masthead TAGLINE',
+      ogGenSource.includes('CARD_TAGLINE') && !/\bTAGLINE\b/.test(ogGenSource),
+      'scripts/make-og.mjs renders the masthead TAGLINE again. That line may state ' +
+        'a fact about the present; the card may not, because scrapers cache it by ' +
+        'URL and never re-fetch. Render CARD_TAGLINE from src/lib/identity.js',
+    );
   }
 
   // THE MASTHEAD SENTENCES ARE SAID IN TWO ENGINES AND SPELLED IN ONE PLACE.
@@ -251,6 +262,7 @@ export function checkSourceGuards() {
       Boolean(src) &&
         src.includes('identity.js') &&
         !src.includes(TAGLINE) &&
+        !src.includes(CARD_TAGLINE) &&
         !src.includes(SET_IN),
       src
         ? `${path} spells the tagline or colophon itself instead of importing it — ` +
@@ -258,6 +270,23 @@ export function checkSourceGuards() {
           'half that drifts silently'
         : `${path} could not be read — it has moved or been renamed, and this check ` +
           'is blind until the path here follows it',
+    );
+  }
+
+  // The Lexicon's own line is said by its masthead, the /blog description and
+  // the feed's <description> — three call sites, one spelling.
+  for (const [label, path] of [
+    ['Base.astro', 'src/layouts/Base.astro'],
+    ['blog/index.astro', 'src/pages/blog/index.astro'],
+    ['rss.xml.ts', 'src/pages/blog/rss.xml.ts'],
+  ]) {
+    const src = source(resolve(path));
+    check(
+      `${label}: LEXICON_TAGLINE comes from src/lib/identity.js`,
+      Boolean(src) && src.includes('identity.js') && !src.includes(LEXICON_TAGLINE),
+      src
+        ? `${path} spells the Lexicon tagline itself instead of importing it`
+        : `${path} could not be read — this check is blind until the path follows it`,
     );
   }
 
@@ -366,6 +395,7 @@ export function checkBuildArtifacts() {
     'og.png',
     '404.html',
     'sitemap-index.xml',
+    'scripts/theme.js',
     '_headers',
   ]) {
     check(`asset: ${asset}`, existsSync(resolve(DIST, asset)));
@@ -471,6 +501,13 @@ export function checkBuildArtifacts() {
       headers.includes('challenges.cloudflare.com'),
       'Turnstile origin missing from static-asset CSP',
     );
+    // theme.js blocks first paint on every page; without its own max-age it
+    // falls back to Cloudflare's revalidate-every-request asset default.
+    check(
+      '_headers: /scripts/theme.js is cacheable',
+      /^\/scripts\/theme\.js\n\s+Cache-Control:\s*public, max-age=\d+/m.test(headers),
+      'gen-headers.mjs no longer gives the render-blocking theme script a max-age',
+    );
   }
 
   // Astro's emitted CSS filename is an internal detail, not a contract. 7.1.3
@@ -497,6 +534,39 @@ export function checkBuildArtifacts() {
   check('css: --accent is #8f5520 (AA contrast)', /--accent:\s*#8f5520/i.test(css));
   check('css: --max token present',               /--max:\s*1100px/.test(css));
   check('css: no inline SVG data URIs',           !css.includes('data:image/svg+xml'));
+  // Night: both triggers must survive into the bundle — the explicit choice
+  // theme.js sets, and the system setting when no choice was made. Losing the
+  // second silently ignores every dark-mode reader without JS; losing the
+  // first makes the toggle's Dark do nothing.
+  //
+  // Anchored on the `@media screen` wrapper, because that wrapper is the print
+  // fallback: browsers drop backgrounds when printing, so a Night block that
+  // escaped it would print cream ink on white paper. Unanchored, these passed
+  // with the wrapper deleted — and the first also matched any descendant rule
+  // keyed off `:root[data-theme=dark]`, such as the toggle's pressed state.
+  const NIGHT_EXPLICIT = /@media screen\s*\{\s*:root\[data-theme=["']?dark["']?\]\s*\{([^}]*)\}/;
+  const NIGHT_SYSTEM =
+    /@media screen and \(prefers-color-scheme:\s*dark\)\s*\{\s*:root:not\(\[data-theme=["']?light["']?\]\)\s*\{([^}]*)\}/;
+  check('css: dark theme via data-theme, screen only',          NIGHT_EXPLICIT.test(css));
+  check('css: dark theme via prefers-color-scheme, screen only', NIGHT_SYSTEM.test(css));
+  // CSS cannot share one declaration block between a selector and a media
+  // query, so Night is written twice and CLAUDE.md says to keep the copies
+  // identical. This makes that a CI rule rather than a by-hand one: a token
+  // added to one block only would give Auto-dark and explicit-Dark readers
+  // different pages.
+  const nightBlock = (rx) => {
+    const body = css.match(rx)?.[1];
+    return body
+      ? body.split(';').map((d) => d.replace(/\s+/g, '')).filter(Boolean).sort().join(';')
+      : null;
+  };
+  const nightExplicit = nightBlock(NIGHT_EXPLICIT);
+  const nightSystem = nightBlock(NIGHT_SYSTEM);
+  check(
+    'css: the two Night blocks declare the same tokens',
+    nightExplicit !== null && nightExplicit === nightSystem,
+    'the data-theme="dark" block and the prefers-color-scheme block have drifted apart',
+  );
   // Guards a prior masthead design (condensed variant + home-link/page-label
   // bar) that was reverted. The rules below assert those classes never
   // reappear in the built CSS or rendered HTML — without these, a copy-paste

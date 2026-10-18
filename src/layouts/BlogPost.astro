@@ -69,6 +69,7 @@ const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
 ---
 
 <Base
+  masthead="lexicon"
   title={title}
   description={description}
   ogImage={hasCard ? `/og/${post.id}.png` : undefined}

@@ -1,6 +1,7 @@
 import rss from '@astrojs/rss';
 import type { APIContext } from 'astro';
 import { getPublishedPosts } from '../../lib/blog.ts';
+import { LEXICON_TAGLINE } from '../../lib/identity.js';
 
 // On-demand (not prerendered): the feed is rebuilt per request so that
 // scheduled posts (future pubDate) enter it automatically once their date
@@ -17,7 +18,7 @@ export async function GET(context: APIContext) {
 
   const response = await rss({
     title: 'The Urbanist Lexicon',
-    description: 'A record of systems, movement, and the transition from bits to bricks.',
+    description: `${LEXICON_TAGLINE}.`,
     site,
     items: posts.map((post) => ({
       title: post.data.title,

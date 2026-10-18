@@ -124,9 +124,16 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 
 ## Design system
 
-Shared with Urbanist Atlas as the **Lexicon Family** — one paper, one amber, three typefaces, two mastheads. The reference (tokens, component guidelines, previews) is the Design System artifact at https://claude.ai/artifact/MqHpb7fJPnWU7VugYdtd57; where it and this file disagree, the code is the source of truth.
+Shared with Urbanist Atlas as the **Lexicon Family** — one paper, one amber, three typefaces. The Design System artifact at https://claude.ai/artifact/MqHpb7fJPnWU7VugYdtd57 (tokens, component guidelines, previews, and the token-name map between the two repos) is split into two layers with different owners:
 
-**Two themes from one set of token names.** Paper (the values below) is `:root`. Night redefines the same tokens under `:root[data-theme="dark"]` and again under `prefers-color-scheme: dark` guarded by `:root:not([data-theme="light"])` — keep the two Night blocks identical. Every colour resolves through a token, so a new rule never needs its own dark override; a literal colour in a new rule is the bug. Night's `--accent` is `#d9955a` (≥6.4:1 on every ground); `--accent-surname` is display-size only (≥24px) in both themes — about 3:1 on Paper.
+- **Family core — the artifact is canonical, for both sites.** Tokens in both themes and the Night mechanism; the type families, scale and label conventions; spacing, square radii, and rules-not-shadows with their weights; the shared chrome primitives (masthead band, grain, double rule, folio and tagline row; numbered nav cells; kicker; rail blocks; § tags; site-foot and colophon strip; the icon theme toggle and the `theme.js` contract); and the accessibility rules (contrast floors in both themes, `--accent-surname` ≥24px only, focus ring, no page-level horizontal scroll). A change to the core starts in the artifact and then lands in both repos. If this repo's code disagrees with the core and the difference is not listed under "Local variations" below, the code is the bug.
+- **Site layer — this repo is canonical.** What fills the shared shapes (wordmarks, which masthead a route gets, taglines, folio text), site-only components built *from* core tokens (entries, post furniture, the galley, the Desk, the subscribe form), per-page layout, and platform constraints (zero-JS chrome, this CSP). The core says how a primitive behaves; this repo decides how to implement it within its limits.
+- **Token names stay per repo.** This repo keeps `--bg` / `--text` / `--accent`…; Atlas keeps `--paper` / `--ink` / `--amber`…. The artifact holds the map. Renaming is churn with no visible payoff.
+- **A fix that would help both sites goes to the core**, not to Local variations — the 640–819px nav tightening is the worked example.
+
+Don't publish to the artifact without coordinating: both repos' agents write to it.
+
+**Two themes from one set of token names.** Paper (the values below) is `:root`. Night redefines the same tokens under `:root[data-theme="dark"]` and again under `prefers-color-scheme: dark` guarded by `:root:not([data-theme="light"])`, both inside `@media screen` so print always gets Paper — keep the two Night blocks identical (smoke compares them). Every colour resolves through a token, so a new rule never needs its own dark override; a literal colour in a new rule is the bug. Night's `--accent` is `#d9955a` (≥6.4:1 on every ground); `--accent-surname` is display-size only (≥24px) in both themes — about 3:1 on Paper.
 
 CSS custom properties at `:root` in `src/styles/global.css` (warm-amber Broadsheet palette, light cream background):
 
@@ -141,6 +148,14 @@ CSS custom properties at `:root` in `src/styles/global.css` (warm-amber Broadshe
 - `--max: 1100px`, `--pad: clamp(1.25rem, 4vw, 2.5rem)`, `--rail: 320px` — page width, gutter, and the home spread's rail.
 
 Chrome vocabulary ported from Atlas: ruled nav cells with lower-case Roman numerals (dropped on phones, where Blog stays pinned), a `.kicker` breadcrumb on interior pages, the home `.spread` with `.rail-block`s, classified `.entry` rows numbered by a CSS counter, square `§` tag chips, and the four-column `.site-foot` with its `.colophon-strip`. **No figure call-outs** — no stats strips, no counts in the kicker.
+
+### Local variations
+
+Where this site deliberately departs from the Family core. Anything not listed here should match the artifact; add an entry, with its reason, in the same commit as the departure.
+
+- **Two mastheads.** The core masthead carries one identity; this site fills it two ways — `author` on non-blog routes, `lexicon` (author as byline) on every blog route — because the blog is a periodical within the site (see "Blog"). Atlas has one wordmark.
+- **Kicker on interior pages only.** Not on `/`, `/blog`, tag pages or posts: the two fronts are where a breadcrumb would start, and posts and tag pages already carry their own back links.
+- **Site-foot columns** are Pages / The Lexicon / Elsewhere — this site's own navigation, not the artifact's example set.
 
 Section labels: `font-variant-caps: all-small-caps` with letter-spacing. Experience and education entries use `.entry` / `.entry-header` / `.entry-meta` / `.company` / `.role` / `.date`. Interior pages use `.page` / `.page-header` / `.page-meta`.
 

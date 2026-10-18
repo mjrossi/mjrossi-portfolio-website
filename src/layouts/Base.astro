@@ -4,7 +4,7 @@ import '../styles/global.css';
 import ContactLinks from '../components/ContactLinks.astro';
 import ThemeToggle from '../components/ThemeToggle.astro';
 import { issue } from '../lib/edition.js';
-import { TAGLINE, LEXICON_TAGLINE, SET_IN, BUILT_WITH, SITE_DESCRIPTION } from '../lib/identity.js';
+import { TAGLINE, LEXICON_TAGLINE, SET_IN, BUILT_WITH, SITE_DESCRIPTION, CARD_DESCRIPTION } from '../lib/identity.js';
 
 interface Crumb {
   label: string;
@@ -46,7 +46,7 @@ const {
   // the FILENAME stable is what makes it safe — a scraper that strips the
   // query still lands on the current card rather than a 404.
   ogImage: ogImagePath = '/og.png?v=3',
-  ogImageAlt = SITE_DESCRIPTION,
+  ogImageAlt = CARD_DESCRIPTION,
   masthead = 'author',
   crumbs,
   themeScript = true,

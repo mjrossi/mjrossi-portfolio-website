@@ -13,6 +13,10 @@
   --accent-tagline: oklch(46% 0.07 60);
   --accent-hover: #7a4a1a;
 
+  /* A failed action, and nothing else: the galley composer's error line.
+     ≥5.3:1 on --bg and --bg2 in both themes. */
+  --danger: #aa3333;
+
   /* Ported from Urbanist Atlas so the two sites draw rules and secondary ink
      from one vocabulary (Atlas: --ink-2, --rule-strong). */
   --text-2: #3a312a;
@@ -67,6 +71,7 @@
     --accent-rule: oklch(40% 0.045 65);
     --accent-tagline: oklch(74% 0.07 65);
     --rule-strong: oklch(52% 0.04 70);
+    --danger: #e8877a;
     --grain-opacity: 0.12;
     --grain-blend: screen;
     color-scheme: dark;
@@ -89,6 +94,7 @@
     --accent-rule: oklch(40% 0.045 65);
     --accent-tagline: oklch(74% 0.07 65);
     --rule-strong: oklch(52% 0.04 70);
+    --danger: #e8877a;
     --grain-opacity: 0.12;
     --grain-blend: screen;
     color-scheme: dark;
@@ -483,7 +489,14 @@ a.masthead-name-link:hover .surname {
   color: var(--accent);
 }
 
-.theme-toggle button[aria-pressed='true'] {
+/* The visible pressed state keys off <html data-theme>, which theme.js sets
+   before the first paint, not off aria-pressed, which it can only sync once
+   the DOM exists. Keyed off aria-pressed, a long post painting progressively
+   showed a reader who chose Dark the Auto glyph underlined until
+   DOMContentLoaded. aria-pressed stays for assistive tech. */
+:root:not([data-theme]) .theme-toggle [data-theme-choice='auto'],
+:root[data-theme='light'] .theme-toggle [data-theme-choice='light'],
+:root[data-theme='dark'] .theme-toggle [data-theme-choice='dark'] {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }

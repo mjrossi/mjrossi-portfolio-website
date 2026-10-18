@@ -218,8 +218,8 @@ async function checkGalleyMatrix(fixtureExp, viewToken, post) {
   // THE SUBSCRIBE CARD MUST NOT REACH A DRAFT, AND ONE `!scheduled` IS ALL THAT
   // STOPS IT. A galley reader is here to review prose, not to be sold a
   // subscription — and placement D otherwise puts Turnstile plus
-  // /scripts/newsletter.js on the page, which is the wider of the two JS
-  // carve-outs landing on a no-store page that exists to be read once.
+  // /scripts/newsletter.js on the page, the one JS carve-out that loads a
+  // third party, landing on a no-store page that exists to be read once.
   //
   // Nothing else could see this. The card is gated in BlogPost.astro, not in
   // Subscribe.astro, so the component renders identically wherever it is

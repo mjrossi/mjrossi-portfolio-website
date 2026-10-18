@@ -13,7 +13,7 @@ import sharp from 'sharp';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { TAGLINE, SET_IN } from '../src/lib/identity.js';
+import { CARD_TAGLINE, SET_IN } from '../src/lib/identity.js';
 
 const W = 1200;
 const H = 630;
@@ -115,7 +115,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <line x1="${PAD}" y1="${RULE_Y}" x2="${W - PAD}" y2="${RULE_Y}" stroke="${RULE}" stroke-width="1"/>
 
   <!-- tagline, centered under the rule -->
-  <text x="${W/2}" y="${TAGLINE_Y}" text-anchor="middle" class="tagline" fill="${ACCENT_TAGLINE}">${escapeXml(TAGLINE)}</text>
+  <text x="${W/2}" y="${TAGLINE_Y}" text-anchor="middle" class="tagline" fill="${ACCENT_TAGLINE}">${escapeXml(CARD_TAGLINE)}</text>
 
   <!-- editorial pull quote in the lower half -->
   <text x="${PAD}" y="${QUOTE_Y}"              class="quote" fill="${TEXT}">Building at the intersection of software,</text>

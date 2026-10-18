@@ -31,8 +31,22 @@
 // than a sentence — an `<h1>` with a `<span>` here, a `<text>` with a `<tspan>`
 // there — so there is no shared value to lift, only a shared shape.
 
-/** The masthead tagline. Also the spine of `SITE_DESCRIPTION` below. */
+/**
+ * The masthead tagline. Also the spine of `SITE_DESCRIPTION` below.
+ *
+ * NOT the social card's line. "Now studying" is a fact about the present, and
+ * the card may state identity only (see `scripts/make-og.mjs`): the page is
+ * re-rendered on every request and can follow this sentence, but the card is
+ * cached by scrapers that never re-fetch it. The card says `CARD_TAGLINE`.
+ */
 export const TAGLINE = 'Software engineer, now studying how cities move people';
+
+/**
+ * The social card's line: who, not what now. It must stay true for as long as
+ * a scraper might hold the card, which is indefinitely. Changing it means
+ * `just og`, then bumping `?v=` on `Base.astro`'s `ogImage` default.
+ */
+export const CARD_TAGLINE = 'Software engineer and urbanist';
 
 /**
  * The Urbanist Lexicon's own line: the tagline of the periodical's masthead on
@@ -49,8 +63,8 @@ export const SET_IN = 'Set in Fraunces & Source Serif';
 export const BUILT_WITH = 'Built in Astro, served from the edge';
 
 /**
- * The default `<meta name="description">`, `og:description` and OG-card alt
- * text — the tagline as a sentence, with the byline in front.
+ * The default `<meta name="description">` and `og:description` — the tagline
+ * as a sentence, with the byline in front.
  *
  * Derived rather than spelled out because it *is* the tagline: written
  * separately it was a fourth copy, and the one furthest from anything a reader
@@ -58,3 +72,10 @@ export const BUILT_WITH = 'Built in Astro, served from the edge';
  */
 export const SITE_DESCRIPTION =
   `Matthew Rossi — ${TAGLINE[0].toLowerCase()}${TAGLINE.slice(1)}.`;
+
+/**
+ * The default `og:image:alt` / `twitter:image:alt`. Alt text describes the
+ * image, so it follows the card's line, not the masthead's.
+ */
+export const CARD_DESCRIPTION =
+  `Matthew Rossi — ${CARD_TAGLINE[0].toLowerCase()}${CARD_TAGLINE.slice(1)}.`;

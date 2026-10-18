@@ -54,6 +54,14 @@ function assertSharedChrome(label, res, html, activeHref) {
     `${label}: no inline <script>`,
     !/<script(?![^>]*\bsrc=)(?![^>]*type=["']application\/ld\+json)[^>]*>/i.test(html),
   );
+  // The kicker is a breadcrumb for interior pages. The two fronts and the blog
+  // routes carry none: `/` and `/blog` are where a breadcrumb would start, and
+  // posts and tag pages already have their own back links.
+  const wantsKicker = activeHref !== null && activeHref !== '/blog';
+  check(
+    `${label}: kicker ${wantsKicker ? 'present' : 'absent'}`,
+    html.includes('class="kicker"') === wantsKicker,
+  );
   const contactCount = occurrences(html, 'aria-label="Contact"');
   check(`${label}: ContactLinks rendered twice`, contactCount === 2, `found ${contactCount}`);
   if (activeHref) {

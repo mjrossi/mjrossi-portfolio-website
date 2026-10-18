@@ -12,7 +12,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { check, stripComments } from './check.mjs';
 import { DIST, FIXTURE_SLUG, GALLEY_WRITE_QUOTA, PUBLISHED_SLUG } from './config.mjs';
-import { BUILT_WITH, SET_IN, TAGLINE } from '../../src/lib/identity.js';
+import { BUILT_WITH, LEXICON_TAGLINE, SET_IN, TAGLINE } from '../../src/lib/identity.js';
 
 /** Read and comment-strip a source file, or return '' if it isn't there. */
 function source(path) {
@@ -261,6 +261,23 @@ export function checkSourceGuards() {
     );
   }
 
+  // The Lexicon's own line is said by its masthead, the /blog description and
+  // the feed's <description> — three call sites, one spelling.
+  for (const [label, path] of [
+    ['Base.astro', 'src/layouts/Base.astro'],
+    ['blog/index.astro', 'src/pages/blog/index.astro'],
+    ['rss.xml.ts', 'src/pages/blog/rss.xml.ts'],
+  ]) {
+    const src = source(resolve(path));
+    check(
+      `${label}: LEXICON_TAGLINE comes from src/lib/identity.js`,
+      Boolean(src) && src.includes('identity.js') && !src.includes(LEXICON_TAGLINE),
+      src
+        ? `${path} spells the Lexicon tagline itself instead of importing it`
+        : `${path} could not be read — this check is blind until the path follows it`,
+    );
+  }
+
   // THE COLOPHON IS SAID IN A THIRD ENGINE, AND THAT ONE CANNOT IMPORT.
   //
   // docs/buttondown-rss-template.md is pasted by hand into Buttondown's
@@ -472,6 +489,13 @@ export function checkBuildArtifacts() {
       headers.includes('challenges.cloudflare.com'),
       'Turnstile origin missing from static-asset CSP',
     );
+    // theme.js blocks first paint on every page; without its own max-age it
+    // falls back to Cloudflare's revalidate-every-request asset default.
+    check(
+      '_headers: /scripts/theme.js is cacheable',
+      /^\/scripts\/theme\.js\n\s+Cache-Control:\s*public, max-age=\d+/m.test(headers),
+      'gen-headers.mjs no longer gives the render-blocking theme script a max-age',
+    );
   }
 
   // Astro's emitted CSS filename is an internal detail, not a contract. 7.1.3
@@ -505,6 +529,24 @@ export function checkBuildArtifacts() {
   check('css: dark theme via data-theme',          /:root\[data-theme=["']?dark["']?\]/.test(css));
   check('css: dark theme via prefers-color-scheme',
     /prefers-color-scheme:\s*dark\)\s*\{\s*:root:not\(\[data-theme=["']?light["']?\]\)/.test(css));
+  // CSS cannot share one declaration block between a selector and a media
+  // query, so Night is written twice and CLAUDE.md says to keep the copies
+  // identical. This makes that a CI rule rather than a by-hand one: a token
+  // added to one block only would give Auto-dark and explicit-Dark readers
+  // different pages.
+  const nightBlock = (rx) => {
+    const body = css.match(rx)?.[1];
+    return body
+      ? body.split(';').map((d) => d.replace(/\s+/g, '')).filter(Boolean).sort().join(';')
+      : null;
+  };
+  const nightExplicit = nightBlock(/:root\[data-theme=["']?dark["']?\]\s*\{([^}]*)\}/);
+  const nightSystem = nightBlock(/:root:not\(\[data-theme=["']?light["']?\]\)\s*\{([^}]*)\}/);
+  check(
+    'css: the two Night blocks declare the same tokens',
+    nightExplicit !== null && nightExplicit === nightSystem,
+    'the data-theme="dark" block and the prefers-color-scheme block have drifted apart',
+  );
   // Guards a prior masthead design (condensed variant + home-link/page-label
   // bar) that was reverted. The rules below assert those classes never
   // reappear in the built CSS or rendered HTML — without these, a copy-paste

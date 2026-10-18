@@ -88,9 +88,9 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `src/lib/galley-relocate.js` — `unmark` / `fold` / `createLocator`, plus the emitters for reviewer text.
 - `src/lib/galley-render.js` — the pulled review file itself, and `reviewModel`, which the Desk renders as HTML.
 - `src/lib/galley-manifest.js` — `noteIdsInMarkdown`: **what `just galley-close` actually retires.** Reads meta lines only.
-- `public/scripts/galley.js` — the review client: selection → note, notes → markers. **JS carve-out #2**, and the tighter of the two.
+- `public/scripts/galley.js` — the review client: selection → note, notes → markers. **JS carve-out #2**, and the tightest of the three.
 - `public/scripts/newsletter.js` — the Turnstile loader + submit handler for `Subscribe.astro`.
-- `public/scripts/theme.js` — **JS carve-out #3.** Sets `data-theme` before first paint, remembers the choice in `localStorage`, reveals the toggles.
+- `public/scripts/theme.js` — **JS carve-out #3.** Sets `data-theme` (and the `data-js` reveal hook) before first paint, remembers the choice in `localStorage`, follows other tabs and bfcache restores.
 - `src/lib/links-store.js` / `src/lib/notes-store.js` — the only owners of `preview_links` / `galley_notes` SQL, against a duck-typed store.
 - `src/lib/sql-literal.js` — `renderSql` / `sqlLiteral`: **the escaping boundary** for every statement run from the CLI, and the whole of it.
 - `migrations/0001_initial.sql` — the original schema. **Frozen.** `0002_preview_link_ceiling.sql` — `max_exp`. `0003_galley_note_closure.sql` — `closed_at`, drops `status`.
@@ -137,7 +137,7 @@ CSS custom properties at `:root` in `src/styles/global.css` (warm-amber Broadshe
 - `--accent-surname` `#c97d3e` — the "Rossi" highlight in the masthead name.
 - `--accent-band`, `--accent-band-border`, `--accent-rule`, `--accent-tagline` — masthead band, double-rule borders, hairlines, and the italic tagline color.
 - `--font` (Source Serif 4) — body. `--font-serif` (Fraunces) — display. `--font-ui` (Inter) — nav and meta. All loaded via Astro's `Font` integration (`astro.config.mjs`) and exposed as CSS variables. `--font-mono` is a **system stack with no webfont** — it is used at 0.82em inside running prose, which is not a size worth a network request.
-- `--text-2`, `--rule-strong`, `--accent-tint` — ported from Atlas (`--ink-2`, `--rule-strong`, `--amber-tint`): secondary ink, the nav/tag frame, the tinted ground.
+- `--text-2`, `--rule-strong` — ported from Atlas (`--ink-2`, `--rule-strong`): secondary ink, and the nav/tag frame.
 - `--max: 1100px`, `--pad: clamp(1.25rem, 4vw, 2.5rem)`, `--rail: 320px` — page width, gutter, and the home spread's rail.
 
 Chrome vocabulary ported from Atlas: ruled nav cells with lower-case Roman numerals (dropped on phones, where Blog stays pinned), a `.kicker` breadcrumb on interior pages, the home `.spread` with `.rail-block`s, classified `.entry` rows numbered by a CSS counter, square `§` tag chips, and the four-column `.site-foot` with its `.colophon-strip`. **No figure call-outs** — no stats strips, no counts in the kicker.
@@ -173,7 +173,7 @@ When a post needs a diagram rather than a photograph, it goes in `src/components
 
 Inline SVG rather than a rendered image, for reasons that are unlikely to change:
 
-- **Mermaid can't run here.** The Atlas repo draws these same shapes in mermaid, but the site ships no client JS outside the newsletter carve-out and `script-src 'self'` would block it anyway. Pre-rendering mermaid to a file means a Puppeteer/Chromium dev dependency and a visual style that fights the Broadsheet palette.
+- **Mermaid can't run here.** The Atlas repo draws these same shapes in mermaid, but the site's client JS is limited to three small carve-outs (newsletter, galley, theme) and `script-src 'self'` would block it anyway. Pre-rendering mermaid to a file means a Puppeteer/Chromium dev dependency and a visual style that fights the Broadsheet palette.
 - **It inherits the design system.** The SVG uses `.dg-*` classes defined in `global.css`, so nodes, rules, and type resolve to `--bg2`, `--border`, `--accent`, `--accent-rule`, `--muted`, `--font-ui` — the same tokens as the rest of the page, with nothing to re-sync if the palette moves.
 - Sharp at any zoom, no image weight, and the graph is readable by a screen reader via `role="img"` + `<title>` + `<desc>`.
 
@@ -358,7 +358,7 @@ The blog index and the foot of every **published** post carry an email signup (`
 
 **Full detail in [docs/NEWSLETTER.md](docs/NEWSLETTER.md)**: the complete env-var sourcing table, and the operator-side Buttondown email design — three files in `docs/` that must be re-pasted into the dashboard by hand, one of which is pinned to `src/lib/identity.js` by smoke.
 
-**JS carve-out:** this is one of the two client-side JavaScript carve-outs (the other is the galley review client). The Turnstile loader and submit handler load on `/blog` **and on every published post** — and that is where the carve-out stops. **Do not lift `Subscribe.astro` into `Base.astro` or any shared chrome, and do not render it on a draft:** `BlogPost.astro` gates the card on `isPublished`, so a galley reader never meets a signup form on the post they are reviewing. Smoke asserts the form is absent on `/`.
+**JS carve-out:** this is one of three client-side JavaScript carve-outs (the others are the galley review client and the site-wide theme switch). The Turnstile loader and submit handler load on `/blog` **and on every published post** — and that is where the carve-out stops. **Do not lift `Subscribe.astro` into `Base.astro` or any shared chrome, and do not render it on a draft:** `BlogPost.astro` gates the card on `isPublished`, so a galley reader never meets a signup form on the post they are reviewing. Smoke asserts the form is absent on `/`.
 
 Env vars in brief — full sourcing in [docs/NEWSLETTER.md](docs/NEWSLETTER.md), ownership model in [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md):
 

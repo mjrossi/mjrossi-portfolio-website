@@ -14,10 +14,9 @@
   --accent-hover: #7a4a1a;
 
   /* Ported from Urbanist Atlas so the two sites draw rules and secondary ink
-     from one vocabulary (Atlas: --ink-2, --rule-strong, --amber-tint). */
+     from one vocabulary (Atlas: --ink-2, --rule-strong). */
   --text-2: #3a312a;
   --rule-strong: #b39a6e;
-  --accent-tint: rgba(143, 85, 32, 0.08);
 
   /* Newsprint grain on the masthead band. Multiply darkens cream paper; on
      Night it would vanish, so the dark theme screens it at lower strength. */
@@ -48,29 +47,33 @@
 
    Warm, not grey: brown-black paper, cream ink, amber lightened until
    --accent clears 4.5:1 on --bg, --bg2 and the band (7.4 / 6.6 / 6.4). The
-   light --accent stays #8f5520 in :root — smoke pins it there. */
-:root[data-theme="dark"] {
-  --bg: oklch(19% 0.012 70);
-  --bg2: oklch(24% 0.014 70);
-  --border: oklch(32% 0.014 70);
-  --text: oklch(92% 0.012 80);
-  --text-2: oklch(82% 0.014 78);
-  --muted: oklch(68% 0.014 75);
-  --accent: #d9955a;
-  --accent-hover: #e8ab73;
-  --accent-surname: #e9b36f;
-  --accent-tint: rgba(217, 149, 90, 0.1);
-  --accent-band: oklch(25% 0.03 65);
-  --accent-band-border: oklch(36% 0.05 65);
-  --accent-rule: oklch(40% 0.045 65);
-  --accent-tagline: oklch(74% 0.07 65);
-  --rule-strong: oklch(52% 0.04 70);
-  --grain-opacity: 0.12;
-  --grain-blend: screen;
-  color-scheme: dark;
+   light --accent stays #8f5520 in :root — smoke pins it there.
+
+   Screen only: browsers drop backgrounds when printing, so Night's cream ink
+   would print near-invisible on white paper. Print always gets Paper. */
+@media screen {
+  :root[data-theme="dark"] {
+    --bg: oklch(19% 0.012 70);
+    --bg2: oklch(24% 0.014 70);
+    --border: oklch(32% 0.014 70);
+    --text: oklch(92% 0.012 80);
+    --text-2: oklch(82% 0.014 78);
+    --muted: oklch(68% 0.014 75);
+    --accent: #d9955a;
+    --accent-hover: #e8ab73;
+    --accent-surname: #e9b36f;
+    --accent-band: oklch(25% 0.03 65);
+    --accent-band-border: oklch(36% 0.05 65);
+    --accent-rule: oklch(40% 0.045 65);
+    --accent-tagline: oklch(74% 0.07 65);
+    --rule-strong: oklch(52% 0.04 70);
+    --grain-opacity: 0.12;
+    --grain-blend: screen;
+    color-scheme: dark;
+  }
 }
 
-@media (prefers-color-scheme: dark) {
+@media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: oklch(19% 0.012 70);
     --bg2: oklch(24% 0.014 70);
@@ -81,7 +84,6 @@
     --accent: #d9955a;
     --accent-hover: #e8ab73;
     --accent-surname: #e9b36f;
-    --accent-tint: rgba(217, 149, 90, 0.1);
     --accent-band: oklch(25% 0.03 65);
     --accent-band-border: oklch(36% 0.05 65);
     --accent-rule: oklch(40% 0.045 65);
@@ -394,13 +396,35 @@ a.masthead-name-link:hover .surname {
   }
 }
 
+/* Between the phone row (which scrolls, 639px and down) and the full row, the
+   cells must fit the sheet unaided: at desktop padding and tracking with the
+   numerals they need ~653px, so from 640px to ~695px (classic scrollbars) the
+   page itself scrolled sideways and clipped Blog. Tighter cells and no
+   numerals until there is room for them. Re-measure scrollWidth at 640px if
+   the labels, padding or tracking change. */
+@media (min-width: 640px) and (max-width: 819px) {
+  .broadsheet-nav-inner .page-links a {
+    padding: 0 0.8rem;
+    letter-spacing: 0.14em;
+  }
+
+  .page-links .roman {
+    display: none;
+  }
+}
+
 /* ── Theme toggle: Auto · Light · Dark ──────────────── */
 
 /* Three glyphs beside the edition in the masthead folio — the one line of
    chrome on screen at every width. Quiet by design: no frame, folio-weight
-   ink, the current choice in --accent with a hairline under it. Rendered
-   `hidden` and revealed by /scripts/theme.js; the [hidden] rule is restated
-   because `display: inline-flex` would otherwise override it. */
+   ink, the current choice in --accent with a hairline under it.
+
+   Rendered `hidden`. /scripts/theme.js sets `data-js` on <html> synchronously
+   in <head>, so the reveal is a CSS rule that holds from the first paint —
+   revealing it on DOMContentLoaded instead grew the folio and, below ~520px,
+   wrapped it and pushed the page down ~28px after paint (layout shift). The
+   script still drops `hidden` once the DOM exists, so the semantics follow.
+   The buttons are 18px so the row is no taller than the folio text. */
 .masthead-folio-right {
   display: inline-flex;
   align-items: center;
@@ -419,13 +443,17 @@ a.masthead-name-link:hover .surname {
   display: none;
 }
 
+:root[data-js] .theme-toggle[hidden] {
+  display: inline-flex;
+}
+
 .theme-toggle button {
   appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 18px;
   padding: 0;
   border: 0;
   border-bottom: 1px solid transparent;
@@ -1071,6 +1099,12 @@ em {
     white-space: nowrap;
   }
 
+  /* LEXICON_TAGLINE is longer than TAGLINE (290px vs 261px at 0.6rem), so at
+     320px it overran the 280px content box by ~10px. */
+  [data-masthead="lexicon"] .masthead-tagline {
+    font-size: 0.56rem;
+  }
+
   /* ONE LINE THAT SCROLLS — a section bar, not a wrapped row.
      Five links wrapped differently at every width: 3+2 at 320 and 360, 4+1 at
      390 and 414, which strands "Blog" alone on the iPhone widths and reads as
@@ -1100,6 +1134,10 @@ em {
        screen edge; left here, the scrolling labels would show through the strip
        between the pin and the edge. */
     padding: 0 0 0 var(--pad);
+    /* overflow-x: auto computes overflow-y to auto as well, and the active
+       link's 3px underline sits at bottom: -1px — so every non-front route got
+       a 1px vertical scroll and a clipped underline. */
+    overflow-y: hidden;
     scroll-snap-type: x proximity;
     /* The gutter above is padding ON the scroller, so without this the snap
        engine aligns the first link against the padding box and rests at
@@ -1148,7 +1186,7 @@ em {
      four run underneath — and content visibly disappearing beneath a pinned
      item is the affordance the fade was reaching for, drawn by layout rather
      than by an animation. No width threshold: where the row does not overflow
-     (roughly 480px up to this query's ceiling) sticky simply has nothing to do
+     (roughly 510px up to this query's ceiling) sticky simply has nothing to do
      and the link sits in flow. */
   .broadsheet-nav-inner .page-links a.nav-pinned {
     position: sticky;

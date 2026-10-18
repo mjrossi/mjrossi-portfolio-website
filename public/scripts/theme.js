@@ -27,12 +27,30 @@
   };
 
   apply(read());
+  // The CSS reveal hook: `:root[data-js] .theme-toggle[hidden]` shows the
+  // switch from the first paint, so revealing it never shifts the layout.
+  root.setAttribute('data-js', '');
 
   const sync = (choice) => {
     for (const b of document.querySelectorAll('[data-theme-choice]')) {
       b.setAttribute('aria-pressed', String(b.dataset.themeChoice === choice));
     }
   };
+
+  // Re-read the stored choice: another tab changed it (`storage` fires only in
+  // the tabs that did NOT make the change), or the page came back from the
+  // back/forward cache with whatever theme it had when it was left.
+  const refresh = () => {
+    const choice = read();
+    apply(choice);
+    sync(choice);
+  };
+  window.addEventListener('storage', (e) => {
+    if (e.key === KEY || e.key === null) refresh();
+  });
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) refresh();
+  });
 
   document.addEventListener('DOMContentLoaded', () => {
     const choice = read();

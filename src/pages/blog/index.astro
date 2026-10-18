@@ -3,18 +3,22 @@ import Base from '../../layouts/Base.astro';
 import BlogPostEntry from '../../components/BlogPostEntry.astro';
 import Subscribe from '../../components/Subscribe.astro';
 import { getPublishedPosts } from '../../lib/blog.ts';
+import { LEXICON_TAGLINE } from '../../lib/identity.js';
 
 const posts = await getPublishedPosts({ showScheduled: Astro.locals.showScheduled });
 ---
 
 <Base
+  masthead="lexicon"
   title="The Urbanist Lexicon"
-  description="A record of systems, movement, and the transition from bits to bricks."
+  description={`${LEXICON_TAGLINE}.`}
 >
   <div class="page blog-page">
     <div class="page-header">
+      {/* No <h1> and no deck here: on /blog the Lexicon masthead's name is the
+          page's heading (as "Matthew Rossi" is on /) and its tagline is the
+          description, so restating either would say it twice in 200px. */}
       <div class="blog-header">
-        <h1>The Urbanist Lexicon</h1>
         <div class="blog-header-links">
           <a class="rss-link" href="/blog/tags">
             <span>Topics</span>
@@ -27,7 +31,6 @@ const posts = await getPublishedPosts({ showScheduled: Astro.locals.showSchedule
           </a>
         </div>
       </div>
-      <p>A record of systems, movement, and the transition from bits to bricks.</p>
     </div>
 
     {/*

@@ -1,0 +1,12 @@
+---
+// Auto · Light · Dark. Rendered `hidden`: /scripts/theme.js reveals it and
+// keeps aria-pressed in sync, so a reader without JavaScript never meets a
+// control that does nothing — they get their system theme via
+// prefers-color-scheme instead. Rendered twice per page (nav and footer); the
+// script binds every instance, so both drive the same stored choice.
+---
+<div class="theme-toggle" role="group" aria-label="Colour theme" hidden>
+  <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
+  <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+  <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+</div>

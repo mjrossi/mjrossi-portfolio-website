@@ -366,6 +366,7 @@ export function checkBuildArtifacts() {
     'og.png',
     '404.html',
     'sitemap-index.xml',
+    'scripts/theme.js',
     '_headers',
   ]) {
     check(`asset: ${asset}`, existsSync(resolve(DIST, asset)));
@@ -497,6 +498,13 @@ export function checkBuildArtifacts() {
   check('css: --accent is #8f5520 (AA contrast)', /--accent:\s*#8f5520/i.test(css));
   check('css: --max token present',               /--max:\s*1100px/.test(css));
   check('css: no inline SVG data URIs',           !css.includes('data:image/svg+xml'));
+  // Night: both triggers must survive into the bundle — the explicit choice
+  // theme.js sets, and the system setting when no choice was made. Losing the
+  // second silently ignores every dark-mode reader without JS; losing the
+  // first makes the toggle's Dark do nothing.
+  check('css: dark theme via data-theme',          /:root\[data-theme=["']?dark["']?\]/.test(css));
+  check('css: dark theme via prefers-color-scheme',
+    /prefers-color-scheme:\s*dark\)\s*\{\s*:root:not\(\[data-theme=["']?light["']?\]\)/.test(css));
   // Guards a prior masthead design (condensed variant + home-link/page-label
   // bar) that was reverted. The rules below assert those classes never
   // reappear in the built CSS or rendered HTML — without these, a copy-paste

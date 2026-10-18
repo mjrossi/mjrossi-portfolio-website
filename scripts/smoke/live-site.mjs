@@ -28,6 +28,32 @@ function assertSharedChrome(label, res, html, activeHref) {
     `${label}: no condensed-masthead residue`,
     !/masthead condensed|masthead-home-link|masthead-page-label/.test(html),
   );
+  // Two mastheads, one paper: every blog route (they are exactly the routes
+  // whose active nav entry is /blog) carries the Lexicon's, everything else the
+  // author's. A swap in either direction is the identity bug — the periodical
+  // presented as the person, or a post presented as a page of the CV.
+  const lexicon = activeHref === '/blog';
+  check(
+    `${label}: ${lexicon ? 'Lexicon' : 'author'} masthead`,
+    lexicon
+      ? html.includes('class="masthead full" data-masthead="lexicon"') && html.includes('The Urbanist <span class="surname">Lexicon</span>')
+      : html.includes('class="masthead full" data-masthead="author"') && html.includes('Matthew <span class="surname">Rossi</span>'),
+  );
+  // The theme carve-out: an external, synchronous script in <head> on every
+  // route, and the toggle it reveals rendered hidden (nav + footer) so a reader
+  // without JS never meets a dead control. No inline script anywhere — the CSP
+  // would refuse it and the carve-out is supposed to be a file.
+  const headEnd = html.indexOf('</head>');
+  check(
+    `${label}: theme script in <head>`,
+    headEnd > 0 && /<script src="\/scripts\/theme\.js"><\/script>/.test(html.slice(0, headEnd)),
+  );
+  const toggles = occurrences(html, 'class="theme-toggle" role="group" aria-label="Colour theme" hidden');
+  check(`${label}: theme toggle rendered hidden, twice`, toggles === 2, `found ${toggles}`);
+  check(
+    `${label}: no inline <script>`,
+    !/<script(?![^>]*\bsrc=)(?![^>]*type=["']application\/ld\+json)[^>]*>/i.test(html),
+  );
   const contactCount = occurrences(html, 'aria-label="Contact"');
   check(`${label}: ContactLinks rendered twice`, contactCount === 2, `found ${contactCount}`);
   if (activeHref) {

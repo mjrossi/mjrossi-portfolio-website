@@ -2,8 +2,14 @@
 import { Font } from 'astro:assets';
 import '../styles/global.css';
 import ContactLinks from '../components/ContactLinks.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
 import { issue } from '../lib/edition.js';
-import { TAGLINE, SET_IN, BUILT_WITH, SITE_DESCRIPTION } from '../lib/identity.js';
+import { TAGLINE, LEXICON_TAGLINE, SET_IN, BUILT_WITH, SITE_DESCRIPTION } from '../lib/identity.js';
+
+interface Crumb {
+  label: string;
+  href?: string;
+}
 
 interface Props {
   title: string;
@@ -13,6 +19,20 @@ interface Props {
   ogImage?: string;
   /** Alt text for that card. Defaults to the site description. */
   ogImageAlt?: string;
+  /**
+   * Which masthead leads the page. `author` ("Matthew Rossi") everywhere except
+   * the blog; `lexicon` ("The Urbanist Lexicon", the author as byline) on every
+   * blog route — two identities, one paper. The band, nav and footer do not
+   * change between them.
+   */
+  masthead?: 'author' | 'lexicon';
+  /** The kicker's breadcrumb. Omitted on the two fronts (`/`, `/blog`) and on posts. */
+  crumbs?: Crumb[];
+  /**
+   * Load /scripts/theme.js. Off only for the Desk, which ships no client JS at
+   * all (smoke asserts it); there the theme simply follows the system.
+   */
+  themeScript?: boolean;
 }
 
 const {
@@ -27,6 +47,9 @@ const {
   // query still lands on the current card rather than a 404.
   ogImage: ogImagePath = '/og.png?v=2',
   ogImageAlt = SITE_DESCRIPTION,
+  masthead = 'author',
+  crumbs,
+  themeScript = true,
 } = Astro.props;
 
 const pathname = Astro.url.pathname;
@@ -45,14 +68,20 @@ const edition = issue();
 // order, tab order, or the desktop row — see `.page-links a.nav-pinned` in
 // global.css for why the blog is the link that gets it.
 const navLinks = [
-  { href: '/work', label: 'Work' },
-  { href: '/projects', label: 'Projects' },
-  { href: '/education', label: 'Education' },
-  { href: '/urban-mobility', label: 'Urban Mobility' },
-  { href: '/blog', label: 'Blog', pinned: true },
+  { href: '/work', label: 'Work', roman: 'i.' },
+  { href: '/projects', label: 'Projects', roman: 'ii.' },
+  { href: '/education', label: 'Education', roman: 'iii.' },
+  { href: '/urban-mobility', label: 'Urban Mobility', roman: 'iv.' },
+  { href: '/blog', label: 'Blog', roman: 'v.', pinned: true },
 ];
 
 const isHome = pathname === '/';
+const isLexicon = masthead === 'lexicon';
+// The masthead name is the page's <h1> only on a front: `/` for the author,
+// `/blog` for the Lexicon. Everywhere else it is a link back to that front and
+// the page supplies its own <h1>.
+const isFront = isLexicon ? pathname === '/blog' || pathname === '/blog/' : isHome;
+const frontHref = isLexicon ? '/blog' : '/';
 ---
 
 <!DOCTYPE html>
@@ -65,6 +94,9 @@ const isHome = pathname === '/';
   <title>{fullTitle}</title>
   <link rel="canonical" href={canonical}>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <meta name="color-scheme" content="light dark">
+  {/* Synchronous on purpose: it sets data-theme before first paint. See the file. */}
+  {themeScript && <script is:inline src="/scripts/theme.js"></script>}
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Matthew Rossi">
@@ -88,22 +120,28 @@ const isHome = pathname === '/';
 </head>
 <body>
 
-  <header class="masthead full">
+  <header class="masthead full" data-masthead={masthead}>
     <div class="masthead-inner">
-      <div class="masthead-name-row">
-        {isHome ? (
-          <h1 class="masthead-name">Matthew <span class="surname">Rossi</span></h1>
+      <div class="masthead-folio">
+        {isLexicon ? (
+          <span class="masthead-folio-left">By <a href="/">Matthew Rossi</a><span class="dot" aria-hidden="true">·</span>Lisbon, Portugal</span>
         ) : (
-          <a href="/" class="masthead-name masthead-name-link">Matthew <span class="surname">Rossi</span></a>
+          <span class="masthead-folio-left">Lisbon, Portugal</span>
         )}
-        <div class="masthead-meta">
-          <span class="masthead-meta-loc">Lisbon, Portugal</span>
-          <span class="masthead-meta-edition">{edition.label}</span>
-        </div>
+        <span class="masthead-meta-edition">{edition.label}</span>
       </div>
+      {isFront ? (
+        <h1 class="masthead-name">
+          {isLexicon ? <>The Urbanist <span class="surname">Lexicon</span></> : <>Matthew <span class="surname">Rossi</span></>}
+        </h1>
+      ) : (
+        <a href={frontHref} class="masthead-name masthead-name-link">
+          {isLexicon ? <>The Urbanist <span class="surname">Lexicon</span></> : <>Matthew <span class="surname">Rossi</span></>}
+        </a>
+      )}
       <div class="masthead-tagline-row">
         <span class="masthead-rule" aria-hidden="true"></span>
-        <span class="masthead-tagline">{TAGLINE}</span>
+        <span class="masthead-tagline">{isLexicon ? LEXICON_TAGLINE : TAGLINE}</span>
         <span class="masthead-rule" aria-hidden="true"></span>
       </div>
     </div>
@@ -120,30 +158,74 @@ const isHome = pathname === '/';
               class:list={[{ active: current, 'nav-pinned': link.pinned }]}
               aria-current={current ? 'page' : undefined}
             >
-              {link.label}
+              <span class="roman" aria-hidden="true">{link.roman}</span>{link.label}
             </a>
           );
         })}
       </div>
       <div class="nav-contact">
         <ContactLinks />
+        <ThemeToggle />
       </div>
     </div>
   </nav>
+
+  {crumbs && crumbs.length > 0 && (
+    <div class="kicker-band">
+      <nav class="kicker" aria-label="Breadcrumb">
+        <ol>
+          {crumbs.map((c, i) => (
+            <li>
+              {i > 0 && <span class="crumb-sep" aria-hidden="true">›</span>}
+              {c.href ? <a href={c.href}>{c.label}</a> : <span aria-current="page">{c.label}</span>}
+            </li>
+          ))}
+        </ol>
+      </nav>
+    </div>
+  )}
 
   <main>
     <slot />
   </main>
 
-  <footer class="broadsheet-footer">
-    <div class="broadsheet-footer-inner">
-      <div class="footer-contact">
-        <ContactLinks />
+  <footer class="site-foot">
+    <div class="site-foot-inner">
+      <div class="site-foot-grid">
+        <div class="site-foot-colophon">
+          <p class="colophon-title">Matthew <span class="em">Rossi</span></p>
+          <p class="colophon-tag">{TAGLINE}.</p>
+          <div class="footer-contact">
+            <ContactLinks />
+          </div>
+        </div>
+        <div>
+          <h2 class="site-foot-heading">Pages</h2>
+          <ul>
+            <li><a href="/">Front</a></li>
+            {navLinks.filter((l) => !l.pinned).map((l) => <li><a href={l.href}>{l.label}</a></li>)}
+          </ul>
+        </div>
+        <div>
+          <h2 class="site-foot-heading">The Lexicon</h2>
+          <ul>
+            <li><a href="/blog">All issues</a></li>
+            <li><a href="/blog/tags">Topics</a></li>
+            <li><a href="/blog/rss.xml">RSS</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2 class="site-foot-heading">Elsewhere</h2>
+          <ul>
+            <li><a href="https://urbanistatlas.com">Urbanist Atlas</a></li>
+            <li><a href="/privacy">Privacy</a></li>
+          </ul>
+        </div>
       </div>
-      <span class="broadsheet-colophon">{SET_IN} · {BUILT_WITH}</span>
-      <div class="broadsheet-footer-row">
-        <span class="footer-left">mjrossi.com</span>
-        <span class="footer-right">Lisbon, Portugal</span>
+      <div class="colophon-strip">
+        <span class="broadsheet-colophon">{SET_IN} · {BUILT_WITH}</span>
+        <span>mjrossi.com · Lisbon, Portugal</span>
+        <ThemeToggle />
       </div>
     </div>
   </footer>

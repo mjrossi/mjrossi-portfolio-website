@@ -3,7 +3,8 @@ import Base from '../layouts/Base.astro';
 import PageHeader from '../components/PageHeader.astro';
 ---
 
-<Base title="Work" description="Matthew Rossi's work history — thirteen years in software engineering across Heroku, Capital One, Braintree, Clarity Consulting, and Ford Motor Company.">
+<Base title="Work" crumbs={[{ label: 'Front', href: '/' }, { label: 'Work' }]}
+  description="Matthew Rossi's work history — thirteen years in software engineering across Heroku, Capital One, Braintree, Clarity Consulting, and Ford Motor Company.">
 
   <div class="page">
   <PageHeader

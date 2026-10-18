@@ -85,7 +85,7 @@ const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
         <div
           class="cf-turnstile"
           data-sitekey={siteKey}
-          data-theme="light"
+          data-theme="auto"
           data-size="flexible"
           data-appearance={turnstileAppearance}
         ></div>
@@ -127,7 +127,7 @@ const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
         <div
           class="cf-turnstile"
           data-sitekey={siteKey}
-          data-theme="light"
+          data-theme="auto"
           data-size="flexible"
           data-appearance={turnstileAppearance}
         ></div>
@@ -195,7 +195,7 @@ const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
     padding: 0.38rem 0.55rem;
     font-family: var(--font-ui);
     font-size: 0.75rem;
-    background: oklch(99% 0.003 75);
+    background: var(--bg);
     color: var(--text);
   }
 

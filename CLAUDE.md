@@ -13,7 +13,7 @@ Six companion docs carry the detail this file only summarises — read the relev
 
 ## Stack
 
-Astro 7 with the `@astrojs/cloudflare` adapter. Plain CSS, **two** scoped pieces of client JS: the newsletter form, on `/blog` and at the foot of every *published* post (see "Newsletter"), and the galley review client, which loads only on a signed review link (see "The galley"). Neither appears on a non-blog page, and neither reaches a draft. `output: 'server'` — every route runs in the Cloudflare worker by default; only `/404` opts back into static via `export const prerender = true`. `/blog/rss.xml` is intentionally on-demand (not prerendered) so scheduled posts can enter the feed at request time — see "Blog". `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response so the edge cache absorbs traffic while the dynamic edition line refreshes hourly. Build output: `dist/client/` (assets, served via the `ASSETS` binding in `wrangler.jsonc`) plus the server bundle in `dist/server/` that Wrangler deploys as the worker. Node 22 (pinned in `mise.toml`).
+Astro 7 with the `@astrojs/cloudflare` adapter. Plain CSS, **three** scoped pieces of client JS: the newsletter form, on `/blog` and at the foot of every *published* post (see "Newsletter"); the galley review client, which loads only on a signed review link (see "The galley"); and `/scripts/theme.js`, the dark-mode switch, on every page except the Desk (see "Design system"). The first two appear on no non-blog page and never reach a draft; the third is deliberately site-wide, and the site works whole without it. `output: 'server'` — every route runs in the Cloudflare worker by default; only `/404` opts back into static via `export const prerender = true`. `/blog/rss.xml` is intentionally on-demand (not prerendered) so scheduled posts can enter the feed at request time — see "Blog". `src/middleware.ts` sets `Cache-Control: public, max-age=3600` on every HTML response so the edge cache absorbs traffic while the dynamic edition line refreshes hourly. Build output: `dist/client/` (assets, served via the `ASSETS` binding in `wrangler.jsonc`) plus the server bundle in `dist/server/` that Wrangler deploys as the worker. Node 22 (pinned in `mise.toml`).
 
 **Server endpoint convention:** anything that doesn't render a page (redirects, JSON APIs) lives under `src/pages/api/*`. All endpoints share `src/lib/server.ts` for security headers, env access, JSON parsing, and error responses.
 
@@ -23,10 +23,11 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 
 ### Layouts and components
 
-- `src/layouts/Base.astro` — shared shell: masthead on every page, edition line built at request time, `ogImage` / `ogImageAlt` props.
+- `src/layouts/Base.astro` — shared shell: masthead on every page (`masthead="author" | "lexicon"`), numbered nav, `crumbs` kicker, site-foot, edition line built at request time, `ogImage` / `ogImageAlt` props, and the synchronous `theme.js` load.
 - `src/layouts/BlogPost.astro` — post chrome. Gates the subscribe card, previous/next **and** the galley on publication.
 - `src/layouts/Desk.astro` — the Desk's chrome and **all** of its CSS (`is:global`), imported only by `/admin` so it never reaches a public bundle.
 - `src/components/ContactLinks.astro` — inline-SVG icon row; rendered twice per page (nav + footer), both asserted by smoke.
+- `src/components/ThemeToggle.astro` — Auto · Light · Dark, rendered `hidden` twice (nav + footer) and revealed by `theme.js`.
 - `src/components/BlogPostEntry.astro` — shared post card for the index and tag pages. Deliberately carries **no** chip row.
 - `src/components/Figure.astro` — `<figure>` around `astro:assets` `<Image>` with an optional caption; imported by `.mdx` posts.
 - `src/components/diagrams/*.astro` — per-post hand-authored inline SVG. One post each, not site chrome; styling via `.dg-*` in `global.css`.
@@ -57,7 +58,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `src/lib/pubdate.js` — `coercePubDate`: the frontmatter-date rule, shared by the build and the minting scripts. Rejects one shape only.
 - `src/lib/tags.js` — `tagLabel` plus `RETIRED` / `retiredTarget`, the map from a consolidated tag to where it goes now.
 - `src/lib/edition.js` — `issue(now?)`. **One derivation, one launch epoch, called once per render in `Base.astro`.** Nothing in page chrome may derive an issue from content.
-- `src/lib/identity.js` — `TAGLINE`, `SET_IN`, `BUILT_WITH`, `SITE_DESCRIPTION`: the sentences the site says about itself, in **three** engines.
+- `src/lib/identity.js` — `TAGLINE`, `LEXICON_TAGLINE`, `SET_IN`, `BUILT_WITH`, `SITE_DESCRIPTION`: the sentences the site says about itself, in **three** engines.
 - `src/lib/now.js` — `NOW_UPDATED` and `nowUpdatedLabel()`, the dateline under the home page's Now heading.
 - `src/lib/readingTime.js` — word-count read time. Plain JS so the OG generator can import it under bare Node.
 - `src/lib/post-source.ts` — `SOURCE_BY_SLUG` and `revisionOf(slug)`. Two definitions of this hash would refuse every galley write.
@@ -89,6 +90,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `src/lib/galley-manifest.js` — `noteIdsInMarkdown`: **what `just galley-close` actually retires.** Reads meta lines only.
 - `public/scripts/galley.js` — the review client: selection → note, notes → markers. **JS carve-out #2**, and the tighter of the two.
 - `public/scripts/newsletter.js` — the Turnstile loader + submit handler for `Subscribe.astro`.
+- `public/scripts/theme.js` — **JS carve-out #3.** Sets `data-theme` before first paint, remembers the choice in `localStorage`, reveals the toggles.
 - `src/lib/links-store.js` / `src/lib/notes-store.js` — the only owners of `preview_links` / `galley_notes` SQL, against a duck-typed store.
 - `src/lib/sql-literal.js` — `renderSql` / `sqlLiteral`: **the escaping boundary** for every statement run from the CLI, and the whole of it.
 - `migrations/0001_initial.sql` — the original schema. **Frozen.** `0002_preview_link_ceiling.sql` — `max_exp`. `0003_galley_note_closure.sql` — `closed_at`, drops `status`.
@@ -122,6 +124,10 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 
 ## Design system
 
+Shared with Urbanist Atlas as the **Lexicon Family** — one paper, one amber, three typefaces, two mastheads. The reference (tokens, component guidelines, previews) is the Design System artifact at https://claude.ai/artifact/MqHpb7fJPnWU7VugYdtd57; where it and this file disagree, the code is the source of truth.
+
+**Two themes from one set of token names.** Paper (the values below) is `:root`. Night redefines the same tokens under `:root[data-theme="dark"]` and again under `prefers-color-scheme: dark` guarded by `:root:not([data-theme="light"])` — keep the two Night blocks identical. Every colour resolves through a token, so a new rule never needs its own dark override; a literal colour in a new rule is the bug. Night's `--accent` is `#d9955a` (≥6.4:1 on every ground); `--accent-surname` is display-size only (≥24px) in both themes — about 3:1 on Paper.
+
 CSS custom properties at `:root` in `src/styles/global.css` (warm-amber Broadsheet palette, light cream background):
 
 - `--bg`, `--bg2` — cream page background and slightly darker secondary surface (oklch).
@@ -131,7 +137,10 @@ CSS custom properties at `:root` in `src/styles/global.css` (warm-amber Broadshe
 - `--accent-surname` `#c97d3e` — the "Rossi" highlight in the masthead name.
 - `--accent-band`, `--accent-band-border`, `--accent-rule`, `--accent-tagline` — masthead band, double-rule borders, hairlines, and the italic tagline color.
 - `--font` (Source Serif 4) — body. `--font-serif` (Fraunces) — display. `--font-ui` (Inter) — nav and meta. All loaded via Astro's `Font` integration (`astro.config.mjs`) and exposed as CSS variables. `--font-mono` is a **system stack with no webfont** — it is used at 0.82em inside running prose, which is not a size worth a network request.
-- `--max: 1100px`, `--pad: clamp(1.25rem, 4vw, 2.5rem)` — page width and gutter.
+- `--text-2`, `--rule-strong`, `--accent-tint` — ported from Atlas (`--ink-2`, `--rule-strong`, `--amber-tint`): secondary ink, the nav/tag frame, the tinted ground.
+- `--max: 1100px`, `--pad: clamp(1.25rem, 4vw, 2.5rem)`, `--rail: 320px` — page width, gutter, and the home spread's rail.
+
+Chrome vocabulary ported from Atlas: ruled nav cells with lower-case Roman numerals (dropped on phones, where Blog stays pinned), a `.kicker` breadcrumb on interior pages, the home `.spread` with `.rail-block`s, classified `.entry` rows numbered by a CSS counter, square `§` tag chips, and the four-column `.site-foot` with its `.colophon-strip`. **No figure call-outs** — no stats strips, no counts in the kicker.
 
 Section labels: `font-variant-caps: all-small-caps` with letter-spacing. Experience and education entries use `.entry` / `.entry-header` / `.entry-meta` / `.company` / `.role` / `.date`. Interior pages use `.page` / `.page-header` / `.page-meta`.
 
@@ -143,7 +152,7 @@ Static page copy lives in the page files under `src/pages/`. Pages in order: `/`
 
 ## Blog
 
-The blog is a **periodical within the site**. Site identity is "Matthew Rossi" (the author, masthead of every page); blog identity is "The Urbanist Lexicon" (the periodical, set on `/blog` and `/blog/rss.xml` and in the RSS-to-email mailings). Keep them distinct: the site masthead is author-led, the blog header and emails are periodical-led with the author dropping to a byline.
+The blog is a **periodical within the site**. Site identity is "Matthew Rossi" (the author, masthead of every non-blog page); blog identity is "The Urbanist Lexicon" (the periodical: the masthead of **every blog route** — `/blog`, `/blog/tags`, tag pages and posts — plus `/blog/rss.xml` and the RSS-to-email mailings). Keep them distinct: the site masthead is author-led; the Lexicon masthead is periodical-led with "By Matthew Rossi" in its folio, linking home. Only the words change — band, nav and footer are identical — and smoke asserts which masthead each route carries.
 
 Driven by Astro Content Collections + MDX. Posts are markdown, published via `git push` — no database, no runtime.
 

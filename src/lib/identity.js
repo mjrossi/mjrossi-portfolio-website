@@ -34,6 +34,14 @@
 /** The masthead tagline. Also the spine of `SITE_DESCRIPTION` below. */
 export const TAGLINE = 'Software engineer turning toward sustainable urban mobility';
 
+/**
+ * The Urbanist Lexicon's own line: the tagline of the periodical's masthead on
+ * every blog route, and the description of `/blog`. Kept apart from `TAGLINE`
+ * because the two mastheads say different things about different subjects —
+ * the site is about its author, the Lexicon is about its subject.
+ */
+export const LEXICON_TAGLINE = 'A record of systems, movement, and the transition from bits to bricks';
+
 /** Colophon, first half — the one both the page footer and the card carry. */
 export const SET_IN = 'Set in Fraunces & Source Serif';
 

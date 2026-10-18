@@ -3,7 +3,7 @@ import Base from '../layouts/Base.astro';
 import PageHeader from '../components/PageHeader.astro';
 ---
 
-<Base title="Urban Mobility" description="Matthew Rossi's engagement with urban mobility, transit advocacy, and civic technology.">
+<Base title="Urban Mobility" crumbs={[{ label: 'Front', href: '/' }, { label: 'Urban Mobility' }]} description="Matthew Rossi's engagement with urban mobility, transit advocacy, and civic technology.">
 
   <div class="page">
   <PageHeader title="Urban Mobility" description="Advocacy, civic tech, and self-directed work in transit and urban systems." />

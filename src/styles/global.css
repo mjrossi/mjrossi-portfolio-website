@@ -389,11 +389,11 @@ a.masthead-name-link:hover .surname {
   display: block;
 }
 
-/* Five ruled cells and the contact cluster do not share a row below ~1024px
-   (measured: the row needs 901px of content width, which the sheet only gives
-   from ~980px). The Family core shows the cluster from 900px; this site's
-   later breakpoint is a recorded Local variation in CLAUDE.md. The contact
-   links are in the footer at every width. */
+/* The nav's right-hand cluster appears from 1024px: the Family core's
+   breakpoint for both sites, with the invariant that cells plus cluster fit
+   one row from there. Measured here: the row needs 901px of content width,
+   which this sheet gives from ~980px. Re-measure if a nav item or a contact
+   icon is added. The contact links are in the footer at every width. */
 @media (max-width: 1023px) {
   .nav-contact {
     display: none;

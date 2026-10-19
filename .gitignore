@@ -9,6 +9,9 @@ dist/
 .env*
 !.env.example
 
+# generated images that are uploaded by hand, not served (just linkedin-banner)
+out/
+
 # lighthouse report output (lhci writes this wherever it runs)
 .lighthouseci/
 

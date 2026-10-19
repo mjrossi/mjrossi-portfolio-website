@@ -406,6 +406,11 @@ og:
 card-assets:
     node scripts/make-card-assets.mjs
 
+# render the LinkedIn profile banner to out/ (uploaded by hand; not served)
+[group('assets')]
+linkedin-banner:
+    node scripts/make-linkedin-banner.mjs out
+
 # regenerate public/noise.webp (masthead grain overlay)
 [group('assets')]
 noise:

@@ -8,7 +8,7 @@
 import { check, checkHeader, checkStatus, occurrences } from './check.mjs';
 import { BASE } from './config.mjs';
 import { feedGuid } from '../../src/lib/feed-guid.js';
-import { CARD_DESCRIPTION, CARD_TAGLINE, TAGLINE } from '../../src/lib/identity.js';
+import { CARD_DESCRIPTION, CARD_TAGLINE, LEXICON_TAGLINE, SITE_DESCRIPTION, TAGLINE } from '../../src/lib/identity.js';
 import { CONTACT_EMAIL } from '../../src/lib/contact.js';
 import { QR_PATH } from '../../src/lib/card-qr.js';
 
@@ -111,6 +111,32 @@ export async function checkRoutes() {
     if (path === '/blog') blog = { res, html };
     assertSharedChrome(label, res, html, activeHref);
   });
+
+  // The home page passes no description, so it gets both defaults: the search
+  // snippet may follow TAGLINE, but a link preview is held indefinitely by
+  // whoever scraped it and must state identity only, like the card image.
+  check(
+    'home: meta description is SITE_DESCRIPTION (follows TAGLINE)',
+    homeHtml.includes(`<meta name="description" content="${SITE_DESCRIPTION}">`),
+  );
+  const taglineRe = TAGLINE.slice(1).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const tag of ['property="og:description"', 'name="twitter:description"']) {
+    check(
+      `home: ${tag} is CARD_DESCRIPTION, not TAGLINE`,
+      homeHtml.includes(`<meta ${tag} content="${CARD_DESCRIPTION}">`) &&
+        (TAGLINE === CARD_TAGLINE ||
+          !new RegExp(`<meta ${tag} content="[^"]*${taglineRe}`, 'i').test(homeHtml)),
+    );
+  }
+
+  // A page that passes its own description owns every description tag; the
+  // defaults above apply only when it passes none.
+  for (const tag of ['name="description"', 'property="og:description"', 'name="twitter:description"']) {
+    check(
+      `blog index: ${tag} is its own description`,
+      blog.html.includes(`<meta ${tag} content="${LEXICON_TAGLINE}.">`),
+    );
+  }
 
   // Blog chain: pick a post + a tag off the index, then fetch both in parallel.
   const postSlug = blog.html.match(/href="\/blog\/(?!tag\/)([^"/]+)\//)?.[1];

@@ -17,7 +17,7 @@ interface Props {
   noindex?: boolean;
   /** Absolute path to a per-page OG card; defaults to the site-level one. */
   ogImage?: string;
-  /** Alt text for that card. Defaults to the site description. */
+  /** Alt text for that card. Defaults to CARD_DESCRIPTION. */
   ogImageAlt?: string;
   /**
    * Which masthead leads the page. `author` ("Matthew Rossi") everywhere except
@@ -52,7 +52,7 @@ interface Props {
 
 const {
   title,
-  description = SITE_DESCRIPTION,
+  description: pageDescription,
   noindex = false,
   // `?v=` is the cache-bust knob, and it is the only one there is: social
   // scrapers key their stored copy on the full image URL and effectively never
@@ -68,6 +68,15 @@ const {
   bare = false,
   ogTitle,
 } = Astro.props;
+
+// Two defaults, because the two readers hold the text for different lengths of
+// time. A search engine re-reads `<meta name="description">` on every crawl, so
+// it may say TAGLINE, a fact about the present. A link preview (og:/twitter:)
+// is kept by someone else indefinitely, so it gets the identity-only line, the
+// same rule the card image follows (see src/lib/identity.js). A page that
+// passes its own description owns both.
+const description = pageDescription ?? SITE_DESCRIPTION;
+const previewDescription = pageDescription ?? CARD_DESCRIPTION;
 
 const pathname = Astro.url.pathname;
 const canonical = new URL(pathname, Astro.site).href;
@@ -119,7 +128,7 @@ const frontHref = isLexicon ? '/blog' : '/';
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Matthew Rossi">
   <meta property="og:title" content={previewTitle}>
-  <meta property="og:description" content={description}>
+  <meta property="og:description" content={previewDescription}>
   <meta property="og:url" content={canonical}>
   <meta property="og:image" content={ogImage}>
   <meta property="og:image:width" content="1200">
@@ -128,7 +137,7 @@ const frontHref = isLexicon ? '/blog' : '/';
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content={previewTitle}>
-  <meta name="twitter:description" content={description}>
+  <meta name="twitter:description" content={previewDescription}>
   <meta name="twitter:image" content={ogImage}>
   <meta name="twitter:image:alt" content={ogImageAlt}>
 

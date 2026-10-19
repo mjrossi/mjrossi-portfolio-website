@@ -30,6 +30,10 @@
 // says CARD_TAGLINE, never TAGLINE, for the card's reason — a saved contact is
 // held by someone else indefinitely — and `src/lib/vcard.test.js` asserts it.
 //
+// `scripts/make-linkedin-banner.mjs` renders CARD_TAGLINE into the LinkedIn
+// banner, for the same reason, and refuses to run if the line it draws is not
+// CARD_TAGLINE.
+//
 // What is deliberately NOT here: the two-tone "Matthew Rossi" wordmark and the
 // `mjrossi.com` domain. Both are also spelled in more than one engine (adding
 // `scripts/make-post-og.mjs` as a third), but the wordmark is markup rather
@@ -68,8 +72,9 @@ export const SET_IN = 'Set in Fraunces & Source Serif';
 export const BUILT_WITH = 'Built in Astro, served from the edge';
 
 /**
- * The default `<meta name="description">` and `og:description` — the tagline
- * as a sentence, with the byline in front.
+ * The default `<meta name="description">` only — the tagline as a sentence,
+ * with the byline in front. Search engines re-read it on every crawl, so it
+ * may follow `TAGLINE`; `og:description` may not, and says `CARD_DESCRIPTION`.
  *
  * Derived rather than spelled out because it *is* the tagline: written
  * separately it was a fourth copy, and the one furthest from anything a reader
@@ -79,8 +84,10 @@ export const SITE_DESCRIPTION =
   `Matthew Rossi — ${TAGLINE[0].toLowerCase()}${TAGLINE.slice(1)}.`;
 
 /**
- * The default `og:image:alt` / `twitter:image:alt`. Alt text describes the
- * image, so it follows the card's line, not the masthead's.
+ * The default `og:description` / `twitter:description` and `og:image:alt` /
+ * `twitter:image:alt`. A link preview is kept indefinitely by whoever scraped
+ * it, and alt text describes the image, so both follow the card's line, not
+ * the masthead's.
  */
 export const CARD_DESCRIPTION =
   `Matthew Rossi — ${CARD_TAGLINE[0].toLowerCase()}${CARD_TAGLINE.slice(1)}.`;

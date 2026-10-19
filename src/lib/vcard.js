@@ -9,7 +9,7 @@
 //
 // The NOTE is CARD_TAGLINE, never TAGLINE. A saved contact is held by someone
 // else indefinitely — exactly like a scraper's copy of the social card — so it
-// may state identity only. "Now studying …" is a fact about the present.
+// may state identity only. "Studying …" is a fact about the present.
 //
 // Plain JS so `node --test` reaches it (src/lib/vcard.test.js); the endpoint
 // is src/pages/api/vcard.ts and serves CARD_VCF unchanged.

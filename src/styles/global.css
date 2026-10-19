@@ -1150,7 +1150,7 @@ em {
     white-space: nowrap;
   }
 
-  /* LEXICON_TAGLINE is longer than TAGLINE (290px vs 261px at 0.6rem), so at
+  /* LEXICON_TAGLINE is longer than TAGLINE (290px vs 191px at 0.6rem), so at
      320px it overran the 280px content box by ~10px. */
   [data-masthead="lexicon"] .masthead-tagline {
     font-size: 0.56rem;

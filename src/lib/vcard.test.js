@@ -69,7 +69,7 @@ test('the card: name, email and URL', () => {
 });
 
 // A saved contact is held indefinitely, like a cached social card, so it may
-// state identity only. TAGLINE ("now studying …") is a fact about the present.
+// state identity only. TAGLINE ("studying …") is a fact about the present.
 test('the card says CARD_TAGLINE, never TAGLINE', () => {
   const vcf = unfold(CARD_VCF);
   assert.ok(vcf.includes(`\r\nNOTE:${escapeText(CARD_TAGLINE)}\r\n`));

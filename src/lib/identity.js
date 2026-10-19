@@ -39,19 +39,19 @@
 /**
  * The masthead tagline. Also the spine of `SITE_DESCRIPTION` below.
  *
- * NOT the social card's line. "Now studying" is a fact about the present, and
+ * NOT the social card's line. "Studying" is a fact about the present, and
  * the card may state identity only (see `scripts/make-og.mjs`): the page is
  * re-rendered on every request and can follow this sentence, but the card is
  * cached by scrapers that never re-fetch it. The card says `CARD_TAGLINE`.
  */
-export const TAGLINE = 'Software engineer, now studying how cities move people';
+export const TAGLINE = 'Technologist studying how cities move people';
 
 /**
  * The social card's line: who, not what now. It must stay true for as long as
  * a scraper might hold the card, which is indefinitely. Changing it means
  * `just og`, then bumping `?v=` on `Base.astro`'s `ogImage` default.
  */
-export const CARD_TAGLINE = 'Software engineer and urbanist';
+export const CARD_TAGLINE = 'Technologist and urbanist';
 
 /**
  * The Urbanist Lexicon's own line: the tagline of the periodical's masthead on

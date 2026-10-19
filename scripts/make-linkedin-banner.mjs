@@ -23,10 +23,11 @@
 // before it writes anything. Still upload a test and look at it on desktop and
 // on the phone: LinkedIn has no preview tool, and its overlay moves.
 //
-// Fonts: same as make-og.mjs — the SVG names Fraunces and Inter, and librsvg
-// takes whatever fontconfig resolves, falling back to Georgia / system-ui.
-// Install Fraunces locally for the real wordmark. Widths are measured from the
-// render, so the hairlines fit whichever face was used.
+// Fonts: the SVG names Fraunces and Inter, and librsvg takes whatever
+// fontconfig resolves. Unlike make-og.mjs, this script REFUSES to run without
+// Fraunces installed: it probes the upright wordmark face and stops if it was
+// substituted. (Only that face — the italic tagline and the Inter folio are not
+// probed.) Widths are measured from the render, so the hairlines fit the face.
 //
 // Run from the project root:
 //   node scripts/make-linkedin-banner.mjs [out-dir]     (default: out/)
@@ -173,8 +174,12 @@ async function grain(scale) {
 const outDir = resolve(process.argv[2] ?? 'out');
 mkdirSync(outDir, { recursive: true });
 
+// Every scale is checked before any file is written.
+const spans = new Map();
+for (const scale of SCALES) spans.set(scale, await checkZones(scale));
+
 for (const scale of SCALES) {
-  const { minX, maxX } = await checkZones(scale);
+  const { minX, maxX } = spans.get(scale);
   const out = await sharp(Buffer.from(svgDoc(ground, scale)))
     .composite([
       { input: await grain(scale), top: 0, left: 0, blend: 'multiply' },

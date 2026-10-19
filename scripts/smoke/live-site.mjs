@@ -615,7 +615,12 @@ export async function checkCard({ homeHtml }) {
   for (const href of ['/api/vcard', '/api/contact', '/']) {
     check(`card: links ${href}`, html.includes(`href="${href}"`));
   }
-  check('card: inline QR path from src/lib/card-qr.js', html.includes(`d="${QR_PATH}"`));
+  // The scanner lands here; a code pointing at the page they are on is useless
+  // to them and competes with "Add to contacts". It lives on /card/qr.
+  check(
+    'card: no QR code — that is /card/qr',
+    !html.includes(QR_PATH) && !html.includes('class="card-qr'),
+  );
   // The rule /api/contact exists for: the address is never in a page. /card is
   // the one page linking both endpoints that carry it.
   check(
@@ -623,6 +628,31 @@ export async function checkCard({ homeHtml }) {
     !html.includes(CONTACT_EMAIL) && !html.includes('mailto:'),
   );
   check('home: no nav link to /card', !homeHtml.includes('href="/card"'));
+
+  // /card/qr, the presenter's view: the name and the code, nothing else.
+  const qr = await fetchRoute('/card/qr');
+  checkStatus('card/qr: 200 OK', qr.res, 200);
+  checkHeader('card/qr: Cache-Control max-age=3600', qr.res, 'cache-control', 'max-age=3600');
+  check('card/qr: CSP header', Boolean(qr.res.headers.get('content-security-policy')));
+  check(
+    'card/qr: no inline <script>',
+    !/<script(?![^>]*\bsrc=)(?![^>]*type=["']application\/ld\+json)[^>]*>/i.test(qr.html),
+  );
+  check(
+    'card/qr: bare — no masthead, nav, toggle or footer',
+    !qr.html.includes('class="masthead') &&
+      !qr.html.includes('broadsheet-nav') &&
+      !qr.html.includes('class="theme-toggle"') &&
+      !qr.html.includes('class="site-foot"'),
+  );
+  check('card/qr: the wordmark', /Matthew <span class="surname"[^>]*>Rossi<\/span>/.test(qr.html));
+  check('card/qr: inline QR path from src/lib/card-qr.js', qr.html.includes(`d="${QR_PATH}"`));
+  // Nothing to act on here: anyone but the presenter belongs on /card.
+  const qrBody = qr.html.slice(qr.html.indexOf('<body'));
+  check('card/qr: no links or contact actions', !/<a\b/i.test(qrBody) && !qrBody.includes('/api/'));
+  // A search result that lands on a bare QR code helps nobody.
+  check('card/qr: noindex', /<meta name="robots" content="noindex">/.test(qr.html));
+  check('card/qr: the address is not in the HTML', !qr.html.includes(CONTACT_EMAIL) && !qr.html.includes('mailto:'));
 
   const vcf = await fetch(`${BASE}/api/vcard`);
   const body = await vcf.text();

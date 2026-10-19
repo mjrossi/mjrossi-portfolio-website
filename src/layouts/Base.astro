@@ -41,6 +41,12 @@ interface Props {
    * choice, and otherwise the system theme.
    */
   bare?: boolean;
+  /**
+   * The title a link preview shows (og:title, twitter:title), when it should
+   * differ from the tab's <title>. Only /card: a text-thread preview reads
+   * better as the name alone than as "Card — Matthew Rossi".
+   */
+  ogTitle?: string;
 }
 
 const {
@@ -59,12 +65,14 @@ const {
   crumbs,
   themeScript = true,
   bare = false,
+  ogTitle,
 } = Astro.props;
 
 const pathname = Astro.url.pathname;
 const canonical = new URL(pathname, Astro.site).href;
 const ogImage = new URL(ogImagePath, Astro.site).href;
 const fullTitle = title === 'Matthew Rossi' ? title : `${title} — Matthew Rossi`;
+const previewTitle = ogTitle ?? fullTitle;
 
 // ONE call, per render, for the one masthead every page carries. Nothing may
 // derive an issue of its own — that divergence is what finding 3.1 caught
@@ -109,7 +117,7 @@ const frontHref = isLexicon ? '/blog' : '/';
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Matthew Rossi">
-  <meta property="og:title" content={fullTitle}>
+  <meta property="og:title" content={previewTitle}>
   <meta property="og:description" content={description}>
   <meta property="og:url" content={canonical}>
   <meta property="og:image" content={ogImage}>
@@ -118,7 +126,7 @@ const frontHref = isLexicon ? '/blog' : '/';
   <meta property="og:image:alt" content={ogImageAlt}>
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content={fullTitle}>
+  <meta name="twitter:title" content={previewTitle}>
   <meta name="twitter:description" content={description}>
   <meta name="twitter:image" content={ogImage}>
   <meta name="twitter:image:alt" content={ogImageAlt}>

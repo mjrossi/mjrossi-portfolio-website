@@ -23,7 +23,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 
 ### Layouts and components
 
-- `src/layouts/Base.astro` — shared shell: masthead on every page (`masthead="author" | "lexicon"`), numbered nav, `crumbs` kicker, site-foot, edition line built at request time, `ogImage` / `ogImageAlt` props, and the synchronous `theme.js` load. `bare` keeps the `<head>` and drops all the chrome — `/card` only.
+- `src/layouts/Base.astro` — shared shell: masthead on every page (`masthead="author" | "lexicon"`), numbered nav, `crumbs` kicker, site-foot, edition line built at request time, `ogImage` / `ogImageAlt` / `ogTitle` props, and the synchronous `theme.js` load. `bare` keeps the `<head>` and drops all the chrome — `/card` only.
 - `src/layouts/BlogPost.astro` — post chrome. Gates the subscribe card, previous/next **and** the galley on publication.
 - `src/layouts/Desk.astro` — the Desk's chrome and **all** of its CSS (`is:global`), imported only by `/admin` so it never reaches a public bundle.
 - `src/components/ContactLinks.astro` — inline-SVG icon row; rendered twice per page (nav + footer), both asserted by smoke.
@@ -171,7 +171,10 @@ Not departures from the core, but choices this repo owns. Change them here, not 
 - **Site-foot columns:** Pages / The Lexicon / Elsewhere.
 - **`/card` is the masthead at card scale, alone.** `bare` — no masthead, nav or footer above it, because it is held up to someone's phone and two mastheads on one screen is the wrong thing to show. No theme toggle either (the toggle lives in the masthead); `theme.js` still applies a stored choice.
 - **The `/card` QR tile is Paper in both themes.** `--qr-ink` / `--qr-tile` sit in `:root` with Paper's literal values and are **absent from both Night blocks** on purpose: an inverted QR code (light on dark) fails on a share of real scanners. They are still tokens, so no rule carries a literal colour; smoke asserts neither Night block declares them.
-- **The card's taglines split by who holds the copy.** The page says `TAGLINE` (it re-renders per request); the `.vcf`'s `NOTE` and the page's `og:description` say `CARD_TAGLINE` / `CARD_DESCRIPTION`, because a saved contact and a text-thread preview are kept indefinitely. A print version of the card (deferred — see `docs/FILE-MAP.md`) would need `CARD_TAGLINE` and no location.
+- **The card's taglines split by who holds the copy.** The page says `TAGLINE` (it re-renders per request); the `.vcf`'s `TITLE` and the page's `og:description` say `CARD_TAGLINE` / `CARD_DESCRIPTION`, because a saved contact and a text-thread preview are kept indefinitely. A print version of the card (deferred — see `docs/FILE-MAP.md`) would need `CARD_TAGLINE` and no location.
+- **On a phone, `/card`'s back face is not 85:55.** It stacks the links above a QR code as wide as the face, because at card proportions the code was ~144px — too small to scan from arm's length. The front keeps the card's shape. From 760px both faces are cards again.
+- **"Add to contacts" is `/card`'s one button**, first in the list: the site's existing primary button (Subscribe's — `--text` fill, `--bg` type, 2px corners) at full width and a 44px tap height. Built from core tokens and kept site layer — not published to the design-system artifact.
+- **`/card` has no motion.** The back used to turn into place from edge-on, which left the QR face blank until the animation ran — in a background tab, or in a quick screenshot kept as an offline fallback.
 - **Measured values of core rules:** the tablet nav band is 640–819px here. The contact cluster's row needs 901px, so it fits from ~980px, inside the core's 1024px breakpoint; re-measure if a nav item or icon is added.
 
 Section labels: `font-variant-caps: all-small-caps` with letter-spacing. Experience and education entries use `.entry` / `.entry-header` / `.entry-meta` / `.company` / `.role` / `.date`. Interior pages use `.page` / `.page-header` / `.page-meta`.

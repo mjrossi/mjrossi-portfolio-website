@@ -9,8 +9,9 @@
 // .vcf (/api/vcard). Smoke asserts this HTML never contains it.
 //
 // The page says TAGLINE, because it re-renders on every request. Everything
-// someone else holds onto says CARD_TAGLINE: the .vcf's NOTE, and the
+// someone else holds onto says CARD_TAGLINE: the .vcf's TITLE, and the
 // description a text-thread link preview keeps — hence CARD_DESCRIPTION below.
+// The preview's title is the name alone (ogTitle), not the tab's "Card — …".
 //
 // Out of the sitemap (astro.config.mjs) and the nav, but indexable.
 import Base from '../layouts/Base.astro';
@@ -18,7 +19,7 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
 import { QR_SIZE, QR_PATH } from '../lib/card-qr.js';
 ---
 
-<Base title="Card" description={CARD_DESCRIPTION} bare>
+<Base title="Card" ogTitle="Matthew Rossi" description={CARD_DESCRIPTION} bare>
   <div class="card-sheet">
 
     <section class="card-face card-front" aria-label="Card, front">
@@ -35,9 +36,9 @@ import { QR_SIZE, QR_PATH } from '../lib/card-qr.js';
 
     <section class="card-face card-back" aria-label="Card, back">
       <ul class="card-contact">
+        <li><a class="card-add" href="/api/vcard">Add to contacts</a></li>
         <li><a href="/api/contact">Email</a></li>
         <li><a href="/">mjrossi.com</a></li>
-        <li><a href="/api/vcard">Add to contacts</a></li>
       </ul>
       <svg
         class="card-qr"
@@ -221,11 +222,19 @@ import { QR_SIZE, QR_PATH } from '../lib/card-qr.js';
 
   /* ── Back: ruled, broadsheet-style ────────────────── */
 
+  /* On a phone the back gives up the 85:55 shape: the links stack above a QR
+     code as wide as the face. At card proportions on a 390px screen the code
+     was ~144px — two or three centimetres, scanned from arm's length across a
+     crowded room. The front keeps its proportions; it is the one people read.
+     The links come first because the person who reads them is the one who
+     scanned the code, on their own phone; the person holding the code up can
+     scroll. From 760px the faces sit side by side and the back is a card
+     again, links beside the code. */
   .card-back {
     background: var(--bg);
     border: 1px solid var(--rule-strong);
-    flex-direction: row;
-    align-items: center;
+    aspect-ratio: auto;
+    justify-content: flex-start;
   }
 
   .card-contact {
@@ -259,16 +268,42 @@ import { QR_SIZE, QR_PATH } from '../lib/card-qr.js';
     text-decoration: underline;
   }
 
-  /* As large as the face allows — about four fifths of its inner height —
-     because this is the part held up to another camera; at a 320px viewport it
-     is still only ~115px. The tile is the whole viewBox, the 4-module quiet
-     zone included, and is Paper in both themes: dark modules on a light
-     ground, always. */
+  /* The one action that matters, so the one button on the card: the site's
+     existing primary button (Subscribe.astro's — --text fill, --bg type, 2px
+     corners, --accent-hover on hover) at full width and a 44px tap height.
+     Both pairs clear 4.5:1 in both themes; the focus ring is the global one. */
+  .card-contact .card-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0.55em 1em;
+    border-radius: 2px;
+    background: var(--text);
+    color: var(--bg);
+    font-family: var(--font-ui);
+    font-size: clamp(0.875rem, 4.2cqi, 1.05rem);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    transition: background 0.15s ease;
+  }
+
+  .card-contact .card-add:hover {
+    background: var(--accent-hover);
+    color: var(--bg);
+    text-decoration: none;
+  }
+
+  /* The tile is the whole viewBox, the 4-module quiet zone included, and is
+     Paper in both themes: dark modules on a light ground, always. On a phone
+     it takes the face's full content width (~300px at 390, ~240px at 320);
+     the cap only binds on a tablet in the stacked layout. */
   .card-qr {
     flex: none;
-    width: 48cqi;
-    margin-left: 5cqi;
+    width: 100%;
+    max-width: 22rem;
     height: auto;
+    margin: 6cqi auto 0;
     display: block;
   }
 
@@ -280,21 +315,25 @@ import { QR_SIZE, QR_PATH } from '../lib/card-qr.js';
     fill: var(--qr-ink);
   }
 
-  /* ── Motion: the back turns over, once ────────────── */
-
-  /* The second half of a flip: the back starts edge-on and turns flat, so it
-     reads as a card turned over without either face ever being hidden behind
-     a tap — the back carries the QR code, which is what gets held up. Once, on
-     load, CSS only; under reduced motion there is none at all, the same
-     pattern as the masthead's drawRule in global.css. */
-  @media (prefers-reduced-motion: no-preference) {
+  @media (min-width: 760px) {
     .card-back {
-      animation: cardTurn 650ms cubic-bezier(0.2, 0.7, 0.2, 1) 250ms both;
+      aspect-ratio: 85 / 55;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
     }
 
-    @keyframes cardTurn {
-      from { transform: perspective(1200px) rotateY(-90deg); }
-      to   { transform: perspective(1200px) rotateY(0); }
+    /* About four fifths of the face's inner height. */
+    .card-qr {
+      width: 48cqi;
+      max-width: none;
+      margin: 0 0 0 5cqi;
     }
   }
+
+  /* No motion. The back used to turn over into place on load, starting
+     edge-on — so for its first 250ms, and for as long as a background tab
+     held the animation paused, the face carrying the QR code was blank, and a
+     quick screenshot kept as an offline fallback could catch it that way. The
+     face that gets scanned does not wait on an animation. */
 </style>

@@ -600,6 +600,17 @@ export async function checkCard({ homeHtml }) {
   // Not the home page's title: both are indexable, and two pages sharing one
   // read as duplicates to a search engine and in a tab strip.
   check('card: its own <title>', html.includes('<title>Card — Matthew Rossi</title>'));
+  // But a link preview in a text thread shows the name alone.
+  check(
+    'card: og:title and twitter:title are the name alone',
+    html.includes('<meta property="og:title" content="Matthew Rossi">') &&
+      html.includes('<meta name="twitter:title" content="Matthew Rossi">'),
+  );
+  // The one action that matters leads the list and is the button.
+  check(
+    'card: "Add to contacts" first, as the button',
+    /<ul class="card-contact"[^>]*>\s*<li[^>]*><a class="card-add"[^>]*href="\/api\/vcard"/.test(html),
+  );
   check('card: indexable (no robots meta)', !/<meta name="robots"/.test(html));
   for (const href of ['/api/vcard', '/api/contact', '/']) {
     check(`card: links ${href}`, html.includes(`href="${href}"`));
@@ -628,8 +639,8 @@ export async function checkCard({ homeHtml }) {
   );
   const unfolded = body.replace(/\r\n /g, '');
   check(
-    'vcard: NOTE is CARD_TAGLINE, never TAGLINE',
-    unfolded.includes(`\r\nNOTE:${CARD_TAGLINE}\r\n`) && !unfolded.includes(TAGLINE),
+    'vcard: TITLE is CARD_TAGLINE, never TAGLINE',
+    unfolded.includes(`\r\nTITLE:${CARD_TAGLINE}\r\n`) && !unfolded.includes(TAGLINE),
   );
   // Read back from the redirect rather than from CONTACT_EMAIL, so the two
   // endpoints are compared with each other and not each with the constant.

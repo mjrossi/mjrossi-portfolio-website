@@ -600,11 +600,27 @@ export async function checkCard({ homeHtml }) {
   // Not the home page's title: both are indexable, and two pages sharing one
   // read as duplicates to a search engine and in a tab strip.
   check('card: its own <title>', html.includes('<title>Card — Matthew Rossi</title>'));
+  // But a link preview in a text thread shows the name alone.
+  check(
+    'card: og:title and twitter:title are the name alone',
+    html.includes('<meta property="og:title" content="Matthew Rossi">') &&
+      html.includes('<meta name="twitter:title" content="Matthew Rossi">'),
+  );
+  // The one action that matters leads the list and is the button.
+  check(
+    'card: "Add to contacts" first, as the button',
+    /<ul class="card-contact"[^>]*>\s*<li[^>]*><a class="card-add"[^>]*href="\/api\/vcard"/.test(html),
+  );
   check('card: indexable (no robots meta)', !/<meta name="robots"/.test(html));
   for (const href of ['/api/vcard', '/api/contact', '/']) {
     check(`card: links ${href}`, html.includes(`href="${href}"`));
   }
-  check('card: inline QR path from src/lib/card-qr.js', html.includes(`d="${QR_PATH}"`));
+  // The scanner lands here; a code pointing at the page they are on is useless
+  // to them and competes with "Add to contacts". It lives on /card/qr.
+  check(
+    'card: no QR code — that is /card/qr',
+    !html.includes(QR_PATH) && !html.includes('class="card-qr'),
+  );
   // The rule /api/contact exists for: the address is never in a page. /card is
   // the one page linking both endpoints that carry it.
   check(
@@ -612,6 +628,49 @@ export async function checkCard({ homeHtml }) {
     !html.includes(CONTACT_EMAIL) && !html.includes('mailto:'),
   );
   check('home: no nav link to /card', !homeHtml.includes('href="/card"'));
+
+  // /card/qr, the presenter's view: the name and the code, nothing else.
+  const qr = await fetchRoute('/card/qr');
+  checkStatus('card/qr: 200 OK', qr.res, 200);
+  checkHeader('card/qr: Cache-Control max-age=3600', qr.res, 'cache-control', 'max-age=3600');
+  check('card/qr: CSP header', Boolean(qr.res.headers.get('content-security-policy')));
+  const qrHeadEnd = qr.html.indexOf('</head>');
+  check(
+    'card/qr: theme script in <head>',
+    qrHeadEnd > 0 && /<script src="\/scripts\/theme\.js"><\/script>/.test(qr.html.slice(0, qrHeadEnd)),
+  );
+  check(
+    'card/qr: no inline <script>',
+    !/<script(?![^>]*\bsrc=)(?![^>]*type=["']application\/ld\+json)[^>]*>/i.test(qr.html),
+  );
+  check(
+    'card/qr: bare — no masthead, nav, toggle or footer',
+    !qr.html.includes('class="masthead') &&
+      !qr.html.includes('broadsheet-nav') &&
+      !qr.html.includes('class="theme-toggle"') &&
+      !qr.html.includes('class="site-foot"'),
+  );
+  check('card/qr: the wordmark', /Matthew <span class="surname"[^>]*>Rossi<\/span>/.test(qr.html));
+  check('card/qr: inline QR path from src/lib/card-qr.js', qr.html.includes(`d="${QR_PATH}"`));
+  // The tile must never invert under Night: --qr-tile / --qr-ink are Paper-only
+  // (static.mjs asserts no Night block declares them), but that holds only while
+  // the route fills from them. A fill of var(--bg) would pass every other check.
+  check(
+    'card/qr: tile and modules fill from the Paper-only QR tokens',
+    /\.card-qr-tile[^{]*\{[^}]*fill:\s*var\(--qr-tile\)/.test(qr.html) &&
+      /\.card-qr-ink[^{]*\{[^}]*fill:\s*var\(--qr-ink\)/.test(qr.html),
+    'the scoped rules are no longer inlined, or no longer fill from --qr-tile / --qr-ink',
+  );
+  // Nothing to act on here: anyone but the presenter belongs on /card.
+  const qrBodyAt = qr.html.indexOf('<body');
+  const qrBody = qr.html.slice(qrBodyAt);
+  check(
+    'card/qr: no links or contact actions',
+    qrBodyAt > 0 && !/<a\b/i.test(qrBody) && !qrBody.includes('/api/'),
+  );
+  // A search result that lands on a bare QR code helps nobody.
+  check('card/qr: noindex', /<meta name="robots" content="noindex">/.test(qr.html));
+  check('card/qr: the address is not in the HTML', !qr.html.includes(CONTACT_EMAIL) && !qr.html.includes('mailto:'));
 
   const vcf = await fetch(`${BASE}/api/vcard`);
   const body = await vcf.text();
@@ -628,8 +687,8 @@ export async function checkCard({ homeHtml }) {
   );
   const unfolded = body.replace(/\r\n /g, '');
   check(
-    'vcard: NOTE is CARD_TAGLINE, never TAGLINE',
-    unfolded.includes(`\r\nNOTE:${CARD_TAGLINE}\r\n`) && !unfolded.includes(TAGLINE),
+    'vcard: TITLE is CARD_TAGLINE, never TAGLINE',
+    unfolded.includes(`\r\nTITLE:${CARD_TAGLINE}\r\n`) && !unfolded.includes(TAGLINE),
   );
   // Read back from the redirect rather than from CONTACT_EMAIL, so the two
   // endpoints are compared with each other and not each with the constant.

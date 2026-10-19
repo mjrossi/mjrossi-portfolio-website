@@ -1,0 +1,101 @@
+---
+// The presenter's view of /card: the QR code, held up to someone else's phone.
+// The name above it says whose code it is, and that is all — no links, no
+// contact actions. Anyone who reaches this page other than the person holding
+// it up followed a link they had no need of; the code takes them to /card,
+// which is where everything they might want lives.
+//
+// Split from /card because the two audiences want opposite pages. The scanner
+// lands on /card and needs "Add to contacts"; a code pointing at the page they
+// are already on is useless to them. The presenter needs the code as large as
+// the screen allows and fully visible without scrolling — with the links above
+// it on one page, its bottom edge sat near 775px on a 390 × 844 phone, under
+// Safari's toolbars.
+//
+// The code points at /card, never here. It is generated once and committed
+// (src/lib/card-qr.js); printed cards will carry the same URL.
+//
+// bare, out of the sitemap (astro.config.mjs) and the nav, and — unlike /card —
+// noindex: a search result that lands on a bare QR code helps nobody.
+import Base from '../../layouts/Base.astro';
+import { CARD_DESCRIPTION } from '../../lib/identity.js';
+import { QR_SIZE, QR_PATH } from '../../lib/card-qr.js';
+---
+
+<Base title="QR" ogTitle="Matthew Rossi" description={CARD_DESCRIPTION} noindex bare>
+  <div class="qr-sheet">
+    <h1 class="qr-name">Matthew <span class="surname">Rossi</span></h1>
+    <svg
+      class="card-qr"
+      viewBox={`0 0 ${QR_SIZE} ${QR_SIZE}`}
+      role="img"
+      aria-label="QR code linking to mjrossi.com/card"
+      shape-rendering="crispEdges"
+    >
+      <rect class="card-qr-tile" width={QR_SIZE} height={QR_SIZE} />
+      <path class="card-qr-ink" d={QR_PATH} />
+    </svg>
+  </div>
+</Base>
+
+<style>
+  /* Scoped to this route, as on /card. Every colour is a token; the QR tile's
+     two are Paper-only by design (see global.css). No motion of any kind. */
+
+  :global(main.bare) {
+    min-height: 100vh; /* before svh: Safari < 15.4, Chrome < 108 */
+    min-height: 100svh;
+    display: grid;
+    align-content: center;
+  }
+
+  .qr-sheet {
+    width: 100%;
+    max-width: 30rem;
+    margin: 0 auto;
+    padding: 1.25rem var(--pad);
+    display: grid;
+    justify-items: center;
+    gap: 1.25rem;
+  }
+
+  /* The masthead wordmark, small. --accent-surname is display-only (≥24px);
+     the floor is that rule, in px so it cannot drift with the root size. */
+  .qr-name {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: clamp(28px, 9vw, 2.75rem);
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    text-align: center;
+    color: var(--text);
+    font-optical-sizing: auto;
+    font-variation-settings: 'opsz' 144, 'SOFT' 30;
+  }
+
+  .qr-name .surname {
+    color: var(--accent-surname);
+  }
+
+  /* The whole content width on a phone (350px at 390), and never taller than
+     the SMALL viewport leaves room for — svh is the height with the browser's
+     toolbars showing, so the code is whole on screen without a scroll in
+     portrait and in landscape. The tile is the whole viewBox, the 4-module
+     quiet zone included, and is Paper in both themes: dark modules on a light
+     ground, always. */
+  .card-qr {
+    display: block;
+    width: min(100%, 100vh - 9rem); /* drops whole without svh — keep a width */
+    width: min(100%, 100svh - 9rem);
+    height: auto;
+  }
+
+  .card-qr-tile {
+    fill: var(--qr-tile);
+  }
+
+  .card-qr-ink {
+    fill: var(--qr-ink);
+  }
+</style>

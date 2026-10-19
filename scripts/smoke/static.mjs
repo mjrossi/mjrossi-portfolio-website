@@ -522,13 +522,14 @@ export function checkBuildArtifacts() {
   }
 
   // /card is a utility page — a business card held up to a phone — left out of
-  // the sitemap (and the nav) on purpose, though not noindexed. The filter is in
-  // astro.config.mjs next to the /admin one.
+  // the sitemap (and the nav) on purpose, though not noindexed; /card/qr, its
+  // presenter's view, is out too. The filter is in astro.config.mjs next to
+  // the /admin one.
   for (const name of sitemaps) {
     check(
-      `sitemap: ${name} does not name /card`,
-      !/<loc>[^<]*\/card\/?<\/loc>/.test(readFileSync(resolve(DIST, name), 'utf8')),
-      '/card is in the sitemap — the filter in astro.config.mjs no longer drops it',
+      `sitemap: ${name} does not name /card or /card/qr`,
+      !/<loc>[^<]*\/card(\/qr)?\/?<\/loc>/.test(readFileSync(resolve(DIST, name), 'utf8')),
+      '/card or /card/qr is in the sitemap — the filter in astro.config.mjs no longer drops it',
     );
   }
 
@@ -623,7 +624,7 @@ export function checkBuildArtifacts() {
     'css: the QR tile tokens are absent from both Night blocks',
     nightExplicit !== null && nightSystem !== null &&
       !nightExplicit.includes('--qr-') && !nightSystem.includes('--qr-'),
-    'a Night block declares --qr-ink or --qr-tile — the /card QR code would invert under Night',
+    'a Night block declares --qr-ink or --qr-tile — the /card/qr QR code would invert under Night',
   );
   check('css: the QR tile tokens are declared', /--qr-ink:/.test(css) && /--qr-tile:/.test(css));
   // Guards a prior masthead design (condensed variant + home-link/page-label
@@ -702,12 +703,12 @@ export function checkBuildArtifacts() {
     (m) => m[1],
   );
   check(
-    'css: card styles are not in the stylesheets every page links',
+    'css: card and card/qr styles are not in the stylesheets every page links',
     linked.length > 0 &&
-      linked.every((path) => !/\.card-/.test(readFileSync(resolve(DIST, path), 'utf8'))),
+      linked.every((path) => !/\.(card|qr)-/.test(readFileSync(resolve(DIST, path), 'utf8'))),
     linked.length === 0
       ? '404.html links no _astro stylesheet — this guard was vacuous'
-      : 'a .card-* rule reached the shared bundle — /card styles belong in its scoped <style>',
+      : 'a .card-* or .qr-* rule reached the shared bundle — /card and /card/qr styles belong in their scoped <style>',
   );
 
   // Nothing the build emits as a static file may carry the address. The source

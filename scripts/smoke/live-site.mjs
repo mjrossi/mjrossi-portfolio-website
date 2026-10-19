@@ -7,6 +7,7 @@
 // the same.
 import { check, checkHeader, checkStatus, occurrences } from './check.mjs';
 import { BASE } from './config.mjs';
+import { feedGuid } from '../../src/lib/feed-guid.js';
 
 export async function fetchRoute(path) {
   const res = await fetch(`${BASE}${path}`);
@@ -321,6 +322,22 @@ function checkRss(rss) {
   );
   const futureRssItems = rssDates.filter((t) => Number.isFinite(t) && t > rssNow);
   check('rss: no future-dated items', futureRssItems.length === 0, `${futureRssItems.length} future item(s)`);
+
+  // Every item's GUID must come from feedGuid(), not from `site`. The unit test
+  // pins the function; this pins the call site — exactly one <guid> per item
+  // (a duplicate means the override and the library default both landed), each
+  // on GUID_ORIGIN and naming the same slug as its own <link>.
+  const items = [...rss.html.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((m) => m[1]);
+  const guidMismatches = items.filter((item) => {
+    const guids = [...item.matchAll(/<guid[^>]*>([^<]*)<\/guid>/g)].map((m) => m[1]);
+    const slug = item.match(/<link>[^<]*\/blog\/([^/<]+)\/<\/link>/)?.[1];
+    return guids.length !== 1 || !slug || guids[0] !== feedGuid(slug);
+  });
+  check(
+    'rss: every item has one GUID from feedGuid()',
+    items.length > 0 && guidMismatches.length === 0,
+    `${guidMismatches.length} of ${items.length} item(s) off`,
+  );
 }
 
 /**

@@ -33,6 +33,14 @@ interface Props {
    * all (smoke asserts it); there the theme simply follows the system.
    */
   themeScript?: boolean;
+  /**
+   * The page alone: the same <head>, but no masthead, nav, kicker or footer.
+   * Only /card, which IS a masthead at card scale and is held up to someone's
+   * phone — a second masthead above it would be two on one screen. With no
+   * masthead there is no theme toggle either; theme.js still applies a stored
+   * choice, and otherwise the system theme.
+   */
+  bare?: boolean;
 }
 
 const {
@@ -45,11 +53,12 @@ const {
   // or Bluesky on its own. Bump this whenever public/og.png changes. Keeping
   // the FILENAME stable is what makes it safe — a scraper that strips the
   // query still lands on the current card rather than a 404.
-  ogImage: ogImagePath = '/og.png?v=3',
+  ogImage: ogImagePath = '/og.png?v=4',
   ogImageAlt = CARD_DESCRIPTION,
   masthead = 'author',
   crumbs,
   themeScript = true,
+  bare = false,
 } = Astro.props;
 
 const pathname = Astro.url.pathname;
@@ -120,6 +129,7 @@ const frontHref = isLexicon ? '/blog' : '/';
 </head>
 <body>
 
+  {!bare && (<>
   <header class="masthead full" data-masthead={masthead}>
     <div class="masthead-inner">
       <div class="masthead-folio">
@@ -186,11 +196,13 @@ const frontHref = isLexicon ? '/blog' : '/';
       </nav>
     </div>
   )}
+  </>)}
 
-  <main>
+  <main class:list={[{ bare }]}>
     <slot />
   </main>
 
+  {!bare && (
   <footer class="site-foot">
     <div class="site-foot-inner">
       <div class="site-foot-grid">
@@ -230,6 +242,7 @@ const frontHref = isLexicon ? '/blog' : '/';
       </div>
     </div>
   </footer>
+  )}
 
 </body>
 </html>

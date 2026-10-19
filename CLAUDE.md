@@ -60,6 +60,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `src/lib/edition.js` — `issue(now?)`. **One derivation, one launch epoch, called once per render in `Base.astro`.** Nothing in page chrome may derive an issue from content.
 - `src/lib/identity.js` — `TAGLINE`, `LEXICON_TAGLINE`, `CARD_TAGLINE`, `SET_IN`, `BUILT_WITH`, `SITE_DESCRIPTION`, `CARD_DESCRIPTION`: the sentences the site says about itself, in **three** engines. The social card says `CARD_TAGLINE`, never `TAGLINE`.
 - `src/lib/now.js` — `NOW_UPDATED` and `nowUpdatedLabel()`, the dateline under the home page's Now heading.
+- `src/lib/feed-guid.js` — `feedGuid(slug)`: each RSS item's GUID, **pinned to `https://mjrossi.com`, never derived from `site`**, so a domain move can't re-mail the archive.
 - `src/lib/readingTime.js` — word-count read time. Plain JS so the OG generator can import it under bare Node.
 - `src/lib/post-source.ts` — `SOURCE_BY_SLUG` and `revisionOf(slug)`. Two definitions of this hash would refuse every galley write.
 - `src/lib/remark-source-anchors.js` — stamps `data-src` on every commentable block. **Why `@astrojs/markdown-remark` is a direct dependency.**

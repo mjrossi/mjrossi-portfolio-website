@@ -30,6 +30,10 @@
 // says CARD_TAGLINE, never TAGLINE, for the card's reason — a saved contact is
 // held by someone else indefinitely — and `src/lib/vcard.test.js` asserts it.
 //
+// `scripts/make-linkedin-banner.mjs` renders CARD_TAGLINE into the LinkedIn
+// banner, for the same reason, and refuses to run if the line it draws is not
+// CARD_TAGLINE.
+//
 // What is deliberately NOT here: the two-tone "Matthew Rossi" wordmark and the
 // `mjrossi.com` domain. Both are also spelled in more than one engine (adding
 // `scripts/make-post-og.mjs` as a third), but the wordmark is markup rather

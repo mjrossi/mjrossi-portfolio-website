@@ -23,7 +23,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 
 ### Layouts and components
 
-- `src/layouts/Base.astro` — shared shell: masthead on every page (`masthead="author" | "lexicon"`), numbered nav, `crumbs` kicker, site-foot, edition line built at request time, `ogImage` / `ogImageAlt` / `ogTitle` props, and the synchronous `theme.js` load. `bare` keeps the `<head>` and drops all the chrome — `/card` and `/card/qr` only.
+- `src/layouts/Base.astro` — shared shell: masthead on every page (`masthead="author" | "lexicon"`), numbered nav, `crumbs` kicker, site-foot, edition line built at request time, `ogImage` / `ogImageAlt` / `ogTitle` props, two description defaults (`SITE_DESCRIPTION` for search, `CARD_DESCRIPTION` for og:/twitter:), and the synchronous `theme.js` load. `bare` keeps the `<head>` and drops all the chrome — `/card` and `/card/qr` only.
 - `src/layouts/BlogPost.astro` — post chrome. Gates the subscribe card, previous/next **and** the galley on publication.
 - `src/layouts/Desk.astro` — the Desk's chrome and **all** of its CSS (`is:global`), imported only by `/admin` so it never reaches a public bundle.
 - `src/components/ContactLinks.astro` — inline-SVG icon row; rendered twice per page (nav + footer), both asserted by smoke.
@@ -119,6 +119,8 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `scripts/galley-preview.mjs` — `just galley-preview`: the margin against fixtures, no build/worker/DB. **Run `--stale` too.**
 - `scripts/gen-headers.mjs` — writes `dist/client/_headers` during the build.
 - `scripts/make-card-assets.mjs` — `just card-assets`: one-off, writes `card-qr.js` + `card-photo.js`. The QR's URL must never change — printed cards will carry it.
+- `scripts/make-linkedin-banner.mjs` — `just linkedin-banner`: /card's front face at 1584 × 396 for LinkedIn, into git-ignored `out/`, **never `public/`**. Says `CARD_TAGLINE`; refuses to render text under the profile photo or in a substitute face.
+- `scripts/paper-tokens.mjs` — Paper's `:root` colours read from `global.css` and converted to hex, so a generated image needs no literal colour.
 - `scripts/make-og.mjs`, `scripts/make-noise.mjs` — one-off regenerators. **The site card states identity only — never a fact about the present.**
 - `scripts/make-post-og.mjs` — runs on **every** build, published posts only. Gates on `__BUILD_TIME__`, not the request clock.
 - `scripts/smoke.mjs` — the run sequence and nothing else; the ordering of its phases is the part to read before changing anything.

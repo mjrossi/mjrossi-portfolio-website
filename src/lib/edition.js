@@ -55,7 +55,7 @@ export function toRoman(n) {
  * The issue for an instant.
  *
  * `short` is `Vol. I · No. V` without the month. It was written for the compact
- * interior masthead, which no longer exists — 8083a77 reverted the header to
+ * interior masthead, which no longer exists — bac1c5c reverted the header to
  * one masthead on the author's call — and its one consumer today is the per-post
  * OG card in scripts/make-post-og.mjs, which drops the month for the same reason
  * the interior pages did: the post's own dateline is already on the card, and

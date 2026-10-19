@@ -11,7 +11,7 @@ import { RETIRED, retiredTarget, tagLabel } from './tags.js';
  * LOADER. `node --test` cannot load astro:content, so this has to walk the
  * directory itself — and the walk is the part that rots. This used to be a
  * local scan that handled top-level `*.mdx` and `<dir>/index.mdx` only, which
- * is the exact shape 152e806 had just fixed one file over in listPostSlugs:
+ * is the exact shape 211c3eb had just fixed one file over in listPostSlugs:
  * the glob is `**\/*.{md,mdx}`, so a `.md` post or one nested a directory
  * deeper is a real post that the scan could not see.
  *

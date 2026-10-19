@@ -203,7 +203,7 @@ for (const slug of listPostSlugs()) {
   // A slug can contain a `/` — the loader's glob is `**`, so `a/b.mdx` is the
   // post `a/b` and its card is `og/a/b.png`. The mkdirSync above only makes
   // OUT_DIR itself, so the intermediate directory has to be made here or the
-  // write throws ENOENT. 152e806 made listPostSlugs walk recursively for
+  // write throws ENOENT. 211c3eb made listPostSlugs walk recursively for
   // exactly this shape and stopped one step short of writing it.
   //
   // Nested posts and BlogPost.astro's og:image URL agree without escaping: an

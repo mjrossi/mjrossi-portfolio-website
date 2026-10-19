@@ -7,6 +7,9 @@ import cloudflare from "@astrojs/cloudflare";
 import remarkSourceAnchors from './src/lib/remark-source-anchors.js';
 import { isAdminPath } from './src/lib/admin-path.js';
 
+// The business card and its presenter's view: utility pages, not content.
+const CARD_PATHS = new Set(['/card', '/card/qr']);
+
 export default defineConfig({
   site: 'https://mjrossi.com',
   output: 'server',
@@ -26,11 +29,12 @@ export default defineConfig({
     // /card is dropped too, for a milder reason: it is a utility page — a
     // business card held up to a phone — not content, so it is left out of the
     // sitemap and the nav. It is deliberately NOT noindexed; this only stops
-    // the site advertising it.
+    // the site advertising it. /card/qr, the presenter's view of it, is out
+    // too, and is noindexed as well — a bare QR code is no search result.
     sitemap({
       filter: (page) => {
         const { pathname } = new URL(page);
-        return !isAdminPath(pathname) && pathname.replace(/\/$/, '') !== '/card';
+        return !isAdminPath(pathname) && !CARD_PATHS.has(pathname.replace(/\/$/, ''));
       },
     }),
   ],

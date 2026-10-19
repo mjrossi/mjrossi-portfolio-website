@@ -70,11 +70,21 @@ test('the card: name, email and URL', () => {
 
 // A saved contact is held indefinitely, like a cached social card, so it may
 // state identity only. TAGLINE ("studying …") is a fact about the present.
-test('the card says CARD_TAGLINE, never TAGLINE', () => {
+// TITLE is what sits under the name in iOS Contacts; it carries the
+// descriptor, and NOTE is gone so the same words do not appear twice.
+test('the card says CARD_TAGLINE as its TITLE, never TAGLINE, and has no NOTE', () => {
   const vcf = unfold(CARD_VCF);
-  assert.ok(vcf.includes(`\r\nNOTE:${escapeText(CARD_TAGLINE)}\r\n`));
+  assert.ok(vcf.includes(`\r\nFN:Matthew Rossi\r\nTITLE:${escapeText(CARD_TAGLINE)}\r\n`));
   assert.ok(!vcf.includes(escapeText(TAGLINE)));
   assert.ok(!vcf.includes(TAGLINE));
+  assert.ok(!/\r\nNOTE[:;]/.test(vcf));
+});
+
+test('a TITLE is escaped and folded like any other TEXT property', () => {
+  const title = 'Technologist, urbanist; ' + 'x'.repeat(100);
+  const vcf = serializeVCard([['TITLE', escapeText(title)]]);
+  for (const line of physicalLines(vcf)) assert.ok(octets(line) <= 75, `${octets(line)}: ${line}`);
+  assert.ok(unfold(vcf).includes(`\r\nTITLE:Technologist\\, urbanist\\; ${'x'.repeat(100)}\r\n`));
 });
 
 test('the card carries a base64 JPEG photo', () => {

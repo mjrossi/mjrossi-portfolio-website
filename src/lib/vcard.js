@@ -7,9 +7,14 @@
 // CRLF, and lines folded at 75 OCTETS (not characters) with a single leading
 // space on each continuation (RFC 2425 §5.8.1, which vCard 3.0 inherits).
 //
-// The NOTE is CARD_TAGLINE, never TAGLINE. A saved contact is held by someone
+// The TITLE is CARD_TAGLINE, never TAGLINE. A saved contact is held by someone
 // else indefinitely — exactly like a scraper's copy of the social card — so it
 // may state identity only. "Studying …" is a fact about the present.
+//
+// TITLE rather than NOTE: iOS Contacts shows TITLE directly under the name,
+// where it does the job of recalling who this was a week later, and NOTE at the
+// foot of the card, where nobody looks. One line, not both — the same words
+// twice on one contact is noise.
 //
 // Plain JS so `node --test` reaches it (src/lib/vcard.test.js); the endpoint
 // is src/pages/api/vcard.ts and serves CARD_VCF unchanged.
@@ -77,9 +82,9 @@ export function serializeVCard(props) {
 export const CARD_VCF = serializeVCard([
   ['N', ['Rossi', 'Matthew', '', '', ''].map(escapeText).join(';')],
   ['FN', escapeText('Matthew Rossi')],
+  ['TITLE', escapeText(CARD_TAGLINE)],
   ['EMAIL;TYPE=INTERNET', escapeText(CONTACT_EMAIL)],
   // A URI, not TEXT — escaping would corrupt a comma or semicolon in a path.
   ['URL', 'https://mjrossi.com'],
-  ['NOTE', escapeText(CARD_TAGLINE)],
   ['PHOTO;ENCODING=b;TYPE=JPEG', PHOTO_JPEG_BASE64],
 ]);

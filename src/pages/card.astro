@@ -51,8 +51,6 @@ import { QR_SIZE, QR_PATH } from '../lib/card-qr.js';
       </svg>
     </section>
 
-    <p class="card-home"><a href="/">The front page →</a></p>
-
   </div>
 </Base>
 
@@ -282,24 +280,21 @@ import { QR_SIZE, QR_PATH } from '../lib/card-qr.js';
     fill: var(--qr-ink);
   }
 
-  /* ── Under the card ───────────────────────────────── */
+  /* ── Motion: the back turns over, once ────────────── */
 
-  .card-home {
-    grid-column: 1 / -1;
-    margin: 0;
-    text-align: center;
-    font-family: var(--font-ui);
-    font-size: 0.8rem;
-    letter-spacing: 0.04em;
-  }
+  /* The second half of a flip: the back starts edge-on and turns flat, so it
+     reads as a card turned over without either face ever being hidden behind
+     a tap — the back carries the QR code, which is what gets held up. Once, on
+     load, CSS only; under reduced motion there is none at all, the same
+     pattern as the masthead's drawRule in global.css. */
+  @media (prefers-reduced-motion: no-preference) {
+    .card-back {
+      animation: cardTurn 650ms cubic-bezier(0.2, 0.7, 0.2, 1) 250ms both;
+    }
 
-  .card-home a {
-    color: var(--muted);
-    text-decoration: none;
-  }
-
-  .card-home a:hover {
-    color: var(--accent);
-    text-decoration: underline;
+    @keyframes cardTurn {
+      from { transform: perspective(1200px) rotateY(-90deg); }
+      to   { transform: perspective(1200px) rotateY(0); }
+    }
   }
 </style>

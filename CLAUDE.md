@@ -23,7 +23,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 
 ### Layouts and components
 
-- `src/layouts/Base.astro` — shared shell: masthead on every page (`masthead="author" | "lexicon"`), numbered nav, `crumbs` kicker, site-foot, edition line built at request time, `ogImage` / `ogImageAlt` / `ogTitle` props, and the synchronous `theme.js` load. `bare` keeps the `<head>` and drops all the chrome — `/card` only.
+- `src/layouts/Base.astro` — shared shell: masthead on every page (`masthead="author" | "lexicon"`), numbered nav, `crumbs` kicker, site-foot, edition line built at request time, `ogImage` / `ogImageAlt` / `ogTitle` props, and the synchronous `theme.js` load. `bare` keeps the `<head>` and drops all the chrome — `/card` and `/card/qr` only.
 - `src/layouts/BlogPost.astro` — post chrome. Gates the subscribe card, previous/next **and** the galley on publication.
 - `src/layouts/Desk.astro` — the Desk's chrome and **all** of its CSS (`is:global`), imported only by `/admin` so it never reaches a public bundle.
 - `src/components/ContactLinks.astro` — inline-SVG icon row; rendered twice per page (nav + footer), both asserted by smoke.

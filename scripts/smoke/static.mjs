@@ -703,12 +703,12 @@ export function checkBuildArtifacts() {
     (m) => m[1],
   );
   check(
-    'css: card styles are not in the stylesheets every page links',
+    'css: card and card/qr styles are not in the stylesheets every page links',
     linked.length > 0 &&
-      linked.every((path) => !/\.card-/.test(readFileSync(resolve(DIST, path), 'utf8'))),
+      linked.every((path) => !/\.(card|qr)-/.test(readFileSync(resolve(DIST, path), 'utf8'))),
     linked.length === 0
       ? '404.html links no _astro stylesheet — this guard was vacuous'
-      : 'a .card-* rule reached the shared bundle — /card styles belong in its scoped <style>',
+      : 'a .card-* or .qr-* rule reached the shared bundle — /card and /card/qr styles belong in their scoped <style>',
   );
 
   // Nothing the build emits as a static file may carry the address. The source

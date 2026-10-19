@@ -35,16 +35,17 @@ interface Props {
   themeScript?: boolean;
   /**
    * The page alone: the same <head>, but no masthead, nav, kicker or footer.
-   * Only /card, which IS a masthead at card scale and is held up to someone's
-   * phone — a second masthead above it would be two on one screen. With no
+   * Only /card and /card/qr, which are shown on someone's phone: /card IS a
+   * masthead at card scale, and a second masthead above either would be two
+   * wordmarks on one screen. With no
    * masthead there is no theme toggle either; theme.js still applies a stored
    * choice, and otherwise the system theme.
    */
   bare?: boolean;
   /**
    * The title a link preview shows (og:title, twitter:title), when it should
-   * differ from the tab's <title>. Only /card: a text-thread preview reads
-   * better as the name alone than as "Card — Matthew Rossi".
+   * differ from the tab's <title>. Only /card and /card/qr: a text-thread
+   * preview reads better as the name alone than as "Card — Matthew Rossi".
    */
   ogTitle?: string;
 }

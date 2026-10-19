@@ -43,6 +43,7 @@ import { QR_SIZE, QR_PATH } from '../../lib/card-qr.js';
      two are Paper-only by design (see global.css). No motion of any kind. */
 
   :global(main.bare) {
+    min-height: 100vh; /* before svh: Safari < 15.4, Chrome < 108 */
     min-height: 100svh;
     display: grid;
     align-content: center;
@@ -85,6 +86,7 @@ import { QR_SIZE, QR_PATH } from '../../lib/card-qr.js';
      ground, always. */
   .card-qr {
     display: block;
+    width: min(100%, 100vh - 9rem); /* drops whole without svh — keep a width */
     width: min(100%, 100svh - 9rem);
     height: auto;
   }

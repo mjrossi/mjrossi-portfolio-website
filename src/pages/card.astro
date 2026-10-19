@@ -55,6 +55,7 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
      token. */
 
   :global(main.bare) {
+    min-height: 100vh; /* before svh: Safari < 15.4, Chrome < 108 */
     min-height: 100svh;
     display: grid;
     align-content: center;

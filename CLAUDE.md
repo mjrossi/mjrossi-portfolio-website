@@ -23,7 +23,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 
 ### Layouts and components
 
-- `src/layouts/Base.astro` — shared shell: masthead on every page (`masthead="author" | "lexicon"`), numbered nav, `crumbs` kicker, site-foot, edition line built at request time, `ogImage` / `ogImageAlt` props, and the synchronous `theme.js` load.
+- `src/layouts/Base.astro` — shared shell: masthead on every page (`masthead="author" | "lexicon"`), numbered nav, `crumbs` kicker, site-foot, edition line built at request time, `ogImage` / `ogImageAlt` props, and the synchronous `theme.js` load. `bare` keeps the `<head>` and drops all the chrome — `/card` only.
 - `src/layouts/BlogPost.astro` — post chrome. Gates the subscribe card, previous/next **and** the galley on publication.
 - `src/layouts/Desk.astro` — the Desk's chrome and **all** of its CSS (`is:global`), imported only by `/admin` so it never reaches a public bundle.
 - `src/components/ContactLinks.astro` — inline-SVG icon row; rendered twice per page (nav + footer), both asserted by smoke.
@@ -40,10 +40,12 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 
 ### Routes
 
-- `src/pages/*.astro` — one file per route. Public: `/`, `/work`, `/projects`, `/education`, `/urban-mobility`, `/blog`, `/blog/tags`, `/privacy`, `/404`. Plus Access-gated `/admin`.
+- `src/pages/*.astro` — one file per route. Public: `/`, `/work`, `/projects`, `/education`, `/urban-mobility`, `/blog`, `/blog/tags`, `/privacy`, `/404`, `/card`. Plus Access-gated `/admin`.
+- `src/pages/card.astro` — the digital business card: two 85:55 faces, `bare`, out of the sitemap and nav but indexable. **No address in the HTML**; its CSS is a scoped `<style>`, so it ships on this route only.
 - `src/pages/blog/index.astro`, `[...slug].astro`, `tag/[tag].astro`, `rss.xml.ts` — list, post, per-tag, RSS. RSS is **on-demand**, not prerendered.
 - `src/pages/admin/index.astro`, `src/pages/admin/[slug].astro` — the Desk. Zero client JS, which is what keeps it clear of the site-wide CSP.
 - `src/pages/api/contact.ts` — `GET` → 302 to `mailto:`, so the address never appears in static HTML.
+- `src/pages/api/vcard.ts` — `GET` → `CARD_VCF` as `text/vcard`, `inline`, `no-store`. The only other carrier of the address.
 - `src/pages/api/subscribe.ts` — newsletter POST: verifies Turnstile, forwards to Buttondown, treats already-subscribed as success.
 - `src/pages/api/galley.ts` — `GET`/`POST` galley notes. Authorisation comes entirely from `Astro.locals`; owns its own write-quota SQL.
 - `src/middleware.ts` — security headers on every response, CSP + `Cache-Control` on HTML, the `/admin` Access gate, and both preview unlocks.
@@ -58,7 +60,10 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `src/lib/pubdate.js` — `coercePubDate`: the frontmatter-date rule, shared by the build and the minting scripts. Rejects one shape only.
 - `src/lib/tags.js` — `tagLabel` plus `RETIRED` / `retiredTarget`, the map from a consolidated tag to where it goes now.
 - `src/lib/edition.js` — `issue(now?)`. **One derivation, one launch epoch, called once per render in `Base.astro`.** Nothing in page chrome may derive an issue from content.
-- `src/lib/identity.js` — `TAGLINE`, `LEXICON_TAGLINE`, `CARD_TAGLINE`, `SET_IN`, `BUILT_WITH`, `SITE_DESCRIPTION`, `CARD_DESCRIPTION`: the sentences the site says about itself, in **three** engines. The social card says `CARD_TAGLINE`, never `TAGLINE`.
+- `src/lib/identity.js` — `TAGLINE`, `LEXICON_TAGLINE`, `CARD_TAGLINE`, `SET_IN`, `BUILT_WITH`, `SITE_DESCRIPTION`, `CARD_DESCRIPTION`: the sentences the site says about itself, in **four** engines (the `.vcf` is the fourth). The social card and the `.vcf` say `CARD_TAGLINE`, never `TAGLINE`.
+- `src/lib/contact.js` — `CONTACT_EMAIL`, spelled once, for the two endpoints. **Never imported by a page or component.**
+- `src/lib/vcard.js` — `escapeText` / `foldLine` / `serializeVCard` and `CARD_VCF`. Folds at 75 **octets**, never mid-character; CRLF throughout.
+- `src/lib/card-qr.js`, `src/lib/card-photo.js` — **generated** by `just card-assets` and committed. The QR is geometry only; `card-qr.test.js` decodes it.
 - `src/lib/now.js` — `NOW_UPDATED` and `nowUpdatedLabel()`, the dateline under the home page's Now heading.
 - `src/lib/feed-guid.js` — `feedGuid(slug)`: each RSS item's GUID, **pinned to `https://mjrossi.com`, never derived from `site`**, so a domain move can't re-mail the archive.
 - `src/lib/readingTime.js` — word-count read time. Plain JS so the OG generator can import it under bare Node.
@@ -112,6 +117,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `scripts/post-rename.mjs` — the database half of a slug rename: **moves** the notes, **revokes** the links. Runs after the `git mv` and checks it happened. Refuses a published post.
 - `scripts/galley-preview.mjs` — `just galley-preview`: the margin against fixtures, no build/worker/DB. **Run `--stale` too.**
 - `scripts/gen-headers.mjs` — writes `dist/client/_headers` during the build.
+- `scripts/make-card-assets.mjs` — `just card-assets`: one-off, writes `card-qr.js` + `card-photo.js`. The QR's URL must never change — printed cards will carry it.
 - `scripts/make-og.mjs`, `scripts/make-noise.mjs` — one-off regenerators. **The site card states identity only — never a fact about the present.**
 - `scripts/make-post-og.mjs` — runs on **every** build, published posts only. Gates on `__BUILD_TIME__`, not the request clock.
 - `scripts/smoke.mjs` — the run sequence and nothing else; the ordering of its phases is the part to read before changing anything.
@@ -163,6 +169,9 @@ Not departures from the core, but choices this repo owns. Change them here, not 
 - **Two mastheads.** The core masthead is filled two ways: `author` on non-blog routes, and `lexicon` (with the author as byline) on every blog route, because the blog is a periodical within the site (see "Blog"). Same size, band, nav and footer either way.
 - **Kicker on interior pages only.** Not on `/`, `/blog`, tag pages or posts. The two fronts are where a breadcrumb would start, and posts and tag pages already carry their own back links.
 - **Site-foot columns:** Pages / The Lexicon / Elsewhere.
+- **`/card` is the masthead at card scale, alone.** `bare` — no masthead, nav or footer above it, because it is held up to someone's phone and two mastheads on one screen is the wrong thing to show. No theme toggle either (the toggle lives in the masthead); `theme.js` still applies a stored choice.
+- **The `/card` QR tile is Paper in both themes.** `--qr-ink` / `--qr-tile` sit in `:root` with Paper's literal values and are **absent from both Night blocks** on purpose: an inverted QR code (light on dark) fails on a share of real scanners. They are still tokens, so no rule carries a literal colour; smoke asserts neither Night block declares them.
+- **The card's taglines split by who holds the copy.** The page says `TAGLINE` (it re-renders per request); the `.vcf`'s `NOTE` and the page's `og:description` say `CARD_TAGLINE` / `CARD_DESCRIPTION`, because a saved contact and a text-thread preview are kept indefinitely. A print version of the card (deferred — see `docs/FILE-MAP.md`) would need `CARD_TAGLINE` and no location.
 - **Measured values of core rules:** the tablet nav band is 640–819px here. The contact cluster's row needs 901px, so it fits from ~980px, inside the core's 1024px breakpoint; re-measure if a nav item or icon is added.
 
 Section labels: `font-variant-caps: all-small-caps` with letter-spacing. Experience and education entries use `.entry` / `.entry-header` / `.entry-meta` / `.company` / `.role` / `.date`. Interior pages use `.page` / `.page-header` / `.page-meta`.

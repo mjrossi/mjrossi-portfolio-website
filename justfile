@@ -401,6 +401,11 @@ kill-smoke:
 og:
     node scripts/make-og.mjs public/og.png
 
+# regenerate src/lib/card-qr.js + src/lib/card-photo.js (/card's QR code and vCard photo)
+[group('assets')]
+card-assets:
+    node scripts/make-card-assets.mjs
+
 # regenerate public/noise.webp (masthead grain overlay)
 [group('assets')]
 noise:

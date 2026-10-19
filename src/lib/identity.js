@@ -25,6 +25,11 @@
 // build until the template is updated and re-pasted. Editing a sentence here is
 // therefore an operator step as well as a code change.
 //
+// A FOURTH engine can import it: `src/lib/vcard.js`, the `.vcf` behind /card's
+// "Add to contacts", which has escaping and line-folding rules of its own. It
+// says CARD_TAGLINE, never TAGLINE, for the card's reason — a saved contact is
+// held by someone else indefinitely — and `src/lib/vcard.test.js` asserts it.
+//
 // What is deliberately NOT here: the two-tone "Matthew Rossi" wordmark and the
 // `mjrossi.com` domain. Both are also spelled in more than one engine (adding
 // `scripts/make-post-og.mjs` as a third), but the wordmark is markup rather
@@ -34,19 +39,19 @@
 /**
  * The masthead tagline. Also the spine of `SITE_DESCRIPTION` below.
  *
- * NOT the social card's line. "Now studying" is a fact about the present, and
+ * NOT the social card's line. "Studying" is a fact about the present, and
  * the card may state identity only (see `scripts/make-og.mjs`): the page is
  * re-rendered on every request and can follow this sentence, but the card is
  * cached by scrapers that never re-fetch it. The card says `CARD_TAGLINE`.
  */
-export const TAGLINE = 'Software engineer, now studying how cities move people';
+export const TAGLINE = 'Technologist studying how cities move people';
 
 /**
  * The social card's line: who, not what now. It must stay true for as long as
  * a scraper might hold the card, which is indefinitely. Changing it means
  * `just og`, then bumping `?v=` on `Base.astro`'s `ogImage` default.
  */
-export const CARD_TAGLINE = 'Software engineer and urbanist';
+export const CARD_TAGLINE = 'Technologist and urbanist';
 
 /**
  * The Urbanist Lexicon's own line: the tagline of the periodical's masthead on

@@ -13,6 +13,7 @@ import { join, relative, resolve } from 'node:path';
 import { check, stripComments } from './check.mjs';
 import { DIST, FIXTURE_SLUG, GALLEY_WRITE_QUOTA, PUBLISHED_SLUG } from './config.mjs';
 import { BUILT_WITH, CARD_TAGLINE, LEXICON_TAGLINE, SET_IN, TAGLINE } from '../../src/lib/identity.js';
+import { CONTACT_EMAIL } from '../../src/lib/contact.js';
 
 /** Read and comment-strip a source file, or return '' if it isn't there. */
 function source(path) {
@@ -375,6 +376,42 @@ export function checkSourceGuards() {
           .join(', ')}, where the --local guard in scripts/links-db.mjs and ` +
         'scripts/notes-db.mjs cannot apply — these delete and forge rows',
   );
+
+  // THE ADDRESS IS SPELLED ONCE, AND NO PAGE IMPORTS IT.
+  //
+  // src/lib/contact.js says both, and until this check nothing held either: the
+  // /card HTML assertion covers one page, and /privacy and newsletter.js had
+  // carried the literal all along. Two checks, because they fail differently.
+  // A second spelling is a copy that goes stale when the address changes; an
+  // import from a page or component is one render away from putting it in HTML.
+  // vcard.js counts as the address, since CARD_VCF carries it.
+  const markup = [
+    ...walk(resolve('src/pages')),
+    ...walk(resolve('src/components')),
+    ...walk(resolve('src/layouts')),
+  ].filter((path) => path.endsWith('.astro'));
+  const importers = markup.filter((path) =>
+    /from\s+['"][^'"]*\/lib\/(contact|vcard)(\.js)?['"]/.test(source(path)),
+  );
+  check(
+    `markup: no page, layout or component imports the address (${markup.length} files scanned)`,
+    markup.length > 0 && importers.length === 0,
+    markup.length === 0
+      ? 'no .astro files were scanned — this guard was vacuous'
+      : `${importers.map((p) => relative(resolve('.'), p)).join(', ')} imports ` +
+        'src/lib/contact.js or src/lib/vcard.js — link /api/contact or /api/vcard instead',
+  );
+  const tree = [...walk(resolve('src')), ...walk(resolve('public')), ...walk(resolve('scripts'))];
+  const spellings = tree.filter(
+    (path) =>
+      path !== resolve('src/lib/contact.js') && readFileSync(path, 'latin1').includes(CONTACT_EMAIL),
+  );
+  check(
+    `contact: the address is spelled only in src/lib/contact.js (${tree.length} files scanned)`,
+    tree.length > 0 && spellings.length === 0,
+    `also spelled in ${spellings.map((p) => relative(resolve('.'), p)).join(', ')} — ` +
+      'import CONTACT_EMAIL, or in markup link /api/contact',
+  );
 }
 
 /** Every file under `dir`, recursively. Returns [] if it isn't there. */
@@ -484,6 +521,17 @@ export function checkBuildArtifacts() {
     );
   }
 
+  // /card is a utility page — a business card held up to a phone — left out of
+  // the sitemap (and the nav) on purpose, though not noindexed. The filter is in
+  // astro.config.mjs next to the /admin one.
+  for (const name of sitemaps) {
+    check(
+      `sitemap: ${name} does not name /card`,
+      !/<loc>[^<]*\/card\/?<\/loc>/.test(readFileSync(resolve(DIST, name), 'utf8')),
+      '/card is in the sitemap — the filter in astro.config.mjs no longer drops it',
+    );
+  }
+
   // _headers is generated post-build by scripts/gen-headers.mjs from the
   // canonical CSP in src/lib/csp.js. Assert the CSP made it into the file —
   // regression guard for the generator and for CSP drift between middleware
@@ -567,6 +615,17 @@ export function checkBuildArtifacts() {
     nightExplicit !== null && nightExplicit === nightSystem,
     'the data-theme="dark" block and the prefers-color-scheme block have drifted apart',
   );
+  // The /card QR tile is Paper in both themes: a scanner needs dark modules on
+  // a light ground, and an inverted code fails on a share of real phones. Its
+  // two tokens therefore live in :root only. A Night override would look like
+  // ordinary theming and pass every other check here.
+  check(
+    'css: the QR tile tokens are absent from both Night blocks',
+    nightExplicit !== null && nightSystem !== null &&
+      !nightExplicit.includes('--qr-') && !nightSystem.includes('--qr-'),
+    'a Night block declares --qr-ink or --qr-tile — the /card QR code would invert under Night',
+  );
+  check('css: the QR tile tokens are declared', /--qr-ink:/.test(css) && /--qr-tile:/.test(css));
   // Guards a prior masthead design (condensed variant + home-link/page-label
   // bar) that was reverted. The rules below assert those classes never
   // reappear in the built CSS or rendered HTML — without these, a copy-paste
@@ -630,5 +689,36 @@ export function checkBuildArtifacts() {
     !/desk-/.test(css),
     'Desk CSS was hoisted into a route stylesheet — something public now imports ' +
       'src/layouts/Desk.astro, directly or through a component',
+  );
+
+  // /card's styles, against the same mechanism, but checked on the stylesheets
+  // another page LINKS rather than on every file in _astro/: the card's scoped
+  // <style> is inlined today, and once it outgrows Astro's inline limit it
+  // becomes a card-only file that is meant to be there. The prerendered 404 is
+  // Base's chrome on a page that isn't /card, so whatever it links, every page
+  // links.
+  const notFound = readFileSync(resolve(DIST, '404.html'), 'utf8');
+  const linked = [...notFound.matchAll(/<link rel="stylesheet" href="\/(_astro\/[^"]+\.css)"/g)].map(
+    (m) => m[1],
+  );
+  check(
+    'css: card styles are not in the stylesheets every page links',
+    linked.length > 0 &&
+      linked.every((path) => !/\.card-/.test(readFileSync(resolve(DIST, path), 'utf8'))),
+    linked.length === 0
+      ? '404.html links no _astro stylesheet — this guard was vacuous'
+      : 'a .card-* rule reached the shared bundle — /card styles belong in its scoped <style>',
+  );
+
+  // Nothing the build emits as a static file may carry the address. The source
+  // check above covers what is written; this covers what is served from
+  // ASSETS — bundled JS, the prerendered 404, generated files — where a
+  // re-export could put the address with no literal anywhere in the repo.
+  const served = walk(DIST);
+  const carriers = served.filter((path) => readFileSync(path, 'latin1').includes(CONTACT_EMAIL));
+  check(
+    `contact: no static asset carries the address (${served.length} files scanned)`,
+    served.length > 0 && carriers.length === 0,
+    `${carriers.map((p) => relative(DIST, p)).join(', ')} — the address is served only by /api/contact and /api/vcard`,
   );
 }

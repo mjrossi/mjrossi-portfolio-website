@@ -22,7 +22,17 @@ export default defineConfig({
     // The predicate is shared with middleware (src/lib/admin-path.js) rather
     // than spelled again here, because a filter that disagreed with the gate is
     // exactly the drift that puts a draft inventory in a public file.
-    sitemap({ filter: (page) => !isAdminPath(new URL(page).pathname) }),
+    //
+    // /card is dropped too, for a milder reason: it is a utility page — a
+    // business card held up to a phone — not content, so it is left out of the
+    // sitemap and the nav. It is deliberately NOT noindexed; this only stops
+    // the site advertising it.
+    sitemap({
+      filter: (page) => {
+        const { pathname } = new URL(page);
+        return !isAdminPath(pathname) && pathname.replace(/\/$/, '') !== '/card';
+      },
+    }),
   ],
   // Applies to .md and .mdx alike, and names the processor rather than leaving
   // it to be inferred.

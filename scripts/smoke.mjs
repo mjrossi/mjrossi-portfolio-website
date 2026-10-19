@@ -29,7 +29,7 @@ import {
   stopRuntime,
   waitForReady,
 } from './smoke/runtime.mjs';
-import { checkEndpoints, checkRoutes } from './smoke/live-site.mjs';
+import { checkCard, checkEndpoints, checkRoutes } from './smoke/live-site.mjs';
 import { checkHostUnlock, checkPreviewAndGalley } from './smoke/live-preview.mjs';
 import { checkDesk, checkDeskIsNotPublic } from './smoke/live-desk.mjs';
 import { conflictingDevVars } from './smoke/access.mjs';
@@ -133,6 +133,7 @@ try {
 
   await checkHostUnlock();
   await checkEndpoints(routes);
+  await checkCard(routes);
 
   const { passes, fails, total } = results();
   if (fails.length === 0) {

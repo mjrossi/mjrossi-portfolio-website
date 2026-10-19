@@ -1,6 +1,7 @@
 import rss from '@astrojs/rss';
 import type { APIContext } from 'astro';
 import { getPublishedPosts } from '../../lib/blog.ts';
+import { feedGuid } from '../../lib/feed-guid.js';
 import { LEXICON_TAGLINE } from '../../lib/identity.js';
 
 // On-demand (not prerendered): the feed is rebuilt per request so that
@@ -25,6 +26,9 @@ export async function GET(context: APIContext) {
       description: post.data.description,
       pubDate: post.data.pubDate,
       link: `/blog/${post.id}/`,
+      // Overrides @astrojs/rss's default GUID (the absolute link, built from
+      // `site`), which would change if the blog's domain did. See feed-guid.js.
+      customData: `<guid isPermaLink="true">${feedGuid(post.id)}</guid>`,
     })),
     xmlns: { atom: 'http://www.w3.org/2005/Atom' },
     customData: [

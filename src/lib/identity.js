@@ -25,6 +25,11 @@
 // build until the template is updated and re-pasted. Editing a sentence here is
 // therefore an operator step as well as a code change.
 //
+// A FOURTH engine can import it: `src/lib/vcard.js`, the `.vcf` behind /card's
+// "Add to contacts", which has escaping and line-folding rules of its own. It
+// says CARD_TAGLINE, never TAGLINE, for the card's reason — a saved contact is
+// held by someone else indefinitely — and `src/lib/vcard.test.js` asserts it.
+//
 // What is deliberately NOT here: the two-tone "Matthew Rossi" wordmark and the
 // `mjrossi.com` domain. Both are also spelled in more than one engine (adding
 // `scripts/make-post-og.mjs` as a third), but the wordmark is markup rather

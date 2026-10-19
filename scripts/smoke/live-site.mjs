@@ -8,6 +8,9 @@
 import { check, checkHeader, checkStatus, occurrences } from './check.mjs';
 import { BASE } from './config.mjs';
 import { feedGuid } from '../../src/lib/feed-guid.js';
+import { CARD_DESCRIPTION, CARD_TAGLINE, TAGLINE } from '../../src/lib/identity.js';
+import { CONTACT_EMAIL } from '../../src/lib/contact.js';
+import { QR_PATH } from '../../src/lib/card-qr.js';
 
 export async function fetchRoute(path) {
   const res = await fetch(`${BASE}${path}`);
@@ -554,4 +557,84 @@ async function checkSubscribe() {
   checkStatus('privacy: 200 OK', privacy.res, 200);
   check('privacy: names Buttondown', /Buttondown/i.test(privacy.html));
   check('privacy: names Turnstile', /Turnstile/i.test(privacy.html));
+}
+
+/**
+ * /card and the .vcf behind it — a route of its own kind, so it does NOT go
+ * through assertSharedChrome: it is `bare`, with no masthead, nav, toggle or
+ * footer, and a check that demanded them would be asserting the wrong page.
+ * What it shares with every route is the <head> (theme.js, no inline script)
+ * and the middleware (CSP, the hour's Cache-Control).
+ */
+export async function checkCard({ homeHtml }) {
+  const { res, html } = await fetchRoute('/card');
+  checkStatus('card: 200 OK', res, 200);
+  checkHeader('card: Cache-Control max-age=3600', res, 'cache-control', 'max-age=3600');
+  check('card: CSP header', Boolean(res.headers.get('content-security-policy')));
+  const headEnd = html.indexOf('</head>');
+  check(
+    'card: theme script in <head>',
+    headEnd > 0 && /<script src="\/scripts\/theme\.js"><\/script>/.test(html.slice(0, headEnd)),
+  );
+  check(
+    'card: no inline <script>',
+    !/<script(?![^>]*\bsrc=)(?![^>]*type=["']application\/ld\+json)[^>]*>/i.test(html),
+  );
+  check(
+    'card: bare — no masthead, nav, toggle or footer',
+    !html.includes('class="masthead') &&
+      !html.includes('broadsheet-nav') &&
+      !html.includes('class="theme-toggle"') &&
+      !html.includes('class="site-foot"'),
+  );
+  // A regex, not the string the masthead check uses: the page's scoped <style>
+  // stamps a data-astro-cid-* attribute on every element it styles.
+  check('card: the wordmark', /Matthew <span class="surname"[^>]*>Rossi<\/span>/.test(html));
+  // The page re-renders per request, so it may follow the masthead's TAGLINE.
+  check('card: the masthead TAGLINE', html.includes(TAGLINE));
+  // A text-thread preview keeps og:description indefinitely, like the OG card.
+  check(
+    'card: og:description is CARD_DESCRIPTION',
+    html.includes(`<meta property="og:description" content="${CARD_DESCRIPTION}">`),
+  );
+  check('card: indexable (no robots meta)', !/<meta name="robots"/.test(html));
+  for (const href of ['/api/vcard', '/api/contact', '/']) {
+    check(`card: links ${href}`, html.includes(`href="${href}"`));
+  }
+  check('card: inline QR path from src/lib/card-qr.js', html.includes(`d="${QR_PATH}"`));
+  // The rule /api/contact exists for: the address is never in a page. /card is
+  // the one page linking both endpoints that carry it.
+  check(
+    'card: the address is not in the HTML',
+    !html.includes(CONTACT_EMAIL) && !html.includes('mailto:'),
+  );
+  check('home: no nav link to /card', !homeHtml.includes('href="/card"'));
+
+  const vcf = await fetch(`${BASE}/api/vcard`);
+  const body = await vcf.text();
+  checkStatus('vcard: 200 OK', vcf, 200);
+  checkHeader('vcard: Content-Type text/vcard', vcf, 'content-type', 'text/vcard; charset=utf-8');
+  checkHeader('vcard: Content-Disposition inline', vcf, 'content-disposition', 'inline; filename="matthew-rossi.vcf"');
+  checkHeader('vcard: Cache-Control no-store', vcf, 'cache-control', 'no-store');
+  checkHeader('vcard: nosniff', vcf, 'x-content-type-options', 'nosniff');
+  check(
+    'vcard: CRLF throughout, every line within 75 octets',
+    body.endsWith('\r\n') &&
+      !/\r(?!\n)|(?<!\r)\n/.test(body) &&
+      body.split('\r\n').every((line) => Buffer.byteLength(line, 'utf8') <= 75),
+  );
+  const unfolded = body.replace(/\r\n /g, '');
+  check(
+    'vcard: NOTE is CARD_TAGLINE, never TAGLINE',
+    unfolded.includes(`\r\nNOTE:${CARD_TAGLINE}\r\n`) && !unfolded.includes(TAGLINE),
+  );
+  // Read back from the redirect rather than from CONTACT_EMAIL, so the two
+  // endpoints are compared with each other and not each with the constant.
+  const contact = await fetch(`${BASE}/api/contact`, { redirect: 'manual' });
+  const mailto = (contact.headers.get('location') ?? '').replace(/^mailto:/, '');
+  check(
+    'vcard: EMAIL matches /api/contact',
+    Boolean(mailto) && unfolded.includes(`\r\nEMAIL;TYPE=INTERNET:${mailto}\r\n`),
+  );
+  check('vcard: carries a JPEG PHOTO', /\r\nPHOTO;ENCODING=b;TYPE=JPEG:\/9j\//.test(unfolded));
 }

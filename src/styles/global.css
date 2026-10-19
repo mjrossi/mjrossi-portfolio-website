@@ -24,6 +24,15 @@
   --text-2: #3a312a;
   --rule-strong: #b39a6e;
 
+  /* The QR tile on /card: Paper's --text on Paper's --bg, as literal values,
+     and deliberately ABSENT from both Night blocks. An inverted QR code (light
+     modules on dark) fails on a share of real scanners, so the tile stays
+     Paper in both themes. Literals, not var(--text) / var(--bg): those
+     follow the active theme, so under Night they would be cream on brown.
+     Smoke asserts neither Night block declares a --qr- token. */
+  --qr-ink: oklch(20% 0.01 75);
+  --qr-tile: oklch(97.5% 0.008 75);
+
   /* Newsprint grain on the masthead band. Multiply darkens cream paper; on
      Night it would vanish, so the dark theme screens it at lower strength. */
   --grain-opacity: 0.35;

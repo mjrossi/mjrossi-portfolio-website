@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { securityHeaders } from '../../lib/server';
+import { CONTACT_EMAIL } from '../../lib/contact.js';
 
 // On-demand redirect so the address never appears in static HTML. The
 // deployment is a Worker with Static Assets (not classic Pages), so
@@ -11,6 +12,6 @@ export const GET: APIRoute = () =>
     status: 302,
     headers: {
       ...securityHeaders,
-      Location: 'mailto:hello@mjrossi.com',
+      Location: `mailto:${CONTACT_EMAIL}`,
     },
   });

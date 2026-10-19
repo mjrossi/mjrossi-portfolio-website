@@ -5,7 +5,8 @@
 // `/api/vcard` puts it in the `.vcf` a recipient saves. Keeping the address out
 // of rendered pages is the reason both are endpoints — see
 // `src/pages/api/contact.ts` — so nothing under `src/pages/*.astro` or
-// `src/components/` may import this. Smoke asserts `/card`, the one page that
-// links both, never contains it.
+// `src/components/` may import this. Smoke holds all three: no `.astro` file
+// imports this or vcard.js, no other file in src/, public/ or scripts/ spells
+// the address, and nothing in dist/client carries it.
 
 export const CONTACT_EMAIL = 'hello@mjrossi.com';

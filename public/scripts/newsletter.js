@@ -37,8 +37,10 @@
   const emailInput = form.querySelector('input[name=email]');
   const hpInput = form.querySelector('input[name=company]');
 
-  function showError(text) {
-    msg.textContent = text;
+  // Text and nodes, so the fallback can carry a link. Strings still land as
+  // text — replaceChildren never parses HTML.
+  function showError(...parts) {
+    msg.replaceChildren(...parts);
     msg.classList.add('is-error');
     window.turnstile?.reset?.();
     btn.disabled = false;
@@ -94,8 +96,13 @@
       // collapses to one fallback with a recovery action; the server still
       // emits each code distinctly so worker logs retain the diagnostic
       // detail.
-      const fallback =
-        "Something's off on our end. Please email hello@mjrossi.com and I'll add you manually.";
+      //
+      // The recovery action is a link to /api/contact, not the address: this
+      // file is a static asset, and the address is in no static file.
+      const contact = document.createElement('a');
+      contact.href = '/api/contact';
+      contact.textContent = 'contact me';
+      const fallback = ["Something's off on our end. Please ", contact, " and I'll add you manually."];
       const messages = {
         // (A) user-fixable
         invalid_email: 'That email address looks off.',
@@ -108,7 +115,7 @@
           "Couldn't reach our email provider. Check your connection and try again.",
         turnstile_unreachable: "Couldn't reach the spam-check service. Try again shortly.",
       };
-      showError(messages[data.error] ?? fallback);
+      showError(...(Object.hasOwn(messages, data.error) ? [messages[data.error]] : fallback));
     } catch {
       showError('Network error. Please try again.');
     }

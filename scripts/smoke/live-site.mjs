@@ -371,8 +371,8 @@ export async function checkEndpoints({ homeHtml, blog }) {
   const contact = await fetch(`${BASE}/api/contact`, { redirect: 'manual' });
   checkStatus('contact: 302 redirect', contact, 302);
   check(
-    'contact: Location is mailto:hello@mjrossi.com',
-    contact.headers.get('location') === 'mailto:hello@mjrossi.com',
+    'contact: Location is mailto:CONTACT_EMAIL',
+    contact.headers.get('location') === `mailto:${CONTACT_EMAIL}`,
     contact.headers.get('location') ?? '(none)',
   );
   checkHeader('contact: Cache-Control no-store', contact, 'cache-control', 'no-store');
@@ -597,6 +597,9 @@ export async function checkCard({ homeHtml }) {
     'card: og:description is CARD_DESCRIPTION',
     html.includes(`<meta property="og:description" content="${CARD_DESCRIPTION}">`),
   );
+  // Not the home page's title: both are indexable, and two pages sharing one
+  // read as duplicates to a search engine and in a tab strip.
+  check('card: its own <title>', html.includes('<title>Card — Matthew Rossi</title>'));
   check('card: indexable (no robots meta)', !/<meta name="robots"/.test(html));
   for (const href of ['/api/vcard', '/api/contact', '/']) {
     check(`card: links ${href}`, html.includes(`href="${href}"`));

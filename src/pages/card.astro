@@ -18,7 +18,7 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
 import { QR_SIZE, QR_PATH } from '../lib/card-qr.js';
 ---
 
-<Base title="Matthew Rossi" description={CARD_DESCRIPTION} bare>
+<Base title="Card" description={CARD_DESCRIPTION} bare>
   <div class="card-sheet">
 
     <section class="card-face card-front" aria-label="Card, front">
@@ -147,7 +147,7 @@ import { QR_SIZE, QR_PATH } from '../lib/card-qr.js';
     flex-wrap: wrap;
     justify-content: center;
     font-family: var(--font-ui);
-    font-size: clamp(0.594rem, 2.9cqi, 0.75rem);
+    font-size: clamp(0.656rem, 2.9cqi, 0.75rem);
     font-weight: 600;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -157,6 +157,24 @@ import { QR_SIZE, QR_PATH } from '../lib/card-qr.js';
   .card-folio .dot {
     color: var(--accent-rule);
     margin: 0 0.6em;
+  }
+
+  /* The floor is the core folio size, 10.5px, and at that size the line needs
+     a face 289px wide (measured) — about a 344px phone. Below it, flex-wrap
+     alone strands the dot at the end of line one, so a narrow face stacks the
+     two items and drops it. The query measures the face's CONTENT box, inside
+     its 7% padding: 258px is a 300px face, which leaves room for font-
+     rendering differences. A face that would just fit stacks instead, which
+     costs nothing. */
+  @container (max-width: 258px) {
+    .card-folio {
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .card-folio .dot {
+      display: none;
+    }
   }
 
   /* --accent-surname is display-only (≥24px). The clamp's floor is that rule,

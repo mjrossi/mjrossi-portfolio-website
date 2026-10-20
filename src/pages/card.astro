@@ -88,6 +88,10 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     aspect-ratio: 85 / 55;
     container-type: inline-size;
     padding: 6% 7%;
+    /* Both faces are <section>s, which global.css gives a 3rem bottom margin.
+       The front's old 4px (room for its double rule) overrode that by
+       accident; the back kept it, and sat the pair 24px above centre. */
+    margin: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -99,7 +103,6 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
   .card-front {
     background: var(--accent-band);
     border: 1px solid var(--accent-band-border);
-    margin-bottom: 4px;
   }
 
   /* Newsprint grain, as on .masthead::before. */
@@ -114,17 +117,9 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     background-size: 220px 220px;
   }
 
-  /* The double rule: the face's own border, a gap, then a heavier line. */
-  .card-front::after {
-    content: '';
-    position: absolute;
-    left: -1px;
-    right: -1px;
-    bottom: -5px;
-    height: 2px;
-    background: var(--accent-band-border);
-    pointer-events: none;
-  }
+  /* No double rule. The masthead's closes a band that spans the page; under
+     a card face it read as a stray second edge, and hung the front 5px below
+     the back where the two sit side by side. A card has one edge. */
 
   .card-front > * {
     position: relative;

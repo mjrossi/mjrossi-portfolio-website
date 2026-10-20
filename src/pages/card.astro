@@ -40,7 +40,7 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
 
     <section class="card-face card-back" aria-label="Card, back">
       <ul class="card-contact">
-        <li><a class="card-add" href="/api/vcard">Add to contacts</a></li>
+        <li><a class="card-add" href="/api/vcard"><span>Add to contacts</span><span class="card-go" aria-hidden="true">+</span></a></li>
         <li><a class="card-row" href="/api/contact"><span>Email</span><span class="card-go" aria-hidden="true">→</span></a></li>
         <li><a class="card-row" href="/"><span>mjrossi.com</span><span class="card-go" aria-hidden="true">→</span></a></li>
       </ul>
@@ -292,10 +292,13 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
      --text so it still out-ranks the accent links beside it. Full width at a
      44px tap height. --text on --accent-band is the wordmark's own pair, so it
      clears 4.5:1 in both themes; the focus ring is the global one. */
+  /* Left-aligned, with its glyph at the right like the rows below it, so it
+     reads as the list's first row rather than a widget above the list: + to
+     save, → to go. */
   .card-contact .card-add {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     gap: 0.5em;
     min-height: 44px;
     padding: 0.5em 1em;
@@ -305,6 +308,10 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     color: var(--text);
     font-weight: 600;
     transition: border-color 0.15s ease;
+  }
+
+  .card-add .card-go {
+    color: var(--accent);
   }
 
   .card-contact .card-add:hover {

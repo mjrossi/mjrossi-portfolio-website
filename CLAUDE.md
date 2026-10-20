@@ -85,6 +85,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `src/lib/admin-path.js` — `isAdminPath`, shared by middleware and the sitemap filter, because three things must agree on the answer.
 - `src/lib/desk.js` — `deskIndex` (a **union**, not a filter) and `countdown` (calendar days in UTC, not elapsed time).
 - `src/lib/server.ts` — shared `/api/*` plumbing. `tryGetEnv()` is the fail-closed read; `refuse` **drains** the request body rather than cancelling it.
+- `src/lib/fetch-retry.js` — `fetchWithRetry`, re-exported by `server.ts`. A per-attempt timeout; retries resend the same request, so siteverify carries an `idempotency_key`.
 - `src/env.d.ts` — Cloudflare `Env`, `ImportMetaEnv`, `App.Locals`, `__BUILD_TIME__`. **`undefined` must always mean denied.**
 - `wrangler.jsonc` — Worker config, `ASSETS` binding, the Access `vars`, and `SESSION` (which the adapter injects whether or not it is used).
 - `astro.config.mjs` — adapter, MDX, sitemap (**filtered through `isAdminPath`**), fonts, and the `__BUILD_TIME__` define.

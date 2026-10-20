@@ -294,8 +294,8 @@ a.masthead-name-link:hover .surname {
 
 /* Ruled cells with lower-case Roman numerals, ported from Atlas .nav: a
    rule-strong frame top and bottom, hairline dividers between cells, and the
-   current page underlined in --accent. The phone-width behaviour (one
-   scrolling row, Blog pinned) is in the 639px query below and is unchanged. */
+   current page underlined in --accent. The phone-width behaviour (a ruled
+   3 + 2 grid) is in the 639px query below. */
 .broadsheet-nav {
   background: var(--bg);
   border-top: 1px solid var(--rule-strong);
@@ -428,7 +428,7 @@ a.masthead-name-link:hover .surname {
   }
 }
 
-/* Between the phone row (which scrolls, 639px and down) and the full row, the
+/* Between the phone grid (639px and down) and the full row, the
    cells must fit the sheet unaided: at the core's 22px padding and 0.22em
    tracking with numerals they need ~725px, so without this band the page
    scrolled sideways and clipped Blog (it did, at 640–695px, before this rule).
@@ -1156,114 +1156,63 @@ em {
     font-size: 0.56rem;
   }
 
-  /* ONE LINE THAT SCROLLS — a section bar, not a wrapped row.
-     Five links wrapped differently at every width: 3+2 at 320 and 360, 4+1 at
-     390 and 414, which strands "Blog" alone on the iPhone widths and reads as
-     an accident rather than a decision. A single scrolling row cannot wrap at
-     all, and it halves the nav (81px → 45px) on the way.
-     It is also the rule this codebase already applies to anything too wide for
-     a phone — see .post-diagram: the box scrolls, the page body never does.
-     Keyboard users reach the far end by Tab, which scrolls it into view
-     without any script.
+  /* A RULED 3 + 2 GRID — every section on screen at once.
+     Five labels need 507px in one row, so below ~510px there is no width at
+     which they fit (not even with "Urban Mobility" shortened and the tracking
+     cut: ~350px against 320). The row used to scroll sideways with Blog pinned
+     to its right edge, and that hid two things. It hid the overflow: the cut
+     landed against Blog's own divider, so at 375 and 390 what showed was a
+     sliver of "U" between two hairlines — an empty-looking cell, not a word
+     that continues. And it hid the CURRENT page: on /urban-mobility at 375 the
+     active cell sat under the pinned Blog, 3px of its underline showing. A
+     fade on the cut was tried first and rendered in Chrome but not Firefox.
 
-     What must NOT be left to the scroll is the blog — see
-     `.page-links a.nav-pinned` below. */
+     This is not the wrapping that the scroller replaced. That was flex-wrap,
+     which split 3+2 at 320 and 360 but 4+1 at 390 and 414 and stranded Blog
+     alone; a grid has one split at every width. Thirds above, halves below —
+     "Urban Mobility", the longest label, gets a half. The cost is one more
+     44px row, about what the wrapped nav (81px) used to take. */
   .broadsheet-nav-inner {
     padding: 0;
   }
 
   .broadsheet-nav-inner .page-links {
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
     width: 100%;
-    gap: 0;
-    /* The gutter moves onto the scroller so the row starts flush with the page
-       and runs to the very edge — clipped mid-label rather than at an inset,
-       which is what makes "there is more" legible.
-       LEFT ONLY. The right gutter belongs to the pinned link below, which
-       carries it as its own padding so that its opaque background reaches the
-       screen edge; left here, the scrolling labels would show through the strip
-       between the pin and the edge. */
-    padding: 0 0 0 var(--pad);
-    /* overflow-x: auto computes overflow-y to auto as well, and the active
-       link's 3px underline sits at bottom: -1px — so every non-front route got
-       a 1px vertical scroll and a clipped underline. */
-    overflow-y: hidden;
-    scroll-snap-type: x proximity;
-    /* The gutter above is padding ON the scroller, so without this the snap
-       engine aligns the first link against the padding box and rests at
-       scrollLeft: 20 — "Work" flush to the screen edge rather than on the
-       page's margin. Insetting the snapport by the same gutter puts the resting
-       position back at 0. */
-    scroll-padding-inline-start: var(--pad);
-    scrollbar-width: none;
   }
 
   .broadsheet-nav-inner .page-links a {
-    flex: 0 0 auto;
-    scroll-snap-align: start;
-    padding: 0 12px;
+    grid-column: span 2;
+    justify-content: center;
+    /* The tap-target floor, not the core's 48px cell: two rows of 48 are a lot
+       of masthead to scroll past on every page. */
+    height: 44px;
+    padding: 0 6px;
+  }
+
+  .broadsheet-nav-inner .page-links a:nth-child(n + 4) {
+    grid-column: span 3;
+  }
+
+  .broadsheet-nav-inner .page-links a:nth-child(-n + 3) {
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Each row runs to the screen edge; .broadsheet-nav's frame closes it. */
+  .broadsheet-nav-inner .page-links a:nth-child(3),
+  .broadsheet-nav-inner .page-links a:last-child {
+    border-right: 0;
   }
 
   /* The numerals are a broadsheet conceit; next to five short labels in a
-     scrolling row they are noise (Atlas drops them on phones too). */
+     small grid they are noise (Atlas drops them on phones too). */
   .page-links .roman {
     display: none;
   }
 
   .broadsheet-nav-inner .page-links a:first-child {
     border-left: 0;
-  }
-
-  /* THE BLOG DOES NOT SCROLL AWAY.
-     Measured on the real page before this rule existed, "Blog" was 0px visible
-     at 320, 360, 375 AND 390 — every common phone width — and only 6px at 414.
-     It was reachable solely by scrolling a row that gave no sign it could
-     scroll.
-
-     What stood there instead was a 32px fade mask on the row's right edge,
-     driven by a scroll-timeline animation. Two things were wrong with it. It is
-     not an affordance: at 375 the row ends on the complete phrase "Urban
-     Mobility", so a dimmed final label reads as the end of the list rather than
-     as a cut. And it was engine-dependent in a way nothing here could see —
-     the fade computes correctly in Chrome (verified: 32px at rest) and is
-     absent in a Firefox render of the same page, which is where this was
-     reported from.
-
-     So the one link that must never be missed stops scrolling. `position:
-     sticky` inside the scroller holds it against the right edge while the other
-     four run underneath — and content visibly disappearing beneath a pinned
-     item is the affordance the fade was reaching for, drawn by layout rather
-     than by an animation. No width threshold: where the row does not overflow
-     (roughly 510px up to this query's ceiling) sticky simply has nothing to do
-     and the link sits in flow. */
-  .broadsheet-nav-inner .page-links a.nav-pinned {
-    position: sticky;
-    right: 0;
-    /* Sticky makes a stacking context; last-in-DOM would paint on top anyway,
-       but say so rather than depend on source order. */
-    z-index: 1;
-    /* Opaque, or the labels passing underneath show through. Matches
-       .broadsheet-nav's own background. */
-    background: var(--bg);
-    /* The row's right gutter, carried here — see the scroller's padding above. */
-    padding-right: var(--pad);
-    /* Reads as a divider between the section pages and the periodical at every
-       width, and as the edge things vanish behind while the row is scrolling. */
-    border-left: 1px solid var(--border);
-    /* Snapping the pinned link would let the scroller rest with it part-way off
-       screen, which is the whole failure being fixed. */
-    scroll-snap-align: none;
-  }
-
-  /* .active paints --bg2 and must keep winning over the opaque background
-     above — this is the /blog page's own nav entry. */
-  .broadsheet-nav-inner .page-links a.nav-pinned.active {
-    background: var(--bg2);
-  }
-
-  .broadsheet-nav-inner .page-links::-webkit-scrollbar {
-    display: none;
   }
 
   .colophon-strip {

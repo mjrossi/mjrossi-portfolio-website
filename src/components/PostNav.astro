@@ -1,24 +1,10 @@
 ---
-// Previous / next, below the tag footer and the subscribe card (finding 1.5).
+// Previous / next by date, below the tag footer and subscribe card.
 //
-// A finished post used to end on "← All posts" and nothing else. Chronological
-// neighbours are the cheapest exit available and need no related-post logic.
-//
-// A missing neighbour renders NOTHING — no cell, no placeholder. It used to
-// render "Newest post" / "Oldest post" in muted type, on the argument that a
-// one-column nav on a two-column layout reads as a broken cell. That argument
-// was wrong in practice and the placeholder was worse than the gap it filled:
-// under the "NEXT →" key, "Newest post" reads as the *title of the next post*,
-// and the cell that carries a link everywhere else is suddenly dead. A reader's
-// first conclusion is a broken link, not "you are at the end of the archive".
-//
-// The layout half is handled in CSS instead: `.post-nav` is `grid-auto-flow:
-// column` over `grid-auto-columns: 1fr`, so one child fills the row and two
-// split it. There is no half-empty cell to look broken.
-//
-// Both neighbours missing means no nav at all — that is the fixture post and a
-// single-post archive, neither of which has anywhere to go but "All posts",
-// which the layout renders directly below this.
+// A missing neighbour renders NOTHING. The old muted "Newest post" placeholder
+// read as the title of the next post, and as a dead link. One child fills the
+// grid row (`grid-auto-flow: column`), so there is no half-empty cell. With no
+// neighbours at all (the fixture, a one-post archive) there is no nav.
 import type { Post } from '../lib/blog.ts';
 
 interface Props {

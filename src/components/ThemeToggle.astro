@@ -1,13 +1,8 @@
 ---
-// Auto · Light · Dark, as three small glyphs: a half-filled disc (follow the
-// system), a sun, a moon. Rendered ONCE, in the masthead folio beside the
-// edition — the one line of chrome that is on screen at every width, so the
-// switch is at the top of the page on a phone without a second copy anywhere.
-//
-// Rendered `hidden`: /scripts/theme.js reveals it and keeps aria-pressed in
-// sync, so a reader without JavaScript never meets a control that does nothing
-// — they get their system theme via prefers-color-scheme instead. Icon-only, so
-// each button carries its own aria-label, and a title for the pointer.
+// Auto · Light · Dark as three glyphs, rendered ONCE in the masthead folio (on
+// screen at every width). Rendered `hidden`: theme.js reveals it, so a reader
+// without JS never meets a control that does nothing. Icon-only, so each button
+// has an aria-label and a title.
 ---
 <div class="theme-toggle" role="group" aria-label="Colour theme" hidden>
   <button type="button" data-theme-choice="auto" aria-pressed="true" aria-label="Match system theme" title="Match system">

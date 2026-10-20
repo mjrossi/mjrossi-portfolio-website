@@ -1,22 +1,12 @@
 ---
-// The presenter's view of /card: the QR code, held up to someone else's phone.
-// The name above it says whose code it is, and that is all — no links, no
-// contact actions. Anyone who reaches this page other than the person holding
-// it up followed a link they had no need of; the code takes them to /card,
-// which is where everything they might want lives.
+// The presenter's view of /card: the wordmark over a QR code, held up to
+// someone else's phone. Nothing else — anything they want is on /card, which
+// the code points at, never here. Split from /card because the presenter needs
+// the code as large as the screen allows with no scroll (with /card's links
+// above it, it sat under Safari's toolbars).
 //
-// Split from /card because the two audiences want opposite pages. The scanner
-// lands on /card and needs "Add to contacts"; a code pointing at the page they
-// are already on is useless to them. The presenter needs the code as large as
-// the screen allows and fully visible without scrolling — with the links above
-// it on one page, its bottom edge sat near 775px on a 390 × 844 phone, under
-// Safari's toolbars.
-//
-// The code points at /card, never here. It is generated once and committed
-// (src/lib/card-qr.js); printed cards will carry the same URL.
-//
-// bare, out of the sitemap (astro.config.mjs) and the nav, and — unlike /card —
-// noindex: a search result that lands on a bare QR code helps nobody.
+// The code is committed (src/lib/card-qr.js); printed cards carry the URL.
+// bare, out of the sitemap and nav, and noindex.
 import Base from '../../layouts/Base.astro';
 import { CARD_DESCRIPTION } from '../../lib/identity.js';
 import { QR_SIZE, QR_PATH } from '../../lib/card-qr.js';
@@ -39,8 +29,7 @@ import { QR_SIZE, QR_PATH } from '../../lib/card-qr.js';
 </Base>
 
 <style>
-  /* Scoped to this route, as on /card. Every colour is a token; the QR tile's
-     two are Paper-only by design (see global.css). No motion of any kind. */
+  /* Scoped. The QR tile's two colours are Paper in both themes (see global.css). */
 
   :global(main.bare) {
     min-height: 100vh; /* before svh: Safari < 15.4, Chrome < 108 */
@@ -59,8 +48,7 @@ import { QR_SIZE, QR_PATH } from '../../lib/card-qr.js';
     gap: 1.25rem;
   }
 
-  /* The masthead wordmark, small. --accent-surname is display-only (≥24px);
-     the floor is that rule, in px so it cannot drift with the root size. */
+  /* --accent-surname is ≥24px only; the floor is that rule, in px. */
   .qr-name {
     margin: 0;
     font-family: var(--font-serif);
@@ -78,12 +66,9 @@ import { QR_SIZE, QR_PATH } from '../../lib/card-qr.js';
     color: var(--accent-surname);
   }
 
-  /* The whole content width on a phone (350px at 390), and never taller than
-     the SMALL viewport leaves room for — svh is the height with the browser's
-     toolbars showing, so the code is whole on screen without a scroll in
-     portrait and in landscape. The tile is the whole viewBox, the 4-module
-     quiet zone included, and is Paper in both themes: dark modules on a light
-     ground, always. */
+  /* Full content width, never taller than the SMALL viewport (svh: toolbars
+     showing), so the code is whole on screen in both orientations. The tile
+     is the whole viewBox, quiet zone included. */
   .card-qr {
     display: block;
     width: min(100%, 100vh - 9rem); /* drops whole without svh — keep a width */

@@ -1,16 +1,10 @@
 ---
-// The Desk index — "what is outstanding?", answerable from a phone.
+// The Desk index: "what is outstanding?", answerable from a phone.
 //
-// Access-gated in src/middleware.ts, which 404s anything without a verified JWT
-// before this file runs. Nothing here re-checks that: one gate, one place to get
-// wrong. Middleware also forces no-store + noindex on the response, which
-// matters more here than anywhere else in the site — this page is the whole
-// draft inventory in one document.
-//
-// READ-ONLY, and that is what makes it cheap. No forms and no fetch, so the
-// site-wide CSP (`script-src 'self'`, `form-action 'none'`) needs no carve-out
-// and this page ships not one byte of client JavaScript. Minting, extending and
-// revoking stay on the laptop — see CLAUDE.md, "The Desk".
+// Middleware 404s anything without a verified Access JWT before this runs, and
+// forces no-store + noindex — this page is the whole draft inventory. Nothing
+// re-checks: one gate. READ-ONLY, with no forms and no JS, so the site CSP
+// needs no carve-out. Minting and revoking stay on the laptop.
 import { getCollection } from 'astro:content';
 import Desk from '../../layouts/Desk.astro';
 import { countdown, deskIndex, plural } from '../../lib/desk.js';
@@ -22,11 +16,8 @@ import { dateFormatter, isoDate } from '../../lib/blog.ts';
 
 export const prerender = false;
 
-// getCollection directly, NOT getPublishedPosts — that helper exists to hide
-// exactly the posts this page is for, and threading a "show me the drafts" flag
-// through it would put a draft-revealing argument in the module that backs the
-// public index, the tag pages and the RSS feed. The feed is what triggers
-// Buttondown's irreversible send; it must stay incapable of showing a draft.
+// getCollection directly, NOT getPublishedPosts: a "show drafts" flag must
+// never reach the module behind the public index, tag pages and RSS.
 const posts = (await getCollection('blog')).map((post) => ({
   slug: post.id,
   title: post.data.title,
@@ -35,10 +26,8 @@ const posts = (await getCollection('blog')).map((post) => ({
 
 const DB = tryGetEnv()?.DB ?? null;
 
-// A missing binding is reported rather than thrown. The scheduled-post half of
-// this page needs no database at all, and losing the whole Desk because D1 is
-// unreachable would be the wrong trade on the page you open when something is
-// already wrong.
+// A missing binding is reported, not thrown: the scheduled half needs no D1,
+// and this is the page you open when something is already wrong.
 let links = [];
 let openNotes = new Map();
 let dbError = DB ? null : 'no DB binding on this worker';
@@ -54,10 +43,7 @@ if (DB) {
 const now = Date.now();
 const { posts: rows, orphans, totals } = deskIndex({ posts, links, openNotes, now });
 
-// countdown lives in desk.js with the rest of what this page decides — it
-// counts calendar days rather than elapsed time, for reasons that are a silent
-// wrong number rather than an error. Only ever called for a post that has NOT
-// published, so its count cannot be negative here.
+// countdown (desk.js) is only called for unpublished posts.
 ---
 
 <Desk
@@ -122,11 +108,7 @@ const { posts: rows, orphans, totals } = deskIndex({ posts, links, openNotes, no
             return (
               <li class="desk-link">
                 <span class="desk-link-id">{link.id}</span>
-                {/* Linked, not just named. /admin/<slug> handles a missing post
-                    deliberately — see that file's header — and this is the only
-                    route to it, since an orphan slug is by definition absent
-                    from the list above. Left as plain text the operator had to
-                    retype the URL for the links most in need of withdrawing. */}
+                {/* Linked: /admin/<slug> handles a missing post, and this is the only route there. */}
                 <a class="desk-link-who" href={`/admin/${group.slug}/`}>{group.slug}</a>
                 <span class="desk-link-who">{link.reviewer ?? 'view only'}</span>
                 <span class={`desk-state desk-state-${state.state}`}>{state.state}</span>

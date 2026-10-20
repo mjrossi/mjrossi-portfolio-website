@@ -1,19 +1,9 @@
-// Canonical non-CSP security header set for the site. Imported by:
-//   - src/middleware.ts (applies it to every response the worker generates)
-//   - scripts/gen-headers.mjs (writes it into dist/client/_headers so the
-//     Cloudflare ASSETS binding serves the same set on static assets)
+// The non-CSP security headers, shared by src/middleware.ts (every worker
+// response) and scripts/gen-headers.mjs (static assets). Middleware sets them
+// only when absent, so /api/*'s stricter values win.
 //
-// Plain JS (not TS) for the same reason as csp.js — both Astro/Vite (src/)
-// and a vanilla Node script (scripts/) import it without TypeScript tooling
-// on the Node side.
-//
-// CSP lives in csp.js, not here: it is applied only to HTML responses by
-// middleware, whereas this set applies to everything the worker emits.
-//
-// Middleware applies these with set-if-absent semantics, so a route that has
-// deliberately chosen a stricter value keeps it — /api/* responses built via
-// src/lib/server.ts send `Referrer-Policy: no-referrer` and
-// `Cache-Control: no-store`, and those must not be widened by the default.
+// Referrer-Policy is load-bearing: preview tokens ride in URLs, and
+// `unsafe-url` would hand every review link to every site a draft links to.
 
 export const SECURITY_HEADERS = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',

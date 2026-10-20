@@ -1,42 +1,24 @@
-// Finding a galley note's passage in the .mdx as it stands now, and emitting
-// reviewer-authored text into markdown without letting it restructure the
-// document. See CLAUDE.md, "The galley".
-//
-// Split out of scripts/galley-pull.mjs so `node --test` can reach it. That
-// script parses argv and shells out to wrangler at import time, so every one of
-// these functions was unreachable from a test — which is the wrong way round,
-// because this is the least obvious code in the feature. The two invariants
-// that matter (an ambiguous quote resolves to NOTHING; typography is folded on
-// both sides before searching) are asserted in galley-relocate.test.js.
-//
-// Plain JS for the same reason as csp.js, schedule.js, and preview.js.
+// Finding a note's passage in the .mdx as it stands now, and emitting
+// reviewer-written text into markdown without letting it restructure the file.
+// Out of scripts/galley-pull.mjs so `node --test` can reach it. The two
+// invariants: an ambiguous quote resolves to NOTHING, and typography is folded
+// on both sides before searching.
 
 /**
- * Strip inline markdown down to the text a browser would render.
+ * Strip inline markdown to the text a browser renders.
  *
- * Applied to the SOURCE side only, and this direction matters. A note's quote
- * comes from `block.textContent`, which has no markup in it at all, while the
- * search runs against raw .mdx — so any selection spanning a link, emphasis, or
- * a code span is not a substring of the line that contains it:
+ * SOURCE side only. A quote comes from `textContent`, with no markup, so a
+ * selection spanning a link or emphasis is not a substring of the raw line:
  *
  *   source: `we shipped [the Atlas](https://…) last spring`
  *   quote:  `we shipped the Atlas last spring`
  *
- * Every post in this repo carries inline links, and editors select whole
- * sentences, so without this the second half of the two-part anchor is dead
- * exactly when the line range has gone stale and it is the only half left.
- *
- * One-directional on purpose: folding the quote side too would mean guessing at
- * markup the client already discarded, and a wrong guess produces a confident
- * match on the wrong passage. Here the worst case is a line that fails to
- * match, which is the behaviour that was already being reported safely.
+ * Folding the quote side too would mean guessing at discarded markup, and a
+ * wrong guess is a confident match on the wrong passage.
  */
 export function unmark(text) {
-  // Escaped punctuation is literal text, not markup, so it has to come out of
-  // the way BEFORE the stripping passes below rather than after. Unescaping
-  // last looks tidier and is wrong: the emphasis rule reaches `\*` first, eats
-  // the asterisk, and leaves a bare backslash in prose that never had one.
-  // Parked as a NUL-delimited index, which cannot occur in .mdx source.
+  // Escapes are parked BEFORE stripping: unescaping last lets the emphasis rule
+  // eat `\*`'s asterisk and leave a stray backslash. NUL can't occur in .mdx.
   const literals = [];
   const parked = String(text).replace(/\\([\\`*_{}[\]()#+\-.!])/g, (_, ch) => {
     literals.push(ch);
@@ -44,30 +26,22 @@ export function unmark(text) {
   });
 
   const stripped = parked
-    // Images contribute nothing to textContent — alt text is an attribute.
+    // Images: alt text is an attribute, not textContent.
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    // Inline and reference links render as their label.
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]*)\]\[[^\]]*\]/g, '$1')
-    // Emphasis and strong.
     .replace(/\*{1,3}/g, '')
-    // Underscore emphasis, at word boundaries only: snake_case identifiers and
-    // file names appear in this blog's prose and must survive intact.
+    // Underscores at word boundaries only, so snake_case survives.
     .replace(/(^|[\s([{])_{1,3}(?=\S)/g, '$1')
     .replace(/(\S)_{1,3}(?=$|[\s.,;:!?)\]}])/g, '$1')
-    // Inline code spans.
     .replace(/`+/g, '');
 
   return stripped.replace(/\u0000(\d+)\u0000/g, (_, i) => literals[Number(i)]);
 }
 
 /**
- * Normalise typography so a browser selection can match .mdx source.
- *
- * Astro's smartypants turns ' into ’ and -- into an em dash, so an editor's
- * selection never matches the source byte-for-byte. Folding both sides is what
- * makes "find the passage this note is about" work at all — without it every
- * single note would look like it had drifted.
+ * Normalise typography on both sides. Smartypants turns ' into ’ and -- into a
+ * dash, so without this every note would look drifted.
  */
 export function fold(text) {
   return String(text)
@@ -82,10 +56,7 @@ export function fold(text) {
 }
 
 /**
- * Build a `locate` bound to one file's lines.
- *
- * A factory rather than a free function because the folded form of every line
- * is computed once per pull and reused across every note.
+ * Build a `locate` for one file; each line is folded once per pull.
  *
  * @param {string[]} sourceLines the .mdx split on newlines
  */
@@ -93,22 +64,12 @@ export function createLocator(sourceLines) {
   const foldedLines = sourceLines.map((line) => fold(unmark(line)));
 
   /**
-   * Where does this quote live in the file as it stands now?
+   * The 1-based line this quote is on now, or null. A quote spanning a source
+   * line break returns null and is flagged for a human, never guessed.
    *
-   * Returns a 1-based line number, or null. This is what makes a note
-   * applicable after the post has been revised: the stored line number may be
-   * stale, but the quote usually still identifies the passage. Paragraphs in
-   * this repo are single long lines, so a per-line search finds nearly
-   * everything; a quote that spans a source line break falls through to null
-   * and is reported as needing a human eye rather than guessed at.
-   *
-   * `prefix` / `suffix` are the ~32 characters either side of the selection,
-   * recorded by public/scripts/galley.js. They are the second half of the
-   * two-part anchor and exist for exactly one case: the quote is findable but
-   * appears more than once. A bare quote search has to give up there — naming
-   * one of three identical sentences is how a note gets applied in the wrong
-   * section — whereas the surrounding context usually separates them. Retrying
-   * with the context is therefore the whole point of storing it.
+   * `prefix` / `suffix` (~32 characters either side, from galley.js) exist for
+   * one case: the quote appears more than once. Naming one of three identical
+   * sentences is how a note lands in the wrong section.
    */
   return function locate(quote, prefix = '', suffix = '') {
     if (!quote) return null;
@@ -120,31 +81,24 @@ export function createLocator(sourceLines) {
     }
     if (hits.length === 1) return hits[0];
 
-    // Ambiguous. Re-search with the context either side folded in. Both sides
-    // are folded together rather than separately because the context was
-    // captured from rendered text with collapsed whitespace, so the boundary
-    // between prefix and quote may not survive as a separate token.
+    // Ambiguous: retry with the context. Folded as one string, because the
+    // prefix/quote boundary may not survive collapsed whitespace.
     if (hits.length > 1 && (prefix || suffix)) {
       const wide = fold(`${prefix}${quote}${suffix}`);
       const narrowed = hits.filter((line) => foldedLines[line - 1].includes(wide));
       if (narrowed.length === 1) return narrowed[0];
     }
 
-    // Still ambiguous, or absent. Reported as needing a human eye — see the
-    // "search for" hint the caller emits — rather than guessed at.
+    // Still ambiguous, or absent: the caller flags it for a human.
     return null;
   };
 }
 
 // ── emitting reviewer text safely ────────────────────
 
-// Everything below is written by a reviewer, and the file it lands in is read
-// by a person AND handed to Claude alongside the .mdx. Raw interpolation makes
-// note text structural: a body containing ``` closes the enclosing fence, and
-// one containing `## Line 12` forges a section heading in a document whose
-// headings are how notes are attributed to passages. Editors are invited by
-// link so this is not a hostile-input surface, but the failure is silent and
-// the fix is cheap.
+// Everything below emits reviewer-written text into a file read by a person
+// and by Claude. Raw, a ``` would close the enclosing fence and `## Line 12`
+// would forge a heading. Not a hostile-input surface, but silent and cheap to fix.
 
 /**
  * A fence guaranteed longer than the longest backtick run in `text`, so content

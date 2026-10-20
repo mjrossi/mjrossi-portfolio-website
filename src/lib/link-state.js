@@ -1,102 +1,59 @@
 // What a preview_links row means right now: live, expired, revoked, or spent.
 //
-// Extracted from scripts/preview-roster.mjs's format(), which is where this
-// vocabulary was invented and where it was the roster's private business until
-// the Desk at /admin came to need the same four words. Two derivations of "live"
-// is how a roster and a dashboard start disagreeing about what is outstanding —
-// and "what is outstanding?" is the only question either of them exists to
-// answer.
-//
-// Presentation stays with each caller. The CLI wants one padded line and the
-// Desk wants markup; what they must share is the CLASSIFICATION, so this returns
-// a decided state and the dates behind it rather than a formatted string.
-//
-// Plain JS, like schedule.js: `node --test` reaches it, the worker imports it,
-// and scripts/ imports it without TypeScript tooling.
+// One classification for preview-roster, preview-extend and the Desk, so they
+// cannot disagree about what is outstanding. Presentation stays with each caller.
 
 import { clampToPublication, isPublished } from './schedule.js';
 
 /**
  * @typedef {object} LinkState
  * @property {'live'|'expired'|'revoked'|'spent'} state
- * @property {boolean} live whether this link is outstanding in any sense that
- *   matters — exactly `state === 'live'`, named because it is what the roster's
- *   "N still live" tally and the Desk's per-post count both mean.
- * @property {Date} expires the row's own effective expiry.
- * @property {Date|null} revokedAt when it was withdrawn, for `state === 'revoked'`.
- * @property {Date|null} publishedAt when the post went live, for `state === 'spent'`.
- * @property {Date|null} extendTo how far `just preview-extend` could move this
- *   link, or null when extending is not available or would gain nothing.
+ * @property {boolean} live exactly `state === 'live'`: outstanding
+ * @property {Date} expires the row's effective expiry
+ * @property {Date|null} revokedAt for `revoked`
+ * @property {Date|null} publishedAt for `spent`
+ * @property {Date|null} extendTo how far `just preview-extend <id>` could move it,
+ *   or null when that would do nothing
  */
 
 /**
  * Classify one row.
  *
- * THE ORDER OF THE FOUR CASES IS LOAD-BEARING and matches the roster it came
- * from. Revoked beats everything, because a withdrawal is a decision somebody
- * made and should not be reported as mere elapsed time. Expiry beats
- * publication, so a link that ran out before its post went live reads `expired`
- * rather than `spent` — the two are only distinguishable here, and `expired` is
- * the one the operator can act on by extending.
+ * THE ORDER IS LOAD-BEARING. Revoked beats everything (a decision, not elapsed
+ * time). Expired beats spent, because expired is the one the operator can act
+ * on. Spent means the row is fine but the post is public, so it grants nothing;
+ * counting it as live made the roster report everything as outstanding forever.
  *
- * `spent` is a link whose row has not expired and has not been withdrawn, but
- * whose POST is already public. Nothing needs doing about one: the draft it was
- * minted to show is a page anybody can load, so it grants nothing a plain URL
- * doesn't. It is a distinct state rather than folded into `live` because
- * reporting it as live is what made the roster answer "what is outstanding?"
- * with "everything, forever".
+ * A null `pubDate` is tolerated: a link for a renamed or deleted post is the one
+ * most in need of revoking, so it must stay listable.
  *
- * `pubDate` is nullable and a null is tolerated rather than refused. A link
- * minted against a post since renamed or deleted is exactly the one most in need
- * of revoking, so it has to remain listable; such a row simply reports its own
- * expiry with no publication in the picture.
+ * `extendTo` is the signature ceiling or publication, whichever is first — what
+ * preview-extend will actually honour.
  *
- * `extendTo` is present only where extending would actually do something. A
- * revoked link cannot be extended at all (extendLink's UPDATE requires
- * `revoked_at IS NULL`) and a spent one has nothing left to be extended to
- * (preview-extend refuses a published post outright) — in both cases the absence
- * of a date is the answer. The cap reported is the SIGNATURE ceiling or
- * PUBLICATION, whichever comes first, because that is what `just preview-extend`
- * will honour; reporting the raw ceiling would advertise headroom the clamp then
- * removes.
+ * AN EXPIRED LINK STILL HAS HEADROOM, on purpose: extending by id revives it on
+ * the URL the reviewer already has ("their link ran out over the weekend"). Do
+ * not narrow that to live links. Only the bulk `--all` skips expired ones, since
+ * a lapsed link may have been ended deliberately.
  *
- * AN EXPIRED LINK STILL HAS HEADROOM, and that is deliberate rather than an
- * oversight. extendLink's WHERE clause never looks at the current `exp`, only at
- * the ceiling, so a lapsed link can be wound forward and comes back to life on
- * the URL the reviewer already has. That is the recovery path for "their link
- * ran out over the weekend", and it is the whole reason extending beats
- * reminting. Do not narrow this to live links; it looks like tidying and it
- * removes the feature.
- *
- * The room is measured against BOTH where the link stands and now — `limit >
- * max(exp, now)`. Against `exp` alone (which is what the roster used to do) a
- * link that had expired and whose ceiling had ALSO passed advertised an extend
- * date in the past, because a dead ceiling is still later than an older dead
- * expiry. Against `now` alone, a live link sitting exactly at its cap would
- * advertise its own expiry as headroom. Both bounds are needed, and each one
- * catches a case the other does not.
+ * Headroom is measured against both `exp` and now: `exp` alone advertised a past
+ * date for a link whose ceiling had also passed; now alone advertised a link at
+ * its cap as extendable.
  *
  * @param {{ exp: number, max_exp?: number, revoked_at?: number|null }} row
- *   as stored: `exp` and `max_exp` in epoch SECONDS, `revoked_at` in epoch MS.
- *   Each column matches the thing it mirrors — see migrations/0001.
- * @param {{ pubDate?: Date|null, now?: number }} [ctx] `now` is epoch MS,
- *   injected so the boundaries are testable.
+ *   `exp` / `max_exp` in epoch SECONDS, `revoked_at` in epoch MS
+ * @param {{ pubDate?: Date|null, now?: number }} [ctx] `now` in epoch MS
  * @returns {LinkState}
  */
 export function linkState(row, { pubDate = null, now = Date.now() } = {}) {
   const nowSec = Math.floor(now / 1000);
   const published = pubDate != null && isPublished(pubDate, now);
   const revoked = row.revoked_at != null;
-  // Inclusive, matching isLinkActive's exclusive `exp * 1000 > now` from the
-  // other side: at exactly `exp` the link is expired here and refused there.
+  // At exactly `exp`: expired here, refused by isLinkActive.
   const expired = row.exp <= nowSec;
 
   const state = revoked ? 'revoked' : expired ? 'expired' : published ? 'spent' : 'live';
 
-  // Only computed for a row extendLink would actually move — live or expired.
-  // max_exp is absent on rows read before migrations/0002 existed anywhere;
-  // treating that as no headroom is the fail-closed reading, and matches what
-  // extendLink would do with a ceiling of 0.
+  // A missing max_exp (pre-migrations/0002) means no headroom.
   let extendTo = null;
   if (state === 'live' || state === 'expired') {
     const ceiling = row.max_exp ?? 0;

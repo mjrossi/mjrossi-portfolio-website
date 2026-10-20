@@ -1,9 +1,5 @@
-// Word-count read time.
-//
-// Plain JS rather than TypeScript so scripts/make-post-og.mjs can import it
-// under plain Node: the OG card prints the same read time the page does, and
-// two implementations of it would drift the first time WORDS_PER_MINUTE moved.
-// Same anti-drift argument as scripts/content.mjs sharing coercePubDate.
+// Word-count read time. Plain JS so the OG card (scripts/make-post-og.mjs)
+// prints the same number the page does.
 
 const WORDS_PER_MINUTE = 200;
 

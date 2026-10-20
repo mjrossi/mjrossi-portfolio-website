@@ -1,32 +1,14 @@
 // The only file that knows the columns of preview_links.
 //
-// Two runners, one copy. The operator CLI reaches D1 through wrangler
-// (scripts/d1-store.mjs presents that as a D1-shaped store) and the deployed
-// worker reaches it through its binding; both call the functions below. Before
-// this module the CLI's statements lived in scripts/links-db.mjs and the
-// worker had none, so building a read surface in the worker would have meant a
-// second copy of a table whose invariants live INSIDE its statements —
-// extendLink's ceiling and revokeLinks' slug scoping are enforced by the
-// `WHERE` clause, not by the caller, and restating either slightly wrong is a
-// silent failure.
+// One copy for two runners: the worker through its D1 binding, and the CLI
+// through scripts/d1-store.mjs. The table's invariants live INSIDE these
+// statements (extendLink's ceiling, revokeLinks' slug scoping), so a second copy
+// restated slightly wrong would fail silently. The store is duck-typed and
+// passed in, so `node --test` can use a stub.
 //
-// The store is duck-typed rather than typed as D1Database, and taken as an
-// argument rather than imported, which is what lets one module serve the worker,
-// the CLI and `node --test` alike. Same arrangement, and the same reasoning, as
-// isLinkActive in src/lib/preview-links.js — which stays where it is because it
-// is the worker's hot path on every preview request and has its own fail-closed
-// contract to state.
-//
-// Plain JS, like schedule.js and preview-links.js: vanilla Node imports it from
-// scripts/ without TypeScript tooling on that side.
-//
-// THE SHAPE CHECKS BELOW ARE DOMAIN VALIDATION, NOT ESCAPING. They used to be
-// the thing that made string interpolation safe, back when each caller built its
-// own SQL; parameters do that job now, and scripts/d1-store.mjs is where the
-// argument for the CLI half is made. What they buy today is a named error at the
-// call site instead of a silent no-op — a mistyped link id otherwise matches
-// nothing, and an UPDATE that changed no rows looks identical to one that was
-// never valid.
+// The shape checks are domain validation, not escaping — parameters do that.
+// They turn a mistyped id into a named error instead of an UPDATE that silently
+// matches nothing.
 
 import { LINK_ID_RE, SLUG_RE } from './preview.js';
 
@@ -53,13 +35,12 @@ function checkInteger(value, label) {
   return value;
 }
 
-/** A reviewer label is shaped like a slug — both are fields in the signed payload. */
+/** Shaped like a slug: both are fields in the signed payload. */
 function checkReviewer(reviewer) {
   if (reviewer === null || reviewer === undefined) return null;
   return checkSlug(reviewer, 'reviewer');
 }
 
-/** `?, ?, ?` for a list of n values. */
 function placeholders(n) {
   return new Array(n).fill('?').join(', ');
 }
@@ -67,16 +48,11 @@ function placeholders(n) {
 // ── writes ───────────────────────────────────────────
 
 /**
- * Record minted links.
+ * Record minted links, in one round-trip.
  *
- * Plural so a caller needing several rows pays one round-trip rather than N --
- * which is what keeps smoke's fixture seeding cheap.
- *
- * `maxExp` is the ceiling: the token's own exp, which is signed and therefore
- * immutable, and the furthest extendLink can ever move `exp`. It DEFAULTS TO
- * `exp`, i.e. no headroom -- a caller that forgets it mints a link that cannot
- * be extended rather than one that can be extended past its signature, which is
- * the fail-closed direction.
+ * `maxExp` is the signed ceiling. It defaults to `exp` (no headroom), so a
+ * caller that forgets it mints a link that can't be extended rather than one
+ * that can be extended past its signature.
  *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {{ id: string, slug: string, reviewer?: string | null, exp: number,
@@ -91,10 +67,8 @@ export async function recordLinks(store, rows) {
   for (const row of rows) {
     const exp = checkInteger(row.exp, 'exp');
     const maxExp = checkInteger(row.maxExp ?? exp, 'maxExp');
-    // A ceiling below the effective expiry is not a security hole -- the token
-    // check would refuse the difference anyway -- but it is a row that says
-    // something untrue, and the roster would report a link as live past the
-    // point its own signature stops verifying.
+    // Not a hole (the token check refuses the difference) but an untrue row:
+    // the roster would show a link live past its own signature.
     if (maxExp < exp) {
       throw new Error(
         `links-store: maxExp ${maxExp} is earlier than exp ${exp} for link ${row.id}`,
@@ -121,22 +95,13 @@ export async function recordLinks(store, rows) {
 }
 
 /**
- * Move a link's effective expiry, without touching the link itself.
+ * Move a link's effective expiry; the URL is unchanged (migrations/0002).
  *
- * This is the whole of `just preview-extend`. The URL in the reviewer's hands
- * is unchanged, because `exp` here is not the one inside the signature -- see
- * migrations/0002 for the clock and the cap above it.
+ * The ceiling is enforced in the statement, not the caller: a read-then-write
+ * would leave a window and put the invariant in the wrong file.
  *
- * THE CEILING IS ENFORCED IN THE STATEMENT, not by the caller. A read-then-write
- * would be two round-trips with a window between them, and would put the one
- * invariant that keeps an extendable link from becoming a permanent one in the
- * script rather than in the module that owns the table. Same argument as the
- * galley write quota being a single INSERT ... SELECT.
- *
- * RETURNS THE ROW IT ACTUALLY CHANGED, empty when it changed nothing, for the
- * same reason revokeLinks does: every refusal here (no such link, wrong post,
- * revoked, past the ceiling) is otherwise indistinguishable from success. The
- * caller is expected to look up why and say so.
+ * Returns the row it changed, or none. Every refusal (no such link, wrong post,
+ * revoked, past the ceiling) otherwise looks like success; the caller says why.
  *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {string} slug
@@ -161,30 +126,17 @@ export async function extendLink(store, slug, id, exp) {
 }
 
 /**
- * Move the effective expiry of EVERY live link for one post.
+ * Move the expiry of every LIVE link for one post: `preview-extend --all`, for
+ * when the pubDate moved. Same ceiling as extendLink, so a partial result is
+ * normal; returns the rows it moved so the caller can name the rest.
  *
- * This is `just preview-extend <slug> --all`, and it exists for one situation:
- * the pubDate moved. A link's expiry is clamped to publication when it is minted,
- * so pushing a draft back leaves every outstanding link expiring on the old date
- * — and reminting them would defeat the point of extending at all. One statement
- * re-clamps the lot, and not one reviewer's URL changes.
- *
- * Same ceiling, enforced the same way and in the same place: rows whose signature
- * will not reach the new expiry are simply not matched, so an --all that moves
- * four links out of five reports four. That is why this RETURNS THE ROWS IT
- * CHANGED rather than a count — the caller names the ones it could not move.
- *
- * LIVE ONLY, as link-state.js defines it: an expired row is not matched. Letting
- * a link lapse is a way to end it (`--hours 1` is the gentle revoke), so a bulk
- * re-clamp must not bring it back. Reviving one is still possible by id, through
- * extendLink, where the operator names the link they mean.
- *
- * Scoped to the slug, like every other write here.
+ * An expired row is not matched. Letting a link lapse is a way to end it, so a
+ * bulk re-clamp must not revive it; extendLink by id still can.
  *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {string} slug
  * @param {number} exp new effective expiry, epoch SECONDS
- * @param {number} [now] epoch MS; injectable so the boundary is testable
+ * @param {number} [now] epoch MS
  * @returns {Promise<{ id: string, exp: number, max_exp: number }[]>} the rows it moved
  */
 export async function extendLinks(store, slug, exp, now = Date.now()) {
@@ -204,40 +156,21 @@ export async function extendLinks(store, slug, exp, now = Date.now()) {
 }
 
 /**
- * Revoke links for one post.
+ * Revoke links for one post. Already-revoked rows keep their original date.
  *
- * ALWAYS scoped to the slug, which is the store's own contract: a caller holding
- * a slug gets a statement that cannot reach past it.
+ * The slug clause is the store's contract, but it is NOT what catches a
+ * mistyped id at the CLI: there the slug is derived from the row, so the clause
+ * can only match. scripts/resolve-id.mjs does that check. Keep the clause; don't
+ * cite it as the safety property.
  *
- * IT IS NO LONGER WHAT PROTECTS A MISTYPED ID AT THE CLI. Since the operator can
- * pass an id alone, the slug reaching this function is usually DERIVED from the
- * very row being filtered, which makes the clause tautological -- it can only
- * match. What catches a wrong id is scripts/resolve-id.mjs refusing when the
- * operator names a post the row disagrees with. Don't delete this clause; do
- * stop citing it as the safety property.
- *
- * Already-revoked rows are left alone (`revoked_at IS NULL`), so re-running
- * does not rewrite the date a link was actually withdrawn.
- *
- * RETURNS THE IDS IT ACTUALLY WITHDREW, and the caller is expected to say so.
- * Both no-op cases here are silent by construction -- an id belonging to another
- * post is scoped away, and a slug whose links are all revoked already matches
- * nothing -- so without this the command that takes a link back reports success
- * either way. That is the wrong default for a withdrawal: the operator runs it
- * precisely when a link has gone astray and they need to know it is dead.
- *
- * An empty result means only that no row matched slug + id + not-already-revoked.
- * WHICH of those missed is not something this statement can say, and not
- * something a caller should infer from call order -- the row is the answer, and
- * `RETURNING` above is why a caller already has it.
- *
- * `RETURNING` rather than a second SELECT so this stays one round-trip and
- * cannot race a concurrent revoke between the write and the read-back.
+ * Returns the ids it withdrew, via RETURNING (one round-trip, no race). An empty
+ * result means nothing matched — the operator needs to hear that, since they run
+ * this when a link has gone astray.
  *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {string} slug
  * @param {{ id?: string | null }} [target] id omitted ⇒ every live link
- * @returns {Promise<string[]>} ids of the rows this call withdrew, oldest first
+ * @returns {Promise<string[]>} ids withdrawn, oldest first
  */
 export async function revokeLinks(store, slug, { id = null } = {}) {
   checkSlug(slug);
@@ -259,27 +192,11 @@ export async function revokeLinks(store, slug, { id = null } = {}) {
 }
 
 /**
- * Delete every link for the named posts. DESTRUCTIVE.
+ * Delete every link for the named posts. DESTRUCTIVE; smoke's fixture reset.
+ * Real links are revoked, never deleted, so the roster stays a full inventory.
  *
- * A test-fixture helper: scripts/smoke.mjs resets its rows before each run.
- * Nothing else in this feature deletes a row -- revoking is how a real link is
- * withdrawn, and it keeps the row so the roster stays a complete inventory.
- *
- * The "local database only" guard lives in scripts/links-db.mjs rather than
- * here, because `--local` is a fact about which database a CLI was pointed at
- * and this module deliberately does not know what a database is.
- *
- * That guard is CLI-side, so it protects only callers that go through the CLI.
- * While this statement lived in scripts/ that was every caller by construction —
- * the worker's module graph did not reach it. It does now, so the claim is only
- * as good as the fact that no route imports this: scripts/smoke/static.mjs
- * asserts exactly that, over src/pages/** and src/middleware.ts, in the same
- * shape as the previewSlug-must-not-reach-blog.ts grep. Don't restore the old
- * "the worker has no path to this function at all" wording — it stopped being
- * structural the moment the SQL moved here.
- *
- * Scoped by slug rather than by reviewer, because view-only rows have no
- * reviewer to scope by.
+ * The local-only guard is in scripts/links-db.mjs, so it protects only CLI
+ * callers. scripts/smoke/static.mjs asserts no route imports this.
  *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {string[]} slugs
@@ -295,26 +212,13 @@ export async function clearLinks(store, slugs) {
 
 // ── reads ────────────────────────────────────────────
 
-/** The column list every read below shares. */
 const COLUMNS = 'id, slug, reviewer, exp, max_exp, created_at, revoked_at';
 
 /**
- * One link, by id.
+ * One link, by id, in ANY state — the lookup that lets the CLI take an id alone.
  *
- * THE PRIMARY-KEY LOOKUP THAT MAKES THE SLUG OPTIONAL AT THE CLI. `slug` is a
- * column on the row, not part of its identity, so resolving an id gives the post
- * for free -- which is what lets `just preview-revoke <id>` work without being
- * told which draft the link was minted for.
- *
- * Returns a row in ANY state -- live, expired, revoked, spent. That is
- * deliberate and load-bearing: scripts/resolve-id.mjs hands the row to callers
- * whose most useful refusals ("was revoked on …", "past the ceiling it was
- * signed with …") exist only because the row was found and then rejected.
- * Filtering to live rows here would flatten all of them into "no such link".
- *
- * Exists to EXPLAIN AND RESOLVE, never to gate. extendLink and revokeLinks each
- * decide in their own statement, so nothing here is load-bearing for
- * authorisation and a stale read cannot widen anything.
+ * Unfiltered on purpose: the useful refusals ("revoked on …", "past its
+ * ceiling") need the row. It explains and resolves; it never gates.
  *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {string} id
@@ -345,16 +249,9 @@ export async function listLinks(store, slug) {
 }
 
 /**
- * Every link in the table, across all posts. Grouped by post, oldest first.
- *
- * The per-post scoping everywhere else in this feature is load-bearing in the
- * PUBLIC worker -- handing someone one draft must not hand them the rest. That
- * reasoning does not reach a CLI already authenticated as the operator, nor the
- * Access-gated Desk at /admin, which exists precisely to answer "what is
- * outstanding?" across every draft at once. Without a list like this, forgetting
- * which slug a link was minted for makes it unrevocable: listLinks needs a slug
- * to answer, and a token is recorded nowhere else. An inventory you can only
- * query by knowing the answer is not much of an inventory.
+ * Every link, across all posts, grouped by post. Per-post scoping matters in the
+ * public worker, not in an authenticated CLI or the Access-gated Desk — and
+ * without this, a link whose slug you forgot could never be revoked.
  *
  * @param {{ prepare: (sql: string) => any }} store
  * @returns {Promise<Record<string, unknown>[]>}

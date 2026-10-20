@@ -1,19 +1,9 @@
-// Tag display and the retired-slug map.
+// Tag display, and where retired tags go now.
 //
-// Two jobs, one module, because they are the same fact seen from two sides:
-// what a topic is called, and what it used to be called.
-//
-// Finding 4.4: chips displayed the raw slug (`safe-streets`, `urban-mobility`).
-// The slug is a URL, not a label — it stays in the URL and a title-cased label
-// goes on screen. Derived rather than enumerated, so a new tag is one word in
-// frontmatter and nothing else; LABELS is for the words title-casing gets
-// wrong, and is empty today on purpose.
-//
-// Finding 2.1: the vocabulary was consolidated from thirteen tags to nine, and
-// a retired tag's URL may already have been shared. RETIRED redirects those
-// rather than 404ing them — which is also why this is plain JS with a test: a
-// map that silently pointed at a slug no longer in the working set would send
-// a reader from one 404 to another.
+// A slug is a URL, not a label: chips show a title-cased label derived from it,
+// so a new tag needs nothing but frontmatter. RETIRED 301s the tags the
+// consolidation removed, since their URLs may have been shared. tags.test.js
+// fails if a target is not a live slug.
 
 /** Slugs whose title-cased form is wrong. Add sparingly. */
 const LABELS = {};
@@ -38,11 +28,8 @@ export function tagLabel(slug) {
 }
 
 /**
- * Retired slug → where it goes now.
- *
- * `urban-mobility` has no successor: it was on every post, which is what made
- * it worth retiring, so it lands on the index rather than on a topic that
- * would misrepresent it.
+ * Retired slug → where it goes now. `urban-mobility` was on every post, so it
+ * goes to the index rather than to a topic that would misrepresent it.
  */
 export const RETIRED = {
   'urban-mobility': '/blog',

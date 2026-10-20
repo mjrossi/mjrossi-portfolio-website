@@ -9,11 +9,8 @@ const { tag } = Astro.params;
 const query = { showScheduled: Astro.locals.showScheduled };
 const tags = await getAllTags(query);
 
-// A tag retired by the August 2026 consolidation redirects rather than 404s —
-// those URLs were linked from chips on every post that carried them and may
-// already have been shared. Checked BEFORE the membership test, because a
-// retired slug is by definition no longer in `tags`. 301: the move is
-// permanent, and the target is a real page (asserted in src/lib/tags.test.js).
+// A retired tag 301s (its URL may have been shared). Checked BEFORE membership,
+// since a retired slug is no longer in `tags`; tags.test.js asserts the target.
 if (tag) {
   const moved = retiredTarget(tag);
   if (moved) {

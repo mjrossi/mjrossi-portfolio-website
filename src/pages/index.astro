@@ -4,18 +4,9 @@ import { getLatestPosts, dateFormatter, isoDate, postReadingTime } from '../lib/
 import { isPublished } from '../lib/schedule.js';
 import { nowUpdatedLabel } from '../lib/now.js';
 
-// "From the Lexicon" (finding 4.3): the periodical's name was doing no work
-// outside /blog. This is a pointer at the archive, not a second index.
-//
-// getLatestPosts, not posts.slice(0, 2): on a *.workers.dev preview host
-// scheduled posts are visible, and the smoke fixture is dated 2099, so the
-// plain newest-first pick featured "Scheduled-post fixture (not a real post)"
-// on every preview deploy.
-//
-// TWO entries, not one: the latest issue and the one before it is a better
-// pointer at a periodical than a single headline. (It was first doubled because
-// one entry left a 512px void under the old full-width grid; in the rail it
-// is simply the right length.)
+// "From the Lexicon": the latest two posts, a pointer at the archive rather
+// than a second index. getLatestPosts, not a slice, or preview hosts would
+// feature the 2099 smoke fixture.
 const latest = await getLatestPosts(2, { showScheduled: Astro.locals.showScheduled });
 ---
 
@@ -55,10 +46,7 @@ const latest = await getLatestPosts(2, { showScheduled: Astro.locals.showSchedul
                   <a href={`/blog/${post.id}/`}>{post.data.title}</a>
                 </h2>
                 <p class="lexicon-teaser-meta">
-                  {/* Only reachable where scheduled posts are visible at all — a
-                      preview host or `astro dev` — and it is what says a featured
-                      post isn't live yet. Keyed off isPublished, like every other
-                      badge. */}
+                  {/* Only where drafts are visible (preview hosts, `astro dev`). */}
                   {!isPublished(post.data.pubDate) && <span class="post-scheduled">Scheduled</span>}
                   <time datetime={isoDate(post.data.pubDate)}>{dateFormatter.format(post.data.pubDate)}</time>
                   <span class="meta-sep" aria-hidden="true">·</span>

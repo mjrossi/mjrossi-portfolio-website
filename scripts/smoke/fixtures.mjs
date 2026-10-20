@@ -110,6 +110,17 @@ export const LINKS = {
     exp: NOW_SEC + 3600,
     maxExp: NOW_SEC + 3600,
   },
+  /**
+   * --all: expired but never revoked, with headroom. Letting a link lapse is a
+   * way to end it, so a bulk re-clamp must leave it lapsed.
+   */
+  extendAllLapsed: {
+    id: 'aaaa9999bbbb8888',
+    slug: EXTEND_SLUG,
+    reviewer: null,
+    exp: NOW_SEC - 60,
+    maxExp: NOW_SEC + 100_000,
+  },
   /** Live review link on a post that has ALREADY published: everything passes except the post being a draft. */
   published: { id: '2222eeee3333ffff', slug: PUBLISHED_SLUG, reviewer: SMOKE_REVIEWER, exp: FAR_FUTURE_EXP },
   /** Seeded already revoked. */
@@ -317,6 +328,12 @@ export async function checkExtendRoundTrip() {
     'extend --all: leaves a link whose ceiling falls short',
     !movedIds.includes(LINKS.extendAllStuck.id),
     'a link was extended past the ceiling it was signed with',
+  );
+  check(
+    'extend --all: does not revive an expired link',
+    !movedIds.includes(LINKS.extendAllLapsed.id) &&
+      (await getLinkById(LINKS.extendAllLapsed.id, LOCAL))?.exp === LINKS.extendAllLapsed.exp,
+    'a link that had lapsed was given new life by a bulk extend',
   );
   check(
     'extend --all: does not touch a revoked link',

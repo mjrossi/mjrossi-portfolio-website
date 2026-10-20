@@ -1,26 +1,11 @@
-// Turning a post's notes into the pulled review file. See CLAUDE.md, "The galley".
+// Turning a post's notes into the pulled review file, and the model the Desk
+// renders. scripts/galley-pull.mjs keeps the I/O; everything that decides what
+// the document SAYS is here, where `node --test` can reach it.
 //
-// Split out of scripts/galley-pull.mjs on exactly the argument that already moved
-// galley-relocate.js and galley-manifest.js out of it: that script parses argv and
-// shells out to wrangler at import time, so none of this was reachable from
-// `node --test`, and this is the half of the pull with decisions in it. The I/O
-// stays there — read the .mdx, query D1, write the file — and everything that
-// decides what the document SAYS is here.
-//
-// What that buys, concretely. Two of the rules below are the kind that fail
-// quietly rather than loudly:
-//
-//   - a group whose notes relocate to DIFFERENT lines must not claim one of them
-//     on its heading (see resolveGroup). Get it wrong and the file reads
-//     "## Line 42-47 — now line 88" over a note that was never about line 88.
-//   - a note's stored anchor wins over a relocation when the file has NOT
-//     drifted. Get it wrong and the excerpt under a heading comes from somewhere
-//     else entirely.
-//
-// Neither shows up as an error. Both are pinned in galley-render.test.js.
-//
-// Plain JS for the same reason as galley-relocate.js, galley-manifest.js,
-// schedule.js and preview.js: no astro: imports, so `node --test` can load it.
+// Two rules fail silently, and galley-render.test.js pins both:
+//   - a group whose notes relocate to DIFFERENT lines must not claim one of
+//     them on its heading (resolveGroup);
+//   - when the file has NOT drifted, the stored anchor beats a relocation.
 
 import { CLOSED_HEADING, noteMetaLine } from './galley-manifest.js';
 import { createLocator, pushFenced, pushQuoted } from './galley-relocate.js';
@@ -37,60 +22,39 @@ const SECTION_MAX = 56;
 /** The label for notes anchored above the post's first heading. */
 const NO_SECTION = '(before the first heading)';
 
-/**
- * The summary bucket for a group whose passage could not be located at all —
- * stale, and its quote no longer in the file. Distinct from NO_SECTION, which
- * is a positive claim about where the note is.
- */
+/** Stale and unfindable. Distinct from NO_SECTION, which is a positive claim. */
 const UNKNOWN_SECTION = '(section unknown)';
 
 /** The summary row for unanchored notes, matching the `## Whole-draft notes` heading. */
 const WHOLE_DRAFT = 'Whole-draft';
 
 /**
- * Appended to a note filed on a passage an earlier note in the same group
- * already covered. DELIBERATELY NEUTRAL: same-reviewer-same-quote catches a
- * retraction ("actually nvm" on the words just suggested) and a plain
- * afterthought alike, and only the adjacency is certain. Calling it a follow-up
- * would assert the second note revises the first, which is exactly the half this
- * cannot know.
+ * Marks a second note by the same reviewer on the same passage. Deliberately
+ * neutral: it might be a retraction or an afterthought, and only the adjacency
+ * is certain.
  */
 const SAME_PASSAGE = '↳ same passage as above';
 
-// An opening or closing fence, captured so the close can be matched against it.
-//
-// galley-manifest.js holds the same CommonMark rule for the PULLED FILE, where
-// it keeps reviewer prose from being read as note ids. This one is for the
-// .mdx, and the two are separate because they scan different documents and may
-// legitimately diverge; excerptAt already owned a fence literal here before
-// either of the readers below needed one.
+// A fence in the .mdx. Same CommonMark rule as galley-manifest.js, which scans
+// a different document; kept separate on purpose.
 const FENCE_RE = /^\s*(`{3,}|~{3,})/;
 
-// An ATX heading: up to three leading spaces, one to six #s, then a space.
-// Setext headings (=== / --- underlines) are NOT detected — every post here is
-// ATX, and an undetected heading yields no label rather than a wrong one.
+// ATX headings only. A setext heading yields no label, never a wrong one.
 const ATX_RE = /^ {0,3}(#{1,6})\s+(.*)$/;
 
 /**
- * A timestamp as the day it fell on, which is the only precision this file ever
- * shows. One definition because the meta line has three date fields between its
- * open and closed forms, and three spellings of the same slice is how one of
- * them ends up a character wider than the others.
+ * A timestamp as YYYY-MM-DD, the only precision this file shows.
  *
  * @param {number | Date} value epoch ms, or a Date
- * @returns {string} YYYY-MM-DD
+ * @returns {string}
  */
 export function isoDay(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
 /**
- * The quote with its stored context, for a human to search by hand.
- *
- * Emitted only where `locate` could not resolve the passage — it is the fallback
- * the prefix/suffix pair was recorded for. Returns null when there is nothing
- * worth printing, so the caller can skip the section rather than print an empty
- * one.
+ * The quote with its context, for searching by hand where `locate` failed.
+ * Null when there is nothing to print.
  *
  * @param {Record<string, unknown>} note
  * @returns {string | null}
@@ -101,14 +65,9 @@ export function contextHint(note) {
 }
 
 /**
- * The source line to show under a heading, skipping a code fence.
- *
- * `code` nodes are anchored across their whole span, fences included, so a note
- * on a code block resolves to the ``` line rather than to any code. Advance to
- * the first line with content on it so the excerpt shows what the note is
- * actually about. Bounded to a few lines: past that the anchor is pointing
- * somewhere unexpected, and printing nothing beats printing something
- * misleading.
+ * The source line to show under a heading. A note on a code block is anchored
+ * at its ``` line, so skip to the first content line — but only a few lines,
+ * since printing nothing beats printing something misleading.
  *
  * @param {string[]} sourceLines
  * @param {number} index 0-based
@@ -125,35 +84,21 @@ export function excerptAt(sourceLines, index) {
 }
 
 /**
- * Every line of the .mdx mapped to the heading it sits under, or null where
- * there isn't one yet.
+ * Every line of the .mdx mapped to the heading it sits under.
  *
- * Built by ONE FORWARD PASS rather than a backward scan per lookup, because the
- * fence state is what makes it correct: a `## ` inside a fenced code block is
- * not a heading, and you cannot tell whether a line is fenced by looking only
- * at the lines above it in reverse.
- *
- * Nearest heading of ANY level wins. A note in "Know what only you can decide"
- * wants that, not the `## Five lessons` two screens up — the specific one is the
- * one that tells you where you are.
- *
- * THE VALUE CARRIES THE HEADING'S OWN LINE as well as its text, because the two
- * answer different questions: the text is what gets printed, and the line is
- * what says whether two groups are in the SAME section. A post can hold the same
- * words twice — `### What worked` under Part two and again under Part three — and
- * nothing in the text alone tells them apart.
+ * One forward pass, because fence state decides what is a heading: a `## `
+ * inside a code block is not one. The nearest heading of any level wins. The
+ * value carries the heading's LINE as well as its text, because a post can
+ * repeat the same words under two parts.
  *
  * @param {string[]} sourceLines
- * @returns {Map<number, { line: number, text: string } | null>} 0-based line
- *   index → the heading it sits under
+ * @returns {Map<number, { line: number, text: string } | null>} 0-based index → heading
  */
 export function sectionMap(sourceLines) {
   const map = new Map();
 
-  // Skip the frontmatter block. `# tags are public` in there is a YAML comment,
-  // and labelling the post's opening paragraph with it would be worse than
-  // labelling nothing. Only the LEADING block — a later `---` is a thematic
-  // break and has no bearing on this.
+  // Skip the leading frontmatter, where `# foo` is a YAML comment. A later `---`
+  // is a thematic break.
   let start = 0;
   if (sourceLines[0]?.trim() === '---') {
     const end = sourceLines.findIndex((line, i) => i > 0 && line.trim() === '---');
@@ -169,16 +114,13 @@ export function sectionMap(sourceLines) {
     const line = sourceLines[i];
     const found = FENCE_RE.exec(line);
     if (fence !== null) {
-      // Close only on the same character at at least the same length —
-      // CommonMark's rule, and the one galley-manifest.js follows. A boolean
-      // toggle flips on a shorter inner fence and hands every line after it the
-      // wrong section.
+      // Same character, at least as long (CommonMark); a toggle flips on a
+      // shorter inner fence.
       if (found && found[1][0] === fence[0] && found[1].length >= fence.length) fence = null;
     } else if (found) {
       fence = found[1];
     } else {
       const heading = ATX_RE.exec(line);
-      // Trailing #s are an optional closing sequence, not part of the text.
       if (heading) {
         const text = heading[2].trim().replace(/\s+#+$/, '');
         current = text ? { line: i, text } : null;
@@ -190,19 +132,11 @@ export function sectionMap(sourceLines) {
 }
 
 /**
- * Notes grouped so byte-identical ones print once, in first-seen order.
+ * Group byte-identical notes (a double-submit) so their content prints once.
  *
- * A double-submit lands two ids on the same reviewer, quote, body and
- * suggestion, and the file then reads as two independent pieces of feedback.
- *
- * SAFE ONLY BECAUSE THE MANIFEST IS LINE-BASED: the caller emits one meta line
- * per id above a single copy of the content, and noteIdsInMarkdown reads each of
- * them, so every id stays closable. An entry whose extra ids stopped being
- * printed would leave those notes open forever with nothing saying so.
- *
- * The key is every content field, prefix and suffix included: the same words
- * selected at a different occurrence in the same block are different notes, and
- * that is the only place they differ.
+ * Safe only because the manifest is line-based: the caller still prints one
+ * meta line per id, so every id stays closable. The key includes prefix and
+ * suffix — the same words at a different occurrence are a different note.
  *
  * @param {Record<string, unknown>[]} notes
  * @returns {{ ids: string[], notes: Record<string, unknown>[] }[]}
@@ -231,8 +165,6 @@ export function collapseDuplicates(notes) {
 }
 
 /**
- * A section label at printable length.
- *
  * @param {string | null} text
  * @returns {string | null}
  */
@@ -242,12 +174,8 @@ function sectionLabel(text) {
 }
 
 /**
- * Group notes by the passage they are anchored to, in the order they should be
- * read: by source line, with unanchored whole-draft notes last.
- *
- * The key doubles as the heading's line range, and `'general'` is the sentinel
- * for "no anchor" — which every caller below discriminates on, so it must stay
- * a value no line range can produce.
+ * Group notes by anchor, by source line, whole-draft notes last. The key is the
+ * line range; `'general'` means no anchor and must stay unproducible as a range.
  *
  * @param {Record<string, unknown>[]} rows
  * @returns {[string, Record<string, unknown>[]][]}
@@ -267,22 +195,12 @@ export function groupByAnchor(rows) {
 }
 
 /**
- * Where one anchored group's notes live in the file as it stands now.
+ * Where one group's notes live now.
  *
- * RESOLVES EVERY QUOTED NOTE, not just the first. Notes share an anchor whenever
- * they were filed against the same block, but they can quote different sentences
- * within it — so a single "now line N" taken from whichever note happened to sort
- * first was being presented as the heading for all of them.
- *
- * The group therefore only claims a relocation when it AGREES: every quoted note
- * found, and all at the same line. Otherwise `line` is null and each note carries
- * its own below, which is what `lineOf` is for. Same stance as `locate` itself
- * resolving an ambiguous quote to nothing — refuse rather than state something
- * that will be confidently wrong.
- *
- * `lineOf` is a Map rather than a field written onto each row: these rows come
- * straight from D1 and are the caller's, and a render pass should not leave marks
- * on them.
+ * Resolves EVERY quoted note: notes on one block can quote different sentences.
+ * The group claims a line only when all of them are found at the SAME line;
+ * otherwise `line` is null and each note reports its own via `lineOf`. A Map,
+ * not a field on the row, so the caller's D1 rows are left untouched.
  *
  * @param {Record<string, unknown>[]} notes one group
  * @param {(quote: string, prefix?: string, suffix?: string) => number | null} locate
@@ -301,18 +219,13 @@ export function resolveGroup(notes, locate) {
 }
 
 /**
- * A note's own content: what the reviewer quoted, wrote, and proposed.
- *
- * Shared by the open-note loop and the closed appendix, which emit exactly this
- * and differ only in their heading and meta line. EVERY reviewer-authored string
- * goes through pushQuoted or pushFenced — prefix/suffix are stored verbatim and
- * newlines survive them, so interpolating any of it raw would let a note forge a
- * `##` heading in a document whose headings are how notes get attributed to
- * passages. Keeping that rule in one function is the point of the function.
+ * A note's content: what the reviewer quoted, wrote and proposed. EVERY
+ * reviewer-written string goes through pushQuoted or pushFenced, or a note
+ * could forge a `##` heading; keeping that in one function is its purpose.
  *
  * @param {string[]} lines
  * @param {Record<string, unknown>} note
- * @param {string | null} hint context to print under the quote, already built
+ * @param {string | null} hint context to print under the quote
  */
 export function pushNoteContent(lines, note, hint = null) {
   if (note.quote) {
@@ -338,19 +251,9 @@ export function pushNoteContent(lines, note, hint = null) {
 }
 
 /**
- * What a review round SAYS, as a data structure.
- *
- * Split out of renderReviewFile when the Desk (/admin/<slug>) came to need the
- * same answers in HTML. Everything hard about a pull is in here — which passage
- * a group is about, whether its anchor still means anything, where it moved to,
- * what section it falls under, which notes are duplicates of each other — and
- * all of it fails SILENTLY when it is wrong: a heading claims a line the note
- * was never about, or an excerpt comes from elsewhere entirely. Two
- * implementations of that would be two chances to get it wrong, and only one of
- * them would be under test.
- *
- * So: one model, two presentations. renderReviewFile emits the markdown
- * `just galley` writes; the Desk renders HTML from the identical object.
+ * What a review round SAYS, as data: one model, two presentations (the markdown
+ * `just galley` writes and the Desk's HTML). Everything in it fails silently
+ * when wrong, so it exists once, under test.
  *
  * @param {object} args
  * @param {string[]} args.sourceLines the .mdx split on newlines
@@ -361,17 +264,11 @@ export function pushNoteContent(lines, note, hint = null) {
 export function reviewModel({ sourceLines, currentHash, rows, closedRows = [] }) {
   const locate = createLocator(sourceLines);
 
-  // Counted over OPEN notes only. A closed note is drifted almost by definition --
-  // the revision that closed it is the one that changed the file -- so counting
-  // those would put a drift warning on every pull forever and train the reader to
-  // ignore the one that matters.
+  // Open notes only: a closed note is drifted almost by definition.
   const drifted = rows.filter((r) => r.revision_hash !== currentHash).length;
 
-  // Everything about a group that both the summary and the body need, resolved
-  // ONCE. The section label and the excerpt must be read at the SAME index —
-  // two independently computed ones is how a heading ends up naming a different
-  // passage than the excerpt printed under it, which is the resolveGroup failure
-  // mode one level up.
+  // Resolved once per group, so the label and the excerpt come from the SAME
+  // index and a heading can't name a different passage from its excerpt.
   const sections = sectionMap(sourceLines);
   const groups = groupByAnchor(rows).map(([key, notes]) => {
     const entries = collapseDuplicates(notes);
@@ -391,16 +288,13 @@ export function reviewModel({ sourceLines, currentHash, rows, closedRows = [] })
     }
     const stale = notes.some((n) => n.revision_hash !== currentHash);
     const { line: current, anyFound, lineOf } = resolveGroup(notes, locate);
-    // Where this group's passage is in the file as it stands. Null when the
-    // group is stale and its quote could not be found: the stored line number
-    // means nothing in the current file, so there is no honest place to read a
-    // heading from and the label is withheld rather than guessed.
+    // Stored anchor while unchanged; the relocation once stale; null when stale
+    // and unfindable, so no label is guessed.
     const anchorIndex = !stale ? Number(key.split('-')[0]) - 1 : current ? current - 1 : null;
     const heading = anchorIndex === null ? null : (sections.get(anchorIndex) ?? null);
     const section = sectionLabel(heading?.text ?? null);
     const label = section ?? (anchorIndex === null ? UNKNOWN_SECTION : NO_SECTION);
-    // Read at anchorIndex, the SAME index the label came from. Elided here
-    // rather than at each call site so both presentations cut it identically.
+    // Elided here so both presentations cut it identically.
     let excerpt = null;
     if (anchorIndex !== null) {
       const text = excerptAt(sourceLines, anchorIndex);
@@ -418,28 +312,16 @@ export function reviewModel({ sourceLines, currentHash, rows, closedRows = [] })
       section,
       label,
       excerpt,
-      // Which section this IS, as opposed to what it is called. The three
-      // label-only buckets have no heading to point at and key on the label
-      // itself; a string and a number never collide as Map keys.
+      // Which section this IS: the heading's line, or the label for the
+      // headingless buckets (a string never collides with a number).
       sectionKey: heading ? heading.line : label,
     };
   });
 
-  // Where the notes fell, before you have read any of them. A round's shape is
-  // its clusters — seven notes on one section is a rewrite and seven notes
-  // spread over seven is an afternoon of small edits — and nothing in a list
-  // ordered by line number shows that.
-  //
-  // Counts NOTES, not entries, so they add up to the total even where duplicates
-  // collapsed.
-  //
-  // BUCKETED BY THE HEADING'S LINE, NOT ITS TEXT. Two sections can carry the
-  // same words — `### What worked` under Part two and again under Part three —
-  // and SECTION_MAX can truncate two long ones to the same string besides.
-  // Merging either pair reports one cluster of seven where the truth is four and
-  // three, which is the exact inference this exists to support. Same words
-  // therefore appear on two rows, in source order; the line ranges say which is
-  // which.
+  // The round's shape before reading it: seven notes on one section is a
+  // rewrite, seven across seven is small edits. Counts notes, not entries.
+  // Bucketed by the heading's LINE, not its text — repeated or truncated titles
+  // would otherwise merge two clusters into one.
   const bySection = new Map();
   for (const group of groups) {
     const bucket = bySection.get(group.sectionKey);
@@ -459,15 +341,9 @@ export function reviewModel({ sourceLines, currentHash, rows, closedRows = [] })
 }
 
 /**
- * The whole pulled review file.
- *
- * THIS FILE IS A MANIFEST as well as a document: every note is printed with its
- * id via noteMetaLine, and `just galley-close` closes exactly the ids it finds
- * here. The emitter and the scan that reads it back both live in
- * galley-manifest.js so the writer cannot drift from the reader.
- *
- * `pulledAt` is a parameter rather than a `new Date()` inside, so the output is a
- * function of its inputs and a test can assert on the whole document.
+ * The whole pulled review file. It is also the MANIFEST: `just galley-close`
+ * closes exactly the ids printed here. `pulledAt` is a parameter so a test can
+ * assert on the whole document.
  *
  * @param {object} args
  * @param {string} args.slug
@@ -509,10 +385,7 @@ export function renderReviewFile({
   );
   lines.push('');
 
-  // The by-section summary — a round's shape before you have read any of it.
-  // Computed in reviewModel; see there for why it buckets on the heading's LINE
-  // rather than its text. Skipped below two buckets: one bucket is not a
-  // grouping, it is the same fact restated.
+  // Skipped for a single bucket, which restates the total.
   if (bySection.length > 1) {
     lines.push('Notes by section:');
     lines.push('');
@@ -524,9 +397,7 @@ export function renderReviewFile({
     lines.push('');
   }
 
-  // The manifest contract, stated in the artifact itself: `just galley-close`
-  // closes the ids printed below and nothing else, so a reader who edits this file
-  // by hand needs to know that deleting a note here spares it.
+  // The manifest contract, stated where a hand-editor will see it.
   lines.push(
     '> Each note carries its id. `just galley-close ' +
       slug +
@@ -550,27 +421,19 @@ export function renderReviewFile({
     if (key === 'general') {
       lines.push('## Whole-draft notes');
     } else {
-      // Section first, drift second: which passage this is, then what has
-      // happened to it.
       let heading = `## Line ${key}`;
       if (section) heading += ` · ${section}`;
       if (stale) {
         if (current) {
           heading += ` — now line ${current}`;
         } else if (anyFound) {
-          // Found, but not all in the same place — these notes share an anchor
-          // while quoting different sentences. Saying "not found" here would be
-          // wrong, and saying "now line N" would pick one of them arbitrarily.
+          // Found, but at different lines: each note says where, below.
           heading += ' — ⚠ revision drift, notes relocated individually below';
         } else {
           heading += ' — ⚠ revision drift, quote not found';
         }
       }
       lines.push(heading);
-      // Read at the same index the section label came from — see reviewModel.
-      // When the file has NOT drifted the stored anchor is authoritative by
-      // definition, so it wins over a relocation: the quote resolving elsewhere
-      // in an unchanged file means the anchor is the trustworthy half.
       if (excerpt) {
         lines.push('');
         pushFenced(lines, excerpt, 'md');
@@ -578,16 +441,10 @@ export function renderReviewFile({
     }
     lines.push('');
 
-    // A passage this group has already spoken about. Keyed by reviewer as well
-    // as quote: two editors landing on the same sentence is the ordinary case
-    // and is not one of them revisiting it.
-    //
-    // Joined on NUL because it is the one character neither field can hold, so
-    // no reviewer label and quote can pair up to look like a different pair. It
-    // is written as the ESCAPE `\0` and must stay that way: as a raw byte in the
-    // source it makes this file binary to `file`, `grep` and `rg`, all of which
-    // then skip it silently — and a diff renders it as a space, which is how it
-    // reads as one in review.
+    // Passages already spoken for, per reviewer (two editors on one sentence is
+    // ordinary). Joined on NUL, which neither field can hold. Keep it the
+    // ESCAPE `\0`: a raw NUL makes this file binary to grep and rg, which then
+    // skip it silently.
     const spokenFor = new Set();
 
     for (const { notes: same } of entries) {
@@ -596,16 +453,12 @@ export function renderReviewFile({
       const passage = note.quote ? `${note.reviewer}\0${note.quote}` : null;
 
       const detail = [];
-      // Per-note relocation, for the case the heading could not claim one: the
-      // notes in this group resolve to different lines, so each says where its
-      // own passage went.
+      // Per-note relocation, when the heading could not claim one.
       if (key !== 'general' && !current && noteLine) detail.push(`now line ${noteLine}`);
       if (passage !== null && spokenFor.has(passage)) detail.push(SAME_PASSAGE);
       if (passage !== null) spokenFor.add(passage);
 
-      // ONE META LINE PER ID over a single copy of the content. Every id stays
-      // in the manifest — noteIdsInMarkdown reads line by line — so a collapsed
-      // duplicate is still closed by `just galley-close`.
+      // ONE META LINE PER ID, so a collapsed duplicate is still closable.
       for (const dupe of same) {
         lines.push(
           noteMetaLine({
@@ -618,9 +471,7 @@ export function renderReviewFile({
         );
       }
       lines.push('');
-      // Nothing else in this file can point at the passage, so hand over the
-      // context the note was written against. This is the case prefix/suffix were
-      // recorded for and that locate() could not resolve on its own.
+      // Unlocated: hand over the context the note was written against.
       const hint = key !== 'general' && !noteLine ? contextHint(note) : null;
       pushNoteContent(lines, note, hint);
     }
@@ -630,13 +481,10 @@ export function renderReviewFile({
 
   // ── closed rounds (--all only) ───────────────────────
   //
-  // Flat and unanchored on purpose. These notes were written against revisions the
-  // file no longer holds, so relocating them would be guesswork on a passage that
-  // has already been dealt with; what is wanted here is the record of what was
-  // said and when it was retired, not a pointer into the current draft.
+  // Flat and unanchored on purpose: a record of what was said, not a pointer
+  // into the current draft.
   if (closedRows.length > 0) {
-    // The exact string noteIdsInMarkdown stops at, imported rather than retyped:
-    // a rename here alone would let closed ids back into the manifest.
+    // Imported, not retyped: the scan stops at this exact string.
     lines.push(CLOSED_HEADING);
     lines.push('');
     lines.push(
@@ -644,9 +492,6 @@ export function renderReviewFile({
         `Re-open one with \`just galley-reopen ${slug} --note <id>\`.`,
     );
     lines.push('');
-    // Collapsed here too — printing identical content twice is noise wherever it
-    // happens. No section label and no same-passage marker: this appendix is
-    // flat and unanchored by design, so neither has anything to attach to.
     for (const { notes: same } of closedEntries) {
       for (const note of same) {
         lines.push(
@@ -660,8 +505,6 @@ export function renderReviewFile({
         );
       }
       lines.push('');
-      // No context hint: these notes are not being relocated, so there is nothing
-      // to point the author at.
       pushNoteContent(lines, same[0]);
     }
     lines.push('---');

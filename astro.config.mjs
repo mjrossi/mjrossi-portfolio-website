@@ -15,22 +15,11 @@ export default defineConfig({
   output: 'server',
   integrations: [
     mdx(),
-    // /admin is the Desk: an Access-gated operator surface listing every
-    // scheduled draft, every outstanding preview link and every galley note.
-    // Middleware 404s it without a valid Access JWT, but a sitemap entry would
-    // still publish the fact that those paths exist and hand a crawler the slug
-    // of every unpublished post — which is the one thing scheduled publishing
-    // is for.
+    // /admin is the Desk: a sitemap entry would hand crawlers the slug of every
+    // draft. Filtered through the same isAdminPath as the middleware gate.
     //
-    // The predicate is shared with middleware (src/lib/admin-path.js) rather
-    // than spelled again here, because a filter that disagreed with the gate is
-    // exactly the drift that puts a draft inventory in a public file.
-    //
-    // /card is dropped too, for a milder reason: it is a utility page — a
-    // business card held up to a phone — not content, so it is left out of the
-    // sitemap and the nav. It is deliberately NOT noindexed; this only stops
-    // the site advertising it. /card/qr, the presenter's view of it, is out
-    // too, and is noindexed as well — a bare QR code is no search result.
+    // /card and /card/qr are utility pages, not content. /card stays indexable
+    // (just not advertised); /card/qr is also noindexed.
     sitemap({
       filter: (page) => {
         const { pathname } = new URL(page);
@@ -38,28 +27,11 @@ export default defineConfig({
       },
     }),
   ],
-  // Applies to .md and .mdx alike, and names the processor rather than leaving
-  // it to be inferred.
-  //
-  // Astro's default markdown processor is `satteri()`, which does not run
-  // remark plugins at all. `unified()` is the remark/rehype one, and it is the
-  // only reason `data-src` exists: remark-source-anchors stamps the anchors
-  // every galley note is resolved against, so a post compiled by the wrong
-  // processor loses the entire review system while still rendering perfectly.
-  //
-  // This used to read `remarkPlugins: [remarkSourceAnchors]` with no processor
-  // named, which worked only through a deprecated shim in astro's config
-  // validation: seeing legacy `markdown.remarkPlugins`, it quietly swapped the
-  // default `satteri()` for `unified()` and migrated the plugins across, with
-  // a deprecation warning on every build as the only sign. When that shim goes,
-  // the processor silently reverts and the anchors vanish from a green build.
-  //
-  // @astrojs/mdx 8 makes naming it matter more, not less: it no longer carries
-  // its own MDX pipeline (that is why it shed @mdx-js/mdx, remark-gfm and a
-  // nested @astrojs/markdown-remark), and delegates .mdx compilation to this
-  // same processor. One declaration now covers both extensions, and
-  // @astrojs/markdown-remark is a real import here rather than a declared
-  // dependency the build only resolved by hoisting.
+  // Names the processor. Astro's default `satteri()` runs no remark plugins,
+  // so a post would render perfectly with no `data-src` anchors and the galley
+  // would silently stop working. This used to work only via a deprecated shim
+  // that swapped in `unified()` when it saw legacy `remarkPlugins`. @astrojs/mdx
+  // 8 delegates .mdx to this same processor, so one declaration covers both.
   markdown: {
     processor: unified({ remarkPlugins: [remarkSourceAnchors] }),
   },
@@ -94,34 +66,19 @@ export default defineConfig({
     },
   ],
   vite: {
-    // The instant this bundle was built, inlined as a literal.
-    //
-    // src/layouts/BlogPost.astro needs it to answer a question `new Date()`
-    // cannot: not "is this post published?" (which changes between deploys —
-    // that is the whole scheduled-publishing feature) but "was it published
-    // when scripts/make-post-og.mjs ran?", which is exactly the set of posts
-    // that have a card at /og/<slug>.png. A post that publishes by its pubDate
-    // passing, with no redeploy behind it, would otherwise start advertising a
-    // card nobody generated — a 404'd social image during the manual
-    // syndication window, which is the one hour it matters.
-    //
-    // The two clocks cannot disagree in the dangerous direction: `npm run
-    // build` runs make-post-og AFTER astro build, so its `now` is strictly
-    // later, so {advertised} ⊆ {written}. The worst case is a post that went
-    // live mid-build getting a card it doesn't link yet.
+    // The build instant, inlined. BlogPost.astro asks "was this post published
+    // when make-post-og.mjs ran?" — which posts have a card — not "is it
+    // published now?". make-post-og runs after astro build, so every advertised
+    // card was written.
     define: {
       __BUILD_TIME__: JSON.stringify(Date.now()),
     },
     build: {
       rollupOptions: {
         output: {
-          // Astro names page-scoped CSS chunks with `@_@` (e.g.
-          // `index@_@astro.<hash>.css`). Cloudflare's Static Assets binding
-          // URL-decodes the path, so the literal `@` form 307s to the
-          // percent-encoded form on every load — ~337ms on the LCP critical
-          // path. Sanitize names with `@` to a `-` so the first hit is served
-          // directly. Non-`@` assets keep Astro's default naming so the smoke
-          // tests still find `Base.<hash>.css`.
+          // Astro's `@_@` chunk names 307 to their percent-encoded form on the
+          // Static Assets binding (~337ms on the LCP path), so `@` becomes `-`.
+          // Other assets keep default names, which smoke looks for.
           assetFileNames: (info) => {
             const original = info.name || 'asset';
             if (!original.includes('@')) {

@@ -2,23 +2,34 @@
 //
 // Two groups, and the first is the more important one.
 //
-// PINNING js-yaml. Everything coercePubDate does rests on a claim about a
-// library nobody in this repo calls directly: that an unquoted YAML timestamp
-// arrives as a Date, already in UTC when it carries no offset. If that ever
-// changed — a js-yaml major, or Astro swapping parsers — posts would publish at
-// the wrong hour and every one of these dates would still look right in the
-// file. These tests are what turns that into a red suite instead. js-yaml is a
-// direct dependency for this reason as much as for scripts/content.mjs.
+// PINNING ASTRO'S FRONTMATTER PARSER. coercePubDate rests on a claim about a
+// library this repo does not own: that an unquoted YAML timestamp arrives as a
+// Date, in UTC when it carries no offset. If that changed, posts would publish
+// at the wrong hour with every date still looking right in the file. These
+// tests parse with `parseFrontmatter`, the function Astro's MDX loader calls,
+// so a parser swap upstream turns the suite red. (They used to pin js-yaml,
+// and stayed green when Astro moved to the `yaml` package.)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import yaml from 'js-yaml';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { parseFrontmatter } from '@astrojs/internal-helpers/frontmatter';
 import { coercePubDate } from './pubdate.js';
 
-/** Parse one frontmatter line the way Astro's loader would. */
-const front = (line) => yaml.load(line);
+/** Parse one frontmatter line the way Astro's loader does. */
+const front = (line) => parseFrontmatter(`---\n${line}\n---\n`).frontmatter;
 
-// ── what js-yaml actually does ───────────────────────
+// ── what the parser actually does ────────────────────
+
+test('this repo parses frontmatter with the same copy of the parser astro does', () => {
+  // A second, separately bumped copy would let the CLI and the build drift.
+  const fromAstro = createRequire(import.meta.resolve('astro/package.json'));
+  assert.equal(
+    import.meta.resolve('@astrojs/internal-helpers/frontmatter'),
+    pathToFileURL(fromAstro.resolve('@astrojs/internal-helpers/frontmatter')).href,
+  );
+});
 
 test('an unquoted YYYY-MM-DD resolves to a Date at midnight UTC', () => {
   const { pubDate } = front('pubDate: 2026-05-10');
@@ -40,9 +51,8 @@ test('an unquoted timestamp with an offset is honoured', () => {
 });
 
 test('a QUOTED timestamp stays a string — this is the trap', () => {
-  // js-yaml hands back a string, `new Date()` reads a naive time as LOCAL, and
-  // the same literal therefore means two different instants depending on a pair
-  // of quotes. coercePubDate refuses this shape; the tests below prove it.
+  // `new Date()` reads a naive time as LOCAL, so the same literal means two
+  // instants depending on a pair of quotes. coercePubDate refuses this shape.
   const { pubDate } = front('pubDate: "2026-05-10T14:00:00"');
   assert.equal(typeof pubDate, 'string');
 });

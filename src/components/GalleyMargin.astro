@@ -1,48 +1,19 @@
 ---
-// Galley review chrome — the margin an editor leaves notes in.
+// Galley review chrome. Rendered ONLY for a signed link that named a reviewer
+// (gated in BlogPost.astro), so only on no-store + noindex responses.
 //
-// Rendered ONLY when a signed preview link named a reviewer. That gate lives
-// in BlogPost.astro and is not optional: it is what keeps this (and the second
-// client-JS carve-out it loads) off every publicly cacheable page. Middleware
-// has already set no-store + noindex on any response that gets here.
-//
-// Owns its own styles, like Subscribe.astro — the .galley-* rules live
-// with the component rather than in global.css, because nothing outside a
-// review session ever renders them.
-//
-// The <style> block below is `is:inline`, and both halves of that matter.
-//
-// Astro hoists a processed <style> into the ROUTE's stylesheet using the static
-// module graph, not the runtime condition that renders this component. A plain
-// <style> here therefore shipped ~4.9KB of galley CSS as a render-blocking
-// stylesheet on every published post — chrome no public reader ever sees, and
-// the one hole in the claim that this component cannot reach a publicly
-// cacheable page. `is:inline` keeps the rules in the response that renders
-// them, which is only ever a no-store + noindex review page.
-//
-// It also has to be inline to work at all. Scoped styles are compiled to
-// `.galley-bar[data-astro-cid-…]`, and Astro stamps that attribute at build
-// time onto elements in this template — but every element these rules target is
-// created at runtime by public/scripts/galley.js via createElement + className,
-// so it never carries the attribute and the scoped selectors matched nothing.
-// Inline styles are emitted verbatim and unscoped, which is what these rules
-// need. That is also why the two `.galley-marked` rules no longer need
-// :global() — nothing here is scoped any more.
-//
-// CSP permits this: src/lib/csp.js sends `style-src 'self' 'unsafe-inline'`.
-// scripts/smoke.mjs asserts no `galley-` rule reaches the built CSS bundles and
-// that a published post carries no galley markup, so a future edit that drops
-// `is:inline` fails the build rather than quietly re-shipping this.
+// The <style> is `is:inline`, and both reasons matter:
+//   - Astro hoists a processed <style> into the ROUTE's stylesheet from the
+//     module graph, not the render condition, so a plain one shipped ~4.9KB of
+//     galley CSS on every published post.
+//   - Scoped selectors carry a build-time attribute that the elements galley.js
+//     creates at runtime never get, so they matched nothing.
+// Smoke asserts no `galley-` rule reaches the CSS bundles.
 
 interface Props {
   slug: string;
   reviewer: string;
-  /**
-   * SHA-256 of the .mdx this page was rendered from. The client echoes it when
-   * saving a note, and /api/galley refuses one whose page has since moved — see
-   * src/lib/post-source.ts. Null only if the source could not be resolved, which
-   * leaves the client unable to write rather than able to write blind.
-   */
+  /** The page's revision, echoed on save; null leaves the client unable to write. */
   revision: string | null;
 }
 
@@ -51,17 +22,11 @@ const { slug, reviewer, revision } = Astro.props;
 
 <div id="galley" data-slug={slug} data-reviewer={reviewer} data-revision={revision}></div>
 
-{/*
-  Handler ships as a static asset at /scripts/galley.js (public/scripts/), for
-  the same reasons as newsletter.js: it loads as an external module under the
-  strict `script-src 'self'` CSP, and Astro's bundler can inline <script>
-  contents on on-demand routes, which would break that.
-*/}
+{/* Static asset, like newsletter.js, so it loads externally under `script-src 'self'`. */}
 <script type="module" src="/scripts/galley.js" is:inline></script>
 
 <style is:inline>
-  /* Bottom band, echoing the masthead's accent band so a review session reads
-     as part of the paper rather than as a tool bolted onto it. */
+  /* Echoes the masthead band, so the review session reads as part of the paper. */
   .galley-bar {
     position: fixed;
     inset-inline: 0;
@@ -104,9 +69,7 @@ const { slug, reviewer, revision } = Astro.props;
     color: var(--accent-hover);
   }
 
-  /* The draft moved under this page. Given the accent rather than the muted
-     grey the rest of the bar uses, because until the reviewer reloads, every
-     marker is withheld and every line number on screen is wrong. */
+  /* The draft moved under this page: in the accent, because every marker is withheld. */
   .galley-bar-stale {
     margin-left: auto;
     margin-right: 0.8rem;
@@ -114,8 +77,7 @@ const { slug, reviewer, revision } = Astro.props;
     font-style: italic;
   }
 
-  /* Notes list. Sits above the bar and is capped so a long review round
-     scrolls inside the panel rather than burying the post. */
+  /* Capped, so a long round scrolls inside the panel. */
   .galley-panel {
     position: fixed;
     right: var(--pad);
@@ -160,9 +122,7 @@ const { slug, reviewer, revision } = Astro.props;
     border-top: 0;
   }
 
-  /* The small-caps meta label, wherever one appears in the margin: above a note,
-     on the addressed disclosure, above a suggestion. One rule so the three
-     cannot drift a hairline apart. Only the margins differ, below. */
+  /* One rule for every small-caps label in the margin, so they can't drift apart. */
   .galley-note-meta,
   .galley-addressed-summary,
   .galley-note-sublabel,
@@ -182,17 +142,12 @@ const { slug, reviewer, revision } = Astro.props;
     color: var(--accent);
   }
 
-  /* Stands where the line number would. A note from an earlier revision has a
-     stored line number, but printing it would send the reviewer to a line that
-     now holds something else — so it says which revision it belongs to instead. */
+  /* In place of a stale note's line number, which would name the wrong line. */
   .galley-note-stale {
     font-style: italic;
   }
 
-  /* Notes from rounds the author has closed. Collapsed by default and dimmed
-     when open: a second reviewer needs to see that a point was already raised —
-     and whether it was acted on or declined — without it competing with the
-     round actually in progress. */
+  /* Closed rounds: collapsed and dimmed, visible so points aren't re-filed. */
   .galley-addressed {
     margin-top: 0.8rem;
     border-top: 1px solid var(--border);
@@ -227,8 +182,7 @@ const { slug, reviewer, revision } = Astro.props;
     line-height: 1.5;
   }
 
-  /* Suggestions — a note whose content is replacement text. Shown as preformatted
-     so the wording an editor typed is what the author reads back. */
+  /* Preformatted, so the author reads back exactly what the editor typed. */
   .galley-note-sublabel,
   .galley-composer-sublabel {
     margin: 0.6rem 0 0.25rem;
@@ -246,8 +200,7 @@ const { slug, reviewer, revision } = Astro.props;
     overflow-wrap: break-word;
   }
 
-  /* Floating "Add note" button, positioned against the selection by
-     public/scripts/galley.js. */
+  /* Positioned against the selection by galley.js. */
   .galley-add {
     position: absolute;
     z-index: 50;
@@ -267,29 +220,15 @@ const { slug, reviewer, revision } = Astro.props;
     background: var(--accent-hover);
   }
 
-  /* LIFTED CLEAR OF THE ON-SCREEN KEYBOARD, which is the whole reason
-     --galley-keyboard exists. This box is fixed against the LAYOUT viewport,
-     and a phone's keyboard no longer shrinks that one: Chrome for Android
-     stopped resizing it in 108 and Firefox for Android followed in 132, both
-     aligning with Safari. The keyboard now covers the bottom of the layout
-     viewport instead of displacing it, so a plain `bottom: 4rem` put both
-     textareas *underneath* it — the composer opened, the quote at its top
-     stayed visible, and everything the reviewer typed landed in a field they
-     could not see.
-
-     public/scripts/galley.js measures the covered strip and sets the property.
-     It is 0px on a desktop and on any browser that still resizes the layout
-     viewport, so both declarations below read as their plain form there. On a
-     phone the keyboard is the dominant term but not the only one — a
-     retractable bottom toolbar is in it too, so the box shifts slightly as
-     that toolbar comes and goes. See the measurement's own comment. */
+  /* LIFTED CLEAR OF THE ON-SCREEN KEYBOARD. The keyboard no longer shrinks the
+     layout viewport (Chrome Android 108, Firefox Android 132, like Safari), so a
+     plain `bottom: 4rem` put the textareas under it and the reviewer typed
+     blind. galley.js sets --galley-keyboard: 0px on desktop. */
   .galley-composer {
     position: fixed;
     left: 50%;
     bottom: calc(4rem + var(--galley-keyboard, 0px));
-    /* What is left above the keyboard can be a few hundred pixels. Scroll
-       inside the composer rather than letting it run off the top of the
-       screen: `Leave note` is at its foot and has to stay reachable. */
+    /* Scroll inside, so `Leave note` at the foot stays on screen. */
     max-height: calc(100svh - 5rem - var(--galley-keyboard, 0px));
     overflow-y: auto;
     transform: translateX(-50%);
@@ -368,47 +307,28 @@ const { slug, reviewer, revision } = Astro.props;
     color: var(--danger);
   }
 
-  /* The passage a note is about. Painted by the client onto a Range via the
-     CSS Custom Highlight API — no element, no DOM mutation, which is what lets
-     it mark words inside prose without disturbing the anchors measured from
-     that same tree. Deeper than the block wash below because it covers a few
-     words rather than a paragraph; small areas need the saturation to read.
-
-     ::highlight() accepts only colour, text-decoration and text-shadow, so
-     there is no border or padding to be had here — the colour is the marker. */
+  /* The quoted words, painted on a Range by the Custom Highlight API: no DOM
+     mutation, so the anchors stay intact. ::highlight() takes colour only. */
   ::highlight(galley-note) {
     background-color: var(--accent-band-border, #e6c9a8);
     color: var(--text);
   }
 
-  /* Applied by the client to a block holding a note it could NOT place more
-     precisely than "somewhere in here" — no quote recorded, a quote that no
-     longer matches, a quote occurring twice in the block, or a browser without
-     the Highlight API. `data-galley-count` counts those notes only.
+  /* A block holding notes that couldn't be placed more precisely.
 
-     A FLAT WASH ACROSS THE WHOLE ELEMENT, deliberately. This rule used to be
-     `linear-gradient(transparent 60%, var(--accent-band) 60%)` — the inline
-     highlighter-pen idiom, which resolves against a LINE box on an inline
-     element but against the whole PARAGRAPH box here, because the client marks
-     blocks. The result was a solid band over the last 40% of every marked
-     paragraph: a confident pointer at whichever prose happened to fall there,
-     never the prose the note was about. Anything with an edge inside the block
-     re-creates that bug. If it is going to say "somewhere in this block", it
-     has to cover the block. */
+     A FLAT WASH ACROSS THE WHOLE ELEMENT, deliberately. The old highlighter
+     gradient resolved against the PARAGRAPH box on a block and banded its last
+     lines — pointing at prose no note was about. Anything with an edge inside
+     the block re-creates that. */
   .post-body .galley-marked {
     background-color: var(--accent-band, #f3e5d5);
     border-radius: 2px;
-    /* Lets the wash breathe past the text box without shifting a single line —
-       padding would reflow the paragraph the moment notes finished loading. */
+    /* Room past the text without reflowing it, as padding would. */
     box-shadow: 0 0 0 0.2rem var(--accent-band, #f3e5d5);
   }
 
-  /* Trails the block's text like a footnote mark. Kept in flow rather than
-     absolutely positioned: the previous version set `top` but no `left`, so it
-     took its static inline position — the end of the last line — while `top`
-     hauled it up to the first, leaving the count floating mid-paragraph
-     attached to nothing. In flow it also survives the elements that can carry
-     an anchor but have no free margin to hang off, `li` and `blockquote`. */
+  /* Trails the text like a footnote mark, in flow: absolutely positioned it
+     floated mid-paragraph, and li/blockquote have no margin to hang it off. */
   .post-body .galley-marked::after {
     content: attr(data-galley-count);
     margin-left: 0.3em;
@@ -440,8 +360,7 @@ const { slug, reviewer, revision } = Astro.props;
     }
   }
 
-  /* The composer is centred with a transform, so it needs its own keyframes —
-     otherwise the shared animation would drop its horizontal centring. */
+  /* Own keyframes, or the shared animation drops the transform's centring. */
   @media (prefers-reduced-motion: no-preference) {
     .galley-composer {
       animation-name: galley-rise-centred;

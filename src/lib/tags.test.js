@@ -23,7 +23,7 @@ import { RETIRED, retiredTarget, tagLabel } from './tags.js';
  * silently pointing at a live slug again. "A new tag fails that test" is the
  * documented contract, and it was true only for one of the loader's shapes.
  *
- * readPost parses with js-yaml rather than a regex over the raw `tags:` line,
+ * readPost parses with Astro's frontmatter parser rather than a regex over the raw `tags:` line,
  * so a block-style list counts too, and it throws on frontmatter that will not
  * parse instead of skipping the file — the right direction for a test.
  *

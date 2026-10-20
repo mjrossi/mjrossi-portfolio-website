@@ -85,6 +85,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `src/lib/admin-path.js` — `isAdminPath`, shared by middleware and the sitemap filter, because three things must agree on the answer.
 - `src/lib/desk.js` — `deskIndex` (a **union**, not a filter) and `countdown` (calendar days in UTC, not elapsed time).
 - `src/lib/server.ts` — shared `/api/*` plumbing. `tryGetEnv()` is the fail-closed read; `refuse` **drains** the request body rather than cancelling it.
+- `src/lib/fetch-retry.js` — `fetchWithRetry`, re-exported by `server.ts`. A per-attempt timeout; retries resend the same request, so siteverify carries an `idempotency_key`.
 - `src/env.d.ts` — Cloudflare `Env`, `ImportMetaEnv`, `App.Locals`, `__BUILD_TIME__`. **`undefined` must always mean denied.**
 - `wrangler.jsonc` — Worker config, `ASSETS` binding, the Access `vars`, and `SESSION` (which the adapter injects whether or not it is used).
 - `astro.config.mjs` — adapter, MDX, sitemap (**filtered through `isAdminPath`**), fonts, and the `__BUILD_TIME__` define.
@@ -109,7 +110,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `scripts/database-target.mjs` — `chooseDatabase`. Every D1 script requires an explicit `--remote` or `--local`; there is **no default**.
 - `scripts/d1.mjs` / `scripts/d1-store.mjs` — the wrangler transport, and the D1-compatible façade over it.
 - `scripts/links-db.mjs`, `scripts/notes-db.mjs` — thin binders turning `{ local }` into a store; the local-only guards live here.
-- `scripts/content.mjs` — `resolvePostSource` and `readPubDate` (js-yaml **then** `coercePubDate`, same two steps as the build).
+- `scripts/content.mjs` — `resolvePostSource` and `readPubDate` (Astro's `parseFrontmatter` **then** `coercePubDate`, same two steps as the build).
 - `scripts/dev-vars.mjs` — the one `.dev.vars` parser, shared by `preview-link.mjs` and `smoke.mjs` so signing and verifying agree.
 - `scripts/preview-link.mjs` — mints a link. **Records the row before printing the URL.** Sets both expiries; clamps the row to `pubDate`.
 - `scripts/preview-extend.mjs` — moves a live link's expiry in place, by link id. **The URL does not change.** `--all` for a slipped `pubDate`.
@@ -131,7 +132,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 
 ### Direct dependencies that only resolve by accident otherwise
 
-`js-yaml`, `sharp`, `@astrojs/markdown-remark` and `typescript` are declared directly because this repo imports them itself — the first three resolved only via astro's hoisting, and `typescript` exists for `mdx-analyzer` in the editor, invisibly to CI. Pins and full rationale in [docs/FILE-MAP.md](docs/FILE-MAP.md).
+`@astrojs/internal-helpers`, `sharp`, `@astrojs/markdown-remark` and `typescript` are declared directly because this repo imports them itself — the first three resolved only via astro's hoisting, and `typescript` exists for `mdx-analyzer` in the editor, invisibly to CI. Pins and full rationale in [docs/FILE-MAP.md](docs/FILE-MAP.md).
 
 ## Design system
 
@@ -254,7 +255,7 @@ cover:                     # optional
 
 Invalid frontmatter fails the build. Committing a post with a past or present `pubDate` publishes it immediately.
 
-**`pubDate` can carry a time of day, and the quoting rule is not decoration.** A bare `YYYY-MM-DD` is midnight UTC. Add a time when the hour matters — which it now does beyond scheduling, because a preview link's expiry is capped at publication. Astro parses frontmatter with `js-yaml`, which resolves an **unquoted** timestamp to a `Date` and reads one with no offset as **UTC**:
+**`pubDate` can carry a time of day, and the quoting rule is not decoration.** A bare `YYYY-MM-DD` is midnight UTC. Add a time when the hour matters — which it now does beyond scheduling, because a preview link's expiry is capped at publication. Astro parses frontmatter with the `yaml` package (YAML 1.1 timestamp tag on), which resolves an **unquoted** timestamp to a `Date` and reads one with no offset as **UTC**:
 
 | frontmatter | instant |
 |---|---|
@@ -263,7 +264,7 @@ Invalid frontmatter fails the build. Committing a post with a past or present `p
 | `pubDate: 2026-05-10T09:00:00-04:00` | `2026-05-10T13:00:00Z` |
 | `pubDate: "2026-05-10T14:00:00"` | **build error** |
 
-**Quote a timestamp and it stops being a YAML timestamp.** js-yaml hands back a string, `new Date()` parses a date-*time* with no offset as **local**, and the same literal means `18:00Z` on a machine in New York and `14:00Z` in the worker — with nothing red anywhere. `src/lib/pubdate.js` rejects exactly that shape at build time and says how to fix it; every other form passes through. Date-*only* is UTC quoted or not, so `"2026-05-10"` is fine. The behaviour this all rests on is pinned in `src/lib/pubdate.test.js`, because it belongs to a library nothing here calls directly — a js-yaml major that changed it would otherwise move every timed post by hours with every date still looking correct in the file.
+**Quote a timestamp and it stops being a YAML timestamp.** The parser hands back a string, `new Date()` parses a date-*time* with no offset as **local**, and the same literal means `18:00Z` on a machine in New York and `14:00Z` in the worker — with nothing red anywhere. `src/lib/pubdate.js` rejects exactly that shape at build time and says how to fix it; every other form passes through. Date-*only* is UTC quoted or not, so `"2026-05-10"` is fine. The behaviour this all rests on is pinned in `src/lib/pubdate.test.js`, because it belongs to a library this repo does not own. The tests call Astro's own `parseFrontmatter`, so an upstream parser change turns the suite red instead of moving every timed post by hours with every date still looking correct in the file.
 
 **Scheduled publishing.** A post with a **future `pubDate`** can be merged to `main` and stays hidden in production — from the blog index, tag pages, its direct URL (which 404s), and the RSS feed — until that date passes, at which point it appears everywhere automatically with no rebuild or redeploy. This works because every one of those surfaces flows through `getPublishedPosts` (which filters future posts in production), and both the pages and the RSS feed are on-demand, so they re-evaluate "now" on each request. `pubDate` is a date, so the boundary is midnight UTC on that day. Future posts stay **visible in local `npm run dev`** for preview; note that `npm run preview` builds in production mode and therefore hides them exactly like production. There is no separate draft flag — a future date *is* the scheduling mechanism; use a git branch only if a post isn't ready to ship at all.
 
@@ -356,7 +357,7 @@ Everything fails closed — no token, malformed, unknown key, wrong audience, wr
 Setup, once:
 
 1. Zero Trust → Access → Applications → self-hosted, path `mjrossi.com/admin`, with whatever policy you want on it.
-2. Copy the **Application Audience (AUD) Tag** and the **team domain** into `vars` in `wrangler.jsonc`. Both ship as `REPLACE-ME` placeholders, so **until you do this the Desk 404s for everyone**, which is the correct direction to be wrong in. Neither is a credential — they confer nothing without a JWT Cloudflare signed — which is why they live in committed config like the KV `id` and `database_id`.
+2. Copy the **Application Audience (AUD) Tag** and the **team domain** into `vars` in `wrangler.jsonc`. Both are set there now. If either is missing or wrong, **the Desk 404s for everyone**, which is the correct direction to be wrong in. Neither is a credential — they confer nothing without a JWT Cloudflare signed — which is why they live in committed config like the KV `id` and `database_id`.
 3. The Access app produces no binding, so nothing in CI can see it drift. Record it in `docs/ARCHITECTURE.md`'s account inventory, which is its only inventory.
 
 The path predicate is `src/lib/admin-path.js`, shared by middleware and the sitemap filter, because **three** things have to agree on it — those two and the Access app's own path pattern. A bare `startsWith('/admin')` also matches `/administrator`, the same trap `isPreviewHost` has with its leading dot. The sitemap filter is not cosmetic: an entry would publish the slug of every scheduled draft in a file crawlers are invited to read.

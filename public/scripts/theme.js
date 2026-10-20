@@ -1,13 +1,8 @@
-// The theme carve-out — the third and smallest piece of client JS on the site.
-//
-// Loaded synchronously from <head> in Base.astro, so `data-theme` is on <html>
-// before the first paint and a reader who chose Dark never sees a cream flash.
-// Everything here degrades to nothing: no script, no storage, or an unknown
-// stored value all leave <html> without `data-theme`, which is Auto — the
-// stylesheet's prefers-color-scheme block decides.
-//
-// Trusted Types are required site-wide (`require-trusted-types-for 'script'`),
-// so this touches no HTML sinks: attributes and properties only.
+// The theme switch. Loaded synchronously from <head> so `data-theme` is set
+// before first paint, with no flash. No script, no storage or an unknown value
+// all mean Auto (the stylesheet's prefers-color-scheme decides). Attributes and
+// properties only, under Trusted Types.
+
 (() => {
   const KEY = 'theme';
   const root = document.documentElement;
@@ -37,9 +32,7 @@
     }
   };
 
-  // Re-read the stored choice: another tab changed it (`storage` fires only in
-  // the tabs that did NOT make the change), or the page came back from the
-  // back/forward cache with whatever theme it had when it was left.
+  // Another tab changed it, or the page came back from the bfcache.
   const refresh = () => {
     const choice = read();
     apply(choice);
@@ -54,8 +47,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     const choice = read();
-    // Turnstile renders implicitly from its data attributes, after this runs.
-    // `auto` follows the OS, which is wrong only when the reader overrode it.
+    // Turnstile renders after this; `auto` is wrong only if the reader overrode it.
     if (choice !== 'auto') {
       for (const el of document.querySelectorAll('.cf-turnstile[data-theme="auto"]')) {
         el.setAttribute('data-theme', choice);
@@ -72,8 +64,7 @@
         if (next === 'auto') localStorage.removeItem(KEY);
         else localStorage.setItem(KEY, next);
       } catch {
-        // Storage refused (private mode, blocked site data): the choice still
-        // applies to this page, it just won't follow the reader to the next.
+        // Storage refused: the choice applies to this page only.
       }
       apply(next);
       sync(next);

@@ -1,24 +1,14 @@
 ---
-// The digital business card: two faces of one 85 × 55 card, shown alone
-// (`bare` — no masthead, nav or footer) so it can be held up to someone's
-// phone. Front: the masthead at card scale. Back: the .vcf, email, the site.
+// The digital business card, the scanner's view: two faces of one 85 × 55
+// card, `bare`. Front: the masthead at card scale. Back: the .vcf, email, site.
 //
-// No QR code. This is the page the scanner LANDS on, and a code pointing at the
-// page they are already reading is useless to them — and, as the largest thing
-// on the screen, it competed with "Add to contacts", the one thing they came
-// for. The code lives on /card/qr, the presenter's view, which is the page that
-// gets held up.
+// No QR code: a code pointing at the page they're on is useless, and it
+// competed with "Add to contacts". It lives on /card/qr, the view held up.
 //
-// The address is NOT on this page. "Email" goes through /api/contact like the
-// icon row does; the address itself reaches the recipient only inside the
-// .vcf (/api/vcard). Smoke asserts this HTML never contains it.
-//
-// The page says TAGLINE, because it re-renders on every request. Everything
-// someone else holds onto says CARD_TAGLINE: the .vcf's TITLE, and the
-// description a text-thread link preview keeps — hence CARD_DESCRIPTION below.
-// The preview's title is the name alone (ogTitle), not the tab's "Card — …".
-//
-// Out of the sitemap (astro.config.mjs) and the nav, but indexable.
+// The address is NOT in this HTML (smoke asserts it): email goes via
+// /api/contact, and the address itself only in the .vcf. The page says TAGLINE
+// (it re-renders); what others keep says CARD_TAGLINE / CARD_DESCRIPTION.
+// Out of the sitemap and nav, but indexable.
 import Base from '../layouts/Base.astro';
 import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
 ---
@@ -50,9 +40,7 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
 </Base>
 
 <style>
-  /* Scoped to this route: Astro hoists a page's <style> into that page's own
-     stylesheet, so none of this reaches any other route. Every colour is a
-     token. */
+  /* Scoped: Astro hoists this into this route's stylesheet only. */
 
   :global(main.bare) {
     min-height: 100vh; /* before svh: Safari < 15.4, Chrome < 108 */
@@ -76,21 +64,15 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     }
   }
 
-  /* 85 × 55 mm, the European card. container-type makes `cqi` the face's own
-     width for everything INSIDE it, so type scales with the card rather than
-     the window. Not for the face's own padding or gap, though: there `cqi`
-     looks past the face for a container, finds none, and falls back to the
-     viewport — 7cqi of a 1280px window is 90px a side. Percentage padding
-     resolves against the column, which is the face's width, so it is used
-     here instead, and the spacing between children lives on the children. */
+  /* 85 × 55 mm. container-type makes `cqi` the face's width for its CHILDREN;
+     the face's own padding uses %, because there `cqi` falls back to the
+     viewport (7cqi of 1280px is 90px a side). */
   .card-face {
     position: relative;
     aspect-ratio: 85 / 55;
     container-type: inline-size;
     padding: 6% 7%;
-    /* Both faces are <section>s, which global.css gives a 3rem bottom margin.
-       The front's old 4px (room for its double rule) overrode that by
-       accident; the back kept it, and sat the pair 24px above centre. */
+    /* Sections get a 3rem margin from global.css; unset, it pushed the pair off centre. */
     margin: 0;
     display: flex;
     flex-direction: column;
@@ -117,9 +99,7 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     background-size: 220px 220px;
   }
 
-  /* No double rule. The masthead's closes a band that spans the page; under
-     a card face it read as a stray second edge, and hung the front 5px below
-     the back where the two sit side by side. A card has one edge. */
+  /* No double rule: under a card it reads as a stray second edge. */
 
   .card-front > * {
     position: relative;
@@ -148,13 +128,9 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     margin: 0 0.6em;
   }
 
-  /* The floor is the core folio size, 10.5px, and at that size the line needs
-     a face 289px wide (measured) — about a 344px phone. Below it, flex-wrap
-     alone strands the dot at the end of line one, so a narrow face stacks the
-     two items and drops it. The query measures the face's CONTENT box, inside
-     its 7% padding: 258px is a 300px face, which leaves room for font-
-     rendering differences. A face that would just fit stacks instead, which
-     costs nothing. */
+  /* At the 10.5px folio floor the line needs a 289px face (~a 344px phone).
+     Below that, stack the two items and drop the dot. 258px is the CONTENT
+     box of a 300px face, with margin for font-rendering differences. */
   @container (max-width: 258px) {
     .card-folio {
       flex-direction: column;
@@ -166,9 +142,7 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     }
   }
 
-  /* --accent-surname is display-only (≥24px). The clamp's floor is that rule,
-     in px so it cannot drift with the root size; at a 320px viewport the face
-     is ~280px wide and 12cqi is already ~34px. */
+  /* --accent-surname is ≥24px only; the floor is that rule, in px. */
   .card-name {
     font-family: var(--font-serif);
     font-size: clamp(24px, 12cqi, 3.6rem);
@@ -212,22 +186,15 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
 
   /* ── Back: ruled, broadsheet-style ────────────────── */
 
-  /* A card at every width again: without the QR code the three rows fit the
-     85:55 face from 320px up — measured, 141px of a ~145px content box at 320.
-     Aspect-ratio lets a face grow rather than clip, so a
-     wider fallback font costs height, not content.
-
-     One card, one edge: the frame is the front's --accent-band-border. It
-     was --rule-strong, which in Paper gave the back a visibly harder edge
-     than the front it is the other side of. */
+  /* An 85:55 face from 320px up: the three rows take 141px of a ~145px content
+     box. Aspect-ratio lets a wider fallback font grow it rather than clip.
+     The frame is the front's --accent-band-border: one card, one edge. */
   .card-back {
     background: var(--bg);
     border: 1px solid var(--accent-band-border);
   }
 
-  /* Ruled BETWEEN rows only. The list used to carry its own top and bottom
-     rules as well, inside the face's frame — two lines doing the frame's job,
-     and the top one sat a few px over the button with nothing to separate. */
+  /* Ruled BETWEEN rows only; the frame draws the edge. */
   .card-contact {
     min-width: 0;
     list-style: none;
@@ -239,8 +206,7 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     border-top: 1px solid var(--border);
   }
 
-  /* The button row is not a ruled row: no rule hugging it from above, and
-     room below before the first hairline. */
+  /* The button row isn't ruled: room below before the first hairline. */
   .card-contact li:first-child {
     padding-bottom: 3cqi;
   }
@@ -253,10 +219,8 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     text-decoration: none;
   }
 
-  /* The whole row is the link, not just its word: at phone widths the word
-     alone was a ~16px-tall target. 44px is the floor; the → says the row,
-     not the word, is what to tap, and is aria-hidden so "Email" is read as
-     "Email". At 320 the three rows take 141px of a ~145px content box. */
+  /* The whole row is the link (the word alone was a ~16px target). 44px
+     floor; the → is aria-hidden. */
   .card-contact .card-row {
     display: flex;
     align-items: center;
@@ -266,17 +230,13 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     padding: 3cqi 0;
   }
 
-  /* No transition: the label's colour and underline change at once, so the
-     arrow does too, rather than fading in behind them. */
+  /* No transition, so the arrow changes with the label. */
   .card-go {
     font-family: var(--font-ui);
     color: var(--accent-rule);
   }
 
-  /* Hover only where there is a pointer to hover with. On a phone, :hover
-     sticks to the last row tapped: tap "Email", come back from Mail, and the
-     row is still underlined. Keyboard focus gets the same cue, on top of the
-     global ring. */
+  /* Hover only with a pointer: on a phone :hover sticks to the last row tapped. */
   .card-contact .card-row:focus-visible {
     color: var(--accent-hover);
   }
@@ -303,17 +263,11 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     }
   }
 
-  /* The one action that matters, so the one button on the card — but in the
-     card's own material rather than the site's primary button. A --text slab
-     (Subscribe's) was the heaviest thing on the screen, outweighing the name,
-     and in Night the brightest. This is the front's band: --accent-band fill,
-     --accent-band-border edge, the list's own serif at the list's own size, in
-     --text so it still out-ranks the accent links beside it. Full width at a
-     44px tap height. --text on --accent-band is the wordmark's own pair, so it
-     clears 4.5:1 in both themes; the focus ring is the global one. */
-  /* Left-aligned, with its glyph at the right like the rows below it, so it
-     reads as the list's first row rather than a widget above the list: + to
-     save, → to go. */
+  /* The card's one button, in its own material: the front's band fill and
+     edge, the list's serif at its size, in --text (the wordmark's pair, 4.5:1
+     in both themes). Subscribe's --text slab was the heaviest thing on screen.
+     Full width, 44px tall. */
+  /* Left-aligned with a + at the right, so it reads as the list's first row. */
   .card-contact .card-add {
     display: flex;
     align-items: center;
@@ -344,8 +298,5 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     }
   }
 
-  /* No motion. The back used to turn over into place on load, starting
-     edge-on — so for its first 250ms, and for as long as a background tab
-     held the animation paused, the face was blank, and a quick screenshot
-     could catch it that way. A card does not wait on an animation. */
+  /* No motion: the old flip-in left the back blank in background tabs and screenshots. */
 </style>

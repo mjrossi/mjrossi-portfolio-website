@@ -25,17 +25,16 @@ export function distExists() {
 }
 
 export function checkSourceGuards() {
-  // Guard against accidental removal of fetchWithRetry from src/lib/server.ts.
-  // /api/subscribe relies on it for transient-503 resilience on the Turnstile
-  // siteverify and Buttondown create-subscriber calls.
-  const serverLibPath = resolve('src/lib/server.ts');
-  if (existsSync(serverLibPath)) {
-    check(
-      'src/lib/server.ts: fetchWithRetry is exported',
-      /export\s+async\s+function\s+fetchWithRetry\b/.test(readFileSync(serverLibPath, 'utf8')),
-      'fetchWithRetry export missing or renamed — /api/subscribe needs it for upstream retries',
-    );
-  }
+  // /api/subscribe retries siteverify, and a Turnstile token is single-use: a
+  // retry after the first attempt consumed it fails as a duplicate unless the
+  // request carries an idempotency_key. fetchWithRetry itself is unit-tested in
+  // src/lib/fetch-retry.test.js; this guards the call site.
+  const subscribe = source(resolve('src/pages/api/subscribe.ts'));
+  check(
+    'src/pages/api/subscribe.ts: siteverify sends an idempotency_key',
+    /fetchWithRetry\(/.test(subscribe) && /idempotency_key:/.test(subscribe),
+    'without it, a retried siteverify fails a real visitor with timeout-or-duplicate',
+  );
 
   // Guard the scheduled-publishing wiring. src/lib/schedule.test.js proves the
   // predicate is correct, but nothing there would catch getPublishedPosts()

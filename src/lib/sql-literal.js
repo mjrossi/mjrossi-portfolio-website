@@ -1,47 +1,17 @@
-// Rendering bound parameters into a SQL string. THE ESCAPING BOUNDARY for every
-// statement this repo runs from the CLI.
-//
-// The statements themselves live in links-store.js and notes-store.js, written
-// once in D1 idiom with `?` placeholders so the worker and the operator CLI run
-// the same copy. The worker's D1 binding takes those parameters as parameters.
-// wrangler's `--command` cannot: it takes a string. This module is what closes
-// that gap, and it is therefore the only place in the repo where a value ends up
-// inside SQL text rather than beside it.
-//
-// SPLIT OUT OF scripts/d1-store.mjs so `node --test` can reach it, on exactly the
-// argument that moved galley-relocate.js and galley-manifest.js out of their
-// scripts. That façade is where the wrangler shell-out lives; this is the part
-// with something to get wrong. The failure modes are a mis-escaped quote (a
-// syntax error at best, an injected statement at worst) and a placeholder count
-// that silently slides every subsequent value into the wrong column — the second
-// being the quiet one, since SQLite will often accept the result.
-//
-// The WORKER never calls this. Nothing on the request path interpolates
-// anything.
+// Rendering bound parameters into SQL text: THE ESCAPING BOUNDARY for every
+// statement the CLI runs. The statements in links-store.js / notes-store.js use
+// `?` placeholders, which the worker's D1 binding takes as parameters; wrangler's
+// `--command` takes only a string, so this closes the gap. The worker never
+// calls it.
 
 /**
- * One value as a SQLite literal.
+ * One value as a SQLite literal: null/undefined → NULL, integers → digits,
+ * strings → quoted with `''`. Anything else throws.
  *
- * Three types reach a statement in this repo, and anything else is a bug worth
- * hearing about rather than coercing:
- *
- *   null/undefined  → NULL
- *   number          → the digits, integers only
- *   string          → quoted, with SQLite's own '' escape
- *
- * Non-integer numbers are refused because nothing here stores one: every numeric
- * column is an epoch (seconds for `exp`, milliseconds for the rest) or a line
- * number, and a float arriving at one of them means a caller computed it wrong.
- * Refusing is how that gets noticed.
- *
- * Quote-doubling is the ONLY transformation applied to a string. SQLite gives
- * backslash no special meaning inside a literal, so escaping it would corrupt
- * reviewer prose rather than protect anything — and reviewer prose is exactly
- * what passes through here.
- *
- * A NUL byte is refused outright: it cannot survive execve into wrangler's argv,
- * so a value carrying one would be truncated somewhere between here and the
- * database with nothing to say so.
+ * Non-integers are refused because every numeric column is an epoch or a line
+ * number. Backslash is NOT escaped: SQLite gives it no meaning in a literal,
+ * and escaping it would corrupt reviewer prose. A NUL byte is refused because
+ * it cannot survive execve into wrangler's argv.
  *
  * @param {unknown} value
  * @param {number} index zero-based, for the message only
@@ -71,18 +41,11 @@ export function sqlLiteral(value, index = 0) {
 /**
  * Substitute bound parameters into a statement.
  *
- * Scans rather than doing a bare `.replace(/\?/g, …)`, because a `?` inside a
- * quoted literal is data and must be left alone. No statement in this repo
- * carries one today — every value is a parameter — but the scanner costs a few
- * lines and removes the need for whoever adds the first one to know that. It
- * also has to understand `''`, SQLite's escape for a quote inside a string,
- * or the first escaped quote would look like the end of the literal and every
- * `?` after it would be substituted as if it were a placeholder.
+ * Scans rather than `.replace(/\?/g, …)`, so a `?` inside a quoted literal
+ * (including after a `''` escape) is left alone.
  *
- * THE COUNT IS CHECKED IN BOTH DIRECTIONS and a mismatch throws. That is the
- * error worth engineering for: too few placeholders and the extra values are
- * dropped, too many and every subsequent value lands one column to the left.
- * Neither is a SQL error, so without this the row is simply wrong.
+ * The count is checked in both directions: a mismatch is not a SQL error, it
+ * slides values into the wrong columns.
  *
  * @param {string} sql
  * @param {unknown[]} params
@@ -98,7 +61,7 @@ export function renderSql(sql, params = []) {
       out += ch;
       if (ch === "'") {
         if (sql[i + 1] === "'") {
-          // An escaped quote: consume both and stay inside the literal.
+          // `''`: consume both, stay inside the literal.
           out += sql[++i];
         } else {
           inString = false;
@@ -124,11 +87,7 @@ export function renderSql(sql, params = []) {
     out += ch;
   }
   if (inString) {
-    // Unbalanced quotes mean the scan above lost track of which side of a string
-    // it was on, so the substitution it just did cannot be trusted. Every
-    // statement in this repo is a string literal in a source file, so this is a
-    // typo rather than input — but it is one that would otherwise produce a
-    // command that silently means something else.
+    // The scan lost track of string boundaries, so its substitutions can't be trusted.
     throw new Error('sql-literal: statement has an unterminated string literal');
   }
   if (used !== params.length) {

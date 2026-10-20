@@ -61,6 +61,9 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         secret: env.TURNSTILE_SECRET_KEY,
         response: turnstileToken,
         remoteip: clientAddress ?? '',
+        // One key for every attempt: tokens are single-use, so a retry after
+        // the first attempt consumed one would otherwise fail as a duplicate.
+        idempotency_key: crypto.randomUUID(),
       }),
     });
     const result = (await verify.json()) as { success?: boolean };

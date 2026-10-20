@@ -1,25 +1,11 @@
 ---
-// The Desk — chrome for the Access-gated operator pages under /admin.
+// The Desk's chrome, for the Access-gated pages under /admin: Base, plus the
+// density of a page read on a phone answering "what is outstanding?".
 //
-// Wraps Base so the Desk inherits one shell, one masthead and one set of design
-// tokens rather than growing a second look. What it adds is density: this is a
-// page read on a phone, standing somewhere, answering "what is outstanding?".
-//
-// WHY THE STYLES LIVE HERE AND NOT IN global.css. global.css is imported by
-// Base.astro and therefore ships on every public page; Desk rules there would be
-// weight on every reader's first paint for markup none of them will ever see.
-// Astro hoists a component's styles into the stylesheet of the routes that
-// import it, and the only importers of this file are the /admin routes, so
-// keeping them here keeps them off the public bundle. smoke asserts that.
-//
-// `is:global` rather than scoped, and the reason is the opposite of
-// GalleyMargin.astro's. That component needed `is:inline` because its elements
-// are created at runtime by galley.js and never carry the scoping attribute, and
-// because a plain <style> there would have shipped galley CSS on every published
-// post. Here the markup is ordinary server-rendered HTML — but it is rendered by
-// the PAGE, in the page's own scope, so scoped rules written in this file would
-// not match it. `is:global` is safe precisely because the module graph already
-// confines this file to /admin.
+// Its styles live here, not in global.css (which ships on every public page);
+// only /admin imports this, so they stay off the public bundle. Smoke asserts
+// it. `is:global`, because the markup is rendered in the PAGE's scope, so scoped
+// rules here wouldn't match; safe because the module graph confines it.
 import Base from './Base.astro';
 
 interface Props {
@@ -34,9 +20,7 @@ const { title, subtitle, back } = Astro.props;
 const { admin } = Astro.locals;
 ---
 
-{/* noindex as well as the X-Robots-Tag header middleware sets. Belt and braces,
-    and free: the header is the one that matters, but a meta tag survives a
-    response someone has saved to disk. */}
+{/* noindex too: the header is what matters, but a meta tag survives a saved page. */}
 <Base title={title} description="Operator desk" noindex={true} themeScript={false}>
   <div class="page desk">
     <header class="desk-header">
@@ -46,9 +30,7 @@ const { admin } = Astro.locals;
       <h1>{title}</h1>
       {subtitle && <p class="desk-subtitle">{subtitle}</p>}
       <p class="desk-who">
-        {/* Who Access says is here. Not a gate — middleware has already refused
-            anyone without a verified JWT — but a signed-in identity you can see
-            is how you notice you are on the wrong account. */}
+        {/* Not a gate: a visible identity is how you notice the wrong account. */}
         {admin?.email ?? 'signed in'} · <span class="desk-warning">not cached, not indexed</span>
       </p>
     </header>
@@ -118,9 +100,7 @@ const { admin } = Astro.locals;
     color: var(--muted);
   }
 
-  /* One card per post. A table would be the obvious shape and is the wrong one:
-     this is read on a phone, where five columns either scroll sideways or
-     shrink past legibility. */
+  /* Cards, not a table: five columns on a phone scroll or shrink past legibility. */
   .desk-list {
     list-style: none;
     margin: 0;
@@ -158,9 +138,7 @@ const { admin } = Astro.locals;
     color: var(--muted);
   }
 
-  /* Counts that matter get the accent; a zero stays quiet. The point of the
-     index is that a glance separates "nothing to do" from "seven notes on one
-     section", so the two must not look alike. */
+  /* Counts that matter get the accent; zero stays quiet. */
   .desk-count-live {
     color: var(--accent);
     font-weight: 600;
@@ -181,9 +159,7 @@ const { admin } = Astro.locals;
     color: var(--accent);
   }
 
-  /* The link roster. Monospace because ids are compared by eye against what
-     `just preview-roster` printed, and a proportional font makes two hex
-     strings that differ in one character look identical. */
+  /* Monospace: ids are compared by eye against preview-roster's output. */
   .desk-links {
     list-style: none;
     margin: 0;
@@ -214,11 +190,8 @@ const { admin } = Astro.locals;
     color: var(--muted);
   }
 
-  /* An orphan slug in the "links with no post" section is a link — the only
-     route to its roster, since it is by definition absent from the list above.
-     Given its own colour because .desk-link-who is a class selector and would
-     otherwise beat global.css's `a` rule on specificity, leaving something
-     clickable that reads as plain text. */
+  /* An orphan slug is a link (its only route to a roster), coloured explicitly
+     because .desk-link-who would otherwise beat the global `a` rule. */
   a.desk-link-who {
     color: var(--accent);
   }
@@ -241,8 +214,7 @@ const { admin } = Astro.locals;
     font-size: 0.9rem;
   }
 
-  /* Commands are meant to be copied into a terminal, so they wrap rather than
-     scroll — a half-visible command is worse than a wrapped one. */
+  /* Wrap rather than scroll: a half-visible command is worse. */
   .desk-cmd {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.78rem;

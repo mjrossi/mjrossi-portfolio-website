@@ -1,14 +1,9 @@
 ---
 // One post at the Desk: its preview links, and what the reviewers said.
+// Access-gated and no-store + noindex in middleware; read-only, no client JS.
 //
-// Access-gated in src/middleware.ts before this runs, and forced to no-store +
-// noindex there. Read-only, no client JS — see the index page's header.
-//
-// SCOPED BY SLUG only because the URL says so, and that is worth being explicit
-// about: unlike /api/galley, whose scoping is an authorisation boundary carried
-// by a signed token, this page is behind a gate that already grants everything.
-// The slug here is navigation, not permission. Do not copy this file's shape
-// into anything reachable without Access.
+// The slug here is navigation, not permission — the gate already grants
+// everything. Do not copy this shape into anything reachable without Access.
 import { getEntry } from 'astro:content';
 import Desk from '../../layouts/Desk.astro';
 import { linkState } from '../../lib/link-state.js';
@@ -26,22 +21,14 @@ export const prerender = false;
 
 const { slug } = Astro.params;
 
-// Shape-checked before it reaches a query. The store modules check too, but a
-// slug that cannot be a slug should 404 as "no such page" rather than surface a
-// validation error from two modules down as a 500.
+// A non-slug 404s as "no such page", not a 500 from the stores' own checks.
 if (!slug || !SLUG_RE.test(slug)) {
   return new Response('Not found', { status: 404 });
 }
 
-// The post may legitimately be absent: a link can outlive its slug, and this
-// page is reachable from the index's "links with no post" section. Rendering
-// the roster for a post that is gone is the point of that path, so a missing
-// post is a state rather than a 404.
-//
-// getEntry, not getCollection().find() — a keyed lookup rather than
-// materialising every post to select one. It logs `Entry blog → <slug> was not
-// found` on the orphan path; that warning is EXPECTED here and is not a fault,
-// which is worth knowing before chasing it in Worker observability.
+// The post may be absent: a link can outlive its slug, and showing that roster
+// is the point of the orphan path. getEntry logs `Entry blog → <slug> was not
+// found` there — EXPECTED, not a fault.
 const post = (await getEntry('blog', slug)) ?? null;
 const pubDate = post?.data.pubDate ?? null;
 
@@ -67,15 +54,9 @@ const states = links.map((link) => ({ link, state: linkState(link, { pubDate, no
 const liveCount = states.filter((entry) => entry.state.live).length;
 const openNotes = notes.filter((note) => note.closed_at === null);
 
-// The same model `just galley` renders its markdown from — the grouping, the
-// relocation of a drifted note, the section labels, the excerpts and the
-// duplicate collapsing. One implementation, two presentations: a second one
-// here would be a second chance at failures that are all silent (a heading
-// claiming a line the note was never about, an excerpt read from elsewhere).
-//
-// Needs the raw source, not a hash, because relocating a note means searching
-// the current lines for its quote. sourceOf is reachable only from behind the
-// Access gate — see src/lib/post-source.ts.
+// The same reviewModel `just galley` renders from: one implementation, since
+// every failure in it is silent. Needs the raw source to relocate notes;
+// sourceOf is only reachable behind Access.
 const source = sourceOf(slug);
 const review =
   source === undefined
@@ -87,10 +68,6 @@ const review =
         closedRows: notes.filter((note) => note.closed_at !== null),
       });
 
-// Day precision comes from isoDay, imported above for the note meta lines — the
-// link states below want the same slice, and its own docblock is about exactly
-// this: three spellings of it is how one ends up a character wider than the
-// others. `stamp` is the one format nothing else here needs.
 const stamp = (date) => date.toISOString().slice(0, 16).replace('T', ' ');
 
 const title = post?.data.title ?? slug;
@@ -122,9 +99,7 @@ const subtitle = post
         </li>
         <li class="desk-link">
           <span class="desk-link-who">read it</span>
-          {/* Only useful once the post is public. A draft needs a signed
-              preview link, which this page cannot mint — so rather than offer a
-              URL that 404s, say what it would take. */}
+          {/* A draft needs a signed link this page can't mint, so say so rather than 404. */}
           {published ? (
             <a href={`/blog/${slug}/`}>/blog/{slug}/</a>
           ) : (
@@ -194,9 +169,7 @@ const subtitle = post
           )}
         </p>
 
-        {/* A round's shape before you read any of it: seven notes on one section
-            is a rewrite, seven spread over seven is an afternoon of small edits.
-            Skipped below two buckets, where it would restate the count above. */}
+        {/* The round's shape; skipped for one bucket, which restates the count. */}
         {review.sections.length > 1 && (
           <ul class="desk-links desk-sections">
             {review.sections.map((bucket) => (
@@ -234,9 +207,7 @@ const subtitle = post
 
             {group.entries.map(({ notes: same }) => (
               <div class="desk-entry">
-                {/* One meta line per id over a single copy of the content, so a
-                    collapsed duplicate still shows every id `just galley-close`
-                    will retire. */}
+                {/* One meta line per id, so every id galley-close retires shows. */}
                 {same.map((note) => (
                   <p class="desk-entry-meta">
                     <span class="desk-link-who">{note.reviewer}</span>
@@ -266,12 +237,7 @@ const subtitle = post
       </>
     )}
 
-    {/* Behind a disclosure, like the galley margin's own "addressed" list, and
-        flat rather than anchored for the same reason galley-pull's appendix is:
-        these notes were written against revisions the file no longer holds, so
-        relocating them would be guesswork about a passage already dealt with.
-        What is wanted is the record of what was said, not a pointer into the
-        current draft. */}
+    {/* Collapsed, and flat like galley-pull's appendix: a record, not a pointer. */}
     {review !== null && review.closed > 0 && (
       <details class="desk-closed">
         <summary>{plural(review.closed, 'note')} closed in earlier rounds</summary>
@@ -301,8 +267,7 @@ const subtitle = post
 </Desk>
 
 <style is:global>
-  /* Lives with the Desk layout's rules rather than global.css, and stays off
-     every public page for the same reason — see src/layouts/Desk.astro. */
+  /* Off public pages for the same reason as Desk.astro's rules. */
   .desk-sections {
     margin-bottom: 1.25rem;
   }
@@ -325,10 +290,7 @@ const subtitle = post
     font-weight: 400;
   }
 
-  /* The excerpt and the suggestion scroll inside their own box rather than
-     shrinking. Below a readable width the text stops being checkable against
-     the source, which is the only thing it is for — same trade as
-     .post-diagram. */
+  /* Scroll rather than shrink: below a readable width it can't be checked against the source. */
   .desk-excerpt,
   .desk-suggestion {
     margin: 0 0 0.75rem;

@@ -3,18 +3,9 @@ import { glob } from 'astro/loaders';
 import { coercePubDate } from './lib/pubdate.js';
 
 /**
- * A frontmatter date, resolved to an instant.
- *
- * Replaces `z.coerce.date()`, which accepted the one shape that means two
- * different things: a QUOTED timestamp with no time zone
- * (`"2026-05-10T14:00:00"`) is read by `new Date()` as LOCAL time, while the
- * same literal unquoted is read by YAML as UTC. Nothing about the file says
- * which you got. coercePubDate refuses it and says how to fix it; see
- * src/lib/pubdate.js for the full table, and src/lib/pubdate.test.js for the
- * js-yaml behaviour it all rests on.
- *
- * Fails the build, which is the right place for it — the alternative is a post
- * going live up to a day off with nothing red anywhere.
+ * A frontmatter date, through coercePubDate rather than `z.coerce.date()`,
+ * which accepted the one ambiguous shape (a quoted timestamp with no zone).
+ * Fails the build; see src/lib/pubdate.js.
  */
 const frontmatterDate = (field: string) =>
   z.union([z.date(), z.string()]).transform((value, ctx) => {
@@ -30,10 +21,8 @@ const blog = defineCollection({
   loader: glob({
     pattern: '**/*.{md,mdx}',
     base: './src/content/blog',
-    // Colocated posts live at <slug>/index.mdx so images can sit next to the
-    // post. Strip `/index` so the id (and therefore the URL) is just <slug>.
-    // A bare `index.mdx` at the root would collapse to an empty id and
-    // collide with the listing page — fail loudly instead.
+    // `<slug>/index.mdx` is just <slug>. A root `index.mdx` would collide with
+    // /blog/, so it fails loudly.
     generateId: ({ entry }) => {
       const id = entry.replace(/(?:\/index)?\.mdx?$/, '');
       if (id === '' || id === 'index') {
@@ -48,14 +37,10 @@ const blog = defineCollection({
     z.object({
       title: z.string(),
       description: z.string(),
-      // A bare YYYY-MM-DD is midnight UTC; add a time when the hour matters —
-      // see "Scheduled publishing" in CLAUDE.md.
       pubDate: frontmatterDate('pubDate'),
       updatedDate: frontmatterDate('updatedDate').optional(),
-      // Tags are interpolated unescaped into URL paths and HTML attributes
-      // (see src/pages/blog/tag/[tag].astro and the post-list pages). This
-      // regex is the security invariant that makes that safe — relaxing it
-      // requires auditing every interpolation site for escaping.
+      // SECURITY INVARIANT: tags are interpolated unescaped into URL paths and
+      // attributes. Relaxing this means auditing every interpolation site.
       tags: z
         .array(
           z

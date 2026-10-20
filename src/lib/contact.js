@@ -1,12 +1,6 @@
-// The address mail reaches me at, spelled once.
-//
-// It is said in two places and neither of them is HTML: `/api/contact` puts it
-// in a 302's `Location`, so a `mailto:` link never carries it in markup, and
-// `/api/vcard` puts it in the `.vcf` a recipient saves. Keeping the address out
-// of rendered pages is the reason both are endpoints — see
-// `src/pages/api/contact.ts` — so nothing under `src/pages/*.astro` or
-// `src/components/` may import this. Smoke holds all three: no `.astro` file
-// imports this or vcard.js, no other file in src/, public/ or scripts/ spells
-// the address, and nothing in dist/client carries it.
+// The address, spelled once, for its two carriers: /api/contact's 302 Location
+// and /api/vcard's .vcf. Keeping it out of rendered HTML is why both are
+// endpoints, so no .astro file may import this. Smoke asserts that, and that
+// nothing else spells the address.
 
 export const CONTACT_EMAIL = 'hello@mjrossi.com';

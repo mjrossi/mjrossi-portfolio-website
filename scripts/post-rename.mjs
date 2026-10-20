@@ -1,37 +1,18 @@
-// Move a post's review history to its new slug, after the file has been renamed.
+// The database half of a post rename. Run it AFTER the `git mv`; it checks the
+// move happened, then fixes what git can't reach.
 //
 //   just post-rename <old-slug> <new-slug> --remote
 //
-// RUN IT AFTER THE `git mv`, not before. Same stance as galley-close running
-// after the merge and reading the committed file back: the operator owns every
-// write to the working tree, and this script's job is to prove the move happened
-// and then fix what git cannot reach.
+// Two tables key on the slug and neither follows a rename, silently:
 //
-// WHY IT EXISTS. A post's slug is its filename, so a rename looks complete once
-// the .mdx has moved and the title matches. Two tables key rows by slug and
-// neither follows:
+//   galley_notes   MOVED — a note is about the post, which still exists
+//   preview_links  REVOKED — the slug is inside each token's HMAC, so they are
+//                  already dead; revoked_at records that
 //
-//   galley_notes   every note the editors left  -> orphaned, and `just galley
-//                  <new>` says "no notes" for a post that has plenty
-//   preview_links  every link issued            -> the slug is inside the
-//                  token's HMAC, so all of them are dead, while preview-roster
-//                  goes on listing them as live
+// It does not mint: preview-link is the only command that issues access. The
+// re-mint lines are printed for you to run.
 //
-// Nothing reports either. The site builds, smoke passes, and the review history
-// quietly detaches from the post it is about.
-//
-// THE TWO TABLES GET OPPOSITE TREATMENT, and the reason is which of them mirrors
-// something signed. `preview_links.slug` mirrors the signed payload, so moving it
-// would describe a link that cannot exist -- those links are not renamed, they
-// are dead, and `revoked_at` is how this schema records a dead link. A note
-// mirrors nothing: it is about the post, which still exists under a new name.
-//
-// IT DOES NOT MINT. `just preview-link` is the only command that issues access,
-// and a second one would have to be found and reasoned about every time that
-// claim is checked. The re-mint lines are printed for you to run.
-//
-// --remote or --local is REQUIRED; see scripts/database-target.mjs. Renaming in
-// the wrong database reports a tidy success while the real rows stay orphaned.
+// --remote or --local is REQUIRED (database-target.mjs).
 
 import { existsSync } from 'node:fs';
 import { galleyFile } from '../src/lib/galley-manifest.js';
@@ -76,15 +57,10 @@ const flag = databaseFlag(useLocal);
 
 // ── the working tree has to agree ────────────────────
 
-// The new post exists. Same guard, and the same reason, as everywhere else on
-// this surface: a typo here would move every note to a slug no post will ever
-// have, and the next pull would report an empty round rather than an error.
+// The new post exists, or every note moves to a slug nothing will ever have.
 requirePost(to);
 
-// And the old one is gone. This is what makes the command a RENAME rather than a
-// copy -- without it, `just post-rename <a> <b>` run against two posts that both
-// exist would strip one of its history and say nothing. It is also the only
-// check that can catch the operator renaming the wrong direction.
+// And the old one is gone: a RENAME, not a copy. Also catches the wrong direction.
 if (resolvePostSource(from)) {
   die(
     `${from} still has a source file — run this after the git mv, not before.\n` +
@@ -92,10 +68,8 @@ if (resolvePostSource(from)) {
   );
 }
 
-// The pulled review file is committed under the old slug and nothing can refresh
-// it there: galley-pull needs a post to resolve, and that slug no longer names
-// one. Requiring the move here puts it in the same commit as the .mdx, and forces
-// whatever the old file's header claims about an unfinished round to be re-read.
+// The pulled review file can't be refreshed under a slug with no post, so it
+// moves in the same commit.
 const oldGalley = galleyFile(from);
 if (existsSync(oldGalley)) {
   die(
@@ -106,9 +80,7 @@ if (existsSync(oldGalley)) {
   );
 }
 
-// Slugs are frozen at publication: a live post's URL is public, and this repo has
-// no post-level redirect (RETIRED in src/lib/tags.js covers tags only). Refusing
-// here is what makes "pre-publication only" a property rather than a docs line.
+// Slugs are frozen at publication: there is no post-level redirect.
 const pubDate = readPubDate(to);
 if (pubDate && isPublished(pubDate)) {
   die(
@@ -129,14 +101,10 @@ try {
   die(err.message);
 }
 
-// TWO POPULATED SLUGS IS A MERGE, not a rename, and the two histories would
-// interleave by created_at with nothing afterwards able to tell them apart.
-//
-// The condition is both-populated rather than "the destination has notes",
-// which is the obvious rule and is wrong: after the notes move, the destination
-// always has them. A run interrupted before the links are revoked would then be
-// unrepeatable -- and repeating it is the only repair there is, because the two
-// writes are two wrangler invocations and cannot share a transaction.
+// TWO POPULATED SLUGS IS A MERGE, not a rename: the histories would interleave
+// for good. Both-populated, not "destination has notes" — after a partial run
+// the destination always does, and re-running is the only repair (two wrangler
+// calls, no shared transaction).
 if (arriving.length > 0 && departing.length > 0) {
   die(
     `both slugs have notes (${from}: ${departing.length}, ${to}: ${arriving.length}).\n` +
@@ -147,17 +115,14 @@ if (arriving.length > 0 && departing.length > 0) {
 
 // ── move the notes, then kill the links ──────────────
 //
-// Notes first, deliberately. It is the write that cannot be reconstructed from
-// anywhere else -- a revoked link can be re-minted, an orphaned note cannot be
-// found again once nothing knows which post it belongs to.
+// Notes first: a revoked link can be re-minted; an orphaned note can't be found.
 
 let moved;
 let revoked;
 let deadLinks;
 try {
   moved = await renameNotes(from, to, { local: useLocal });
-  // Read the roster BEFORE revoking, so the re-mint lines below can name the
-  // reviewers whose access this is about to withdraw.
+  // Read before revoking, so the re-mint lines can name the reviewers.
   deadLinks = await listLinks(from, { local: useLocal });
   revoked = await revokeLinks(from, {}, { local: useLocal });
 } catch (err) {
@@ -180,14 +145,10 @@ if (moved.open + moved.closed === 0 && revoked.length === 0) {
   );
 }
 
-// WHO LOST ACCESS. A revoked link was already dead — the slug is signed into the
-// token, so it stopped opening anything the moment the file moved — but the
-// reviewer holding it does not know that, and nothing else will tell them.
+// WHO LOST ACCESS: their links died with the move, and nothing else tells them.
 if (revoked.length > 0) {
   const byId = new Map(deadLinks.map((row) => [row.id, row]));
-  // Reviewers who already hold a live link under the new slug: printing a mint
-  // line for them would issue a second link to someone who can already read the
-  // draft, and leave the roster carrying an entry nobody recognises.
+  // Already re-minted on the new slug: skip, or they'd get a second link.
   const covered = new Set(
     (await listLinks(to, { local: useLocal }))
       .filter((row) => linkState(row, { pubDate }).live)
@@ -218,12 +179,8 @@ if (revoked.length > 0) {
   console.error('');
 }
 
-// Nothing on stdout. The re-mint lines are commands to read and decide about --
-// a review round may well be over -- rather than an artifact to pipe, and a URL
-// is not produced here at all. Same reasoning as galley-close.
+// Nothing on stdout: the re-mint lines are for reading, not piping.
 //
-// NON-ZERO WHEN NOTHING CHANGED, on galley-close's rule: "already done" and
-// "wrong slug, or wrong database" look identical from here, and only one of them
-// is a success. This is what stops a chained `just post-rename … && git commit`
-// from recording a rename that never reached the table.
+// NON-ZERO WHEN NOTHING CHANGED, on galley-close's rule, so a chained
+// `&& git commit` can't record a rename that never reached the table.
 if (moved.open + moved.closed === 0 && revoked.length === 0) process.exitCode = 1;

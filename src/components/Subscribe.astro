@@ -1,34 +1,17 @@
 ---
-// The newsletter signup, in both of its placements (design review §5, A + D).
+// The newsletter signup, one form in two variants:
 //
-// ONE form implementation, two variants:
+//   variant="line" — a one-line band under the blog index header: the ask
+//     before the reader has had anything, so it stays quiet.
+//   variant="card" — a tonal card at the end of every PUBLISHED post, in
+//     --bg2 so it doesn't outshout the next-post link below.
 //
-//   variant="line" — a one-line band under the blog index header. The ask
-//     before the reader has been given anything, so it stays quiet and stays
-//     one line. It is the only accent-band element on the index, which is what
-//     earns it the saturation.
-//   variant="card" — a tonal card at the end of every published post. The ask
-//     after six minutes of reading. --bg2, not accent: it must not outshout the
-//     next-post link directly below it.
+// JS CARVE-OUT: ships the Turnstile loader and /scripts/newsletter.js on /blog
+// and published posts only — never a non-blog route, never a draft. Do not lift
+// it into Base.astro or shared chrome; smoke asserts its absence on `/`.
 //
-// Replaces NewsletterSignup.astro, whose single placement was the block at the
-// bottom of the index (finding 2.2 — heavier than the archive it belonged to).
-//
-// JS CARVE-OUT, NOW WIDER THAN /blog. This component ships the Turnstile
-// loader and /scripts/newsletter.js, and variant="card" puts both on every
-// published post as well as the index. That is the deliberate cost of
-// placement D. What has NOT changed: it is still absent from every non-blog
-// route, still absent from a post rendered as a draft (see BlogPost.astro), and
-// still the only client JS outside the galley. Do not lift it into Base.astro
-// or any shared chrome — smoke asserts its absence on / for exactly that
-// reason.
-//
-// `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` is inlined at build time. When
-// the value isn't set in the build environment Vite inlines `undefined`, which
-// surfaces here at REQUEST time (these routes are on-demand). Rather than throw
-// — which would 500 the whole page for visitors — we omit the form and log the
-// misconfiguration to Worker observability so it's visible to the operator
-// without breaking the page.
+// A missing PUBLIC_TURNSTILE_SITE_KEY is inlined as `undefined` and surfaces at
+// request time, so the form is omitted and logged rather than 500ing the page.
 interface Props {
   variant?: 'line' | 'card';
 }
@@ -44,11 +27,8 @@ if (!siteKey) {
   );
 }
 
-// The band has no room for a rendered widget, so there it runs in
-// interaction-only mode: Turnstile still executes and still produces the token
-// the endpoint verifies, and it only draws itself if a challenge is actually
-// required. The card has the room, so it shows the widget as before. Either
-// way this is a rendering choice — the anti-spam behaviour is unchanged.
+// The band has no room for the widget, so it runs interaction-only (drawn only
+// if a challenge is needed); the card shows it. Anti-spam is the same either way.
 const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
 ---
 
@@ -134,13 +114,7 @@ const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
 
         <p class="newsletter-msg" role="status" aria-live="polite"></p>
 
-        {/*
-          The spec's fine-print line ends "· or use RSS"; that clause is dropped
-          here only because the description directly above already links RSS,
-          and two RSS links inside one small card reads as a mistake. The line
-          is otherwise verbatim, and it is the whole of the fine print — the
-          Turnstile disclosure and the add-me-by-hand offer moved to /privacy.
-        */}
+        {/* The fine print minus "· or use RSS": the description above links it. */}
         <p class="subscribe-fine">
           Delivered by <a href="https://buttondown.com" rel="noopener">Buttondown</a> ·
           <a href="/privacy">privacy</a>
@@ -148,25 +122,14 @@ const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
       </aside>
     )}
 
-    <!--
-      Submit handler lives as a static asset at /scripts/newsletter.js (under
-      public/scripts/). Shipped that way deliberately:
-       1. as a static asset it's served by the Cloudflare ASSETS binding and
-          loads under our strict `script-src 'self' …` CSP without needing
-          'unsafe-inline', per-page hashes, or nonces;
-       2. Astro's bundler may inline <script> blocks on on-demand routes
-          (especially under the Cloudflare adapter) — shipping the file under
-          public/ avoids that variability.
-    -->
+    <!-- A static asset, so it loads externally under `script-src 'self'` with no inlining. -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <script type="module" src="/scripts/newsletter.js" is:inline></script>
   </Fragment>
 )}
 
 <style>
-  /* Both variants share the form's field + button; only the frame differs.
-     Kept with the component, like the block it replaces, rather than in
-     global.css — these rules have exactly two call sites. */
+  /* Both variants share the field and button; only the frame differs. */
 
   .subscribe-sr {
     position: absolute;
@@ -190,9 +153,8 @@ const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
   .subscribe-card input[type='email'] {
     flex: 1;
     min-width: 0;
-    /* --muted, not --border: the outline is the field's only boundary (its
-       fill is --bg, a shade off the band or card it sits on), so it must clear
-       the Family core's 3:1 for control boundaries — --border is ~1.3:1. */
+    /* --muted, not --border: the outline is the field's only boundary and must
+       clear 3:1 (--border is ~1.3:1). */
     border: 1px solid var(--muted);
     border-radius: 0;
     padding: 0.38rem 0.55rem;
@@ -316,17 +278,10 @@ const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
     text-decoration-color: var(--accent);
   }
 
-  /* Status line. Empty until the handler writes to it, so it takes no space
-     until it has something to say — in the band that matters, since the whole
-     placement is one row tall.
-
-     VISUALLY HIDDEN WHEN EMPTY, NOT `display: none`. This is an aria-live
-     region, and a live region has to be in the accessibility tree BEFORE the
-     text lands in it for the announcement to be reliable — `display: none`
-     takes it out, so the first error a screen-reader user hits may never be
-     read out. The clip-path idiom (same as .subscribe-sr) keeps it in the tree
-     the whole time, and `position: absolute` keeps it out of the band's flex
-     flow so it still costs no row and no gap. */
+  /* Status line. VISUALLY HIDDEN WHEN EMPTY, NOT `display: none`: an
+     aria-live region must be in the accessibility tree before text lands, or
+     the first error may never be announced. Absolute, so it costs the band no
+     row. */
   .newsletter-msg {
     font-family: var(--font-ui);
     font-size: 0.75rem;
@@ -348,36 +303,21 @@ const turnstileAppearance = variant === 'line' ? 'interaction-only' : 'always';
     color: var(--accent-tagline);
   }
 
-  /* Turnstile widget; :global because the third-party script rewrites the
-     wrapper's attributes and children — keeping the rule outside Astro's
-     scoping guarantees it applies regardless. In the band it is
-     interaction-only, so it occupies a full row only when a challenge is
-     actually shown. */
+  /* :global, because Turnstile rewrites the wrapper's attributes and children. */
   :global(.cf-turnstile:not(:empty)) {
     margin: 0.35rem 0 0;
 
-    /* Full width in BOTH of the band's directions. This was `flex-basis: 100%`,
-       which reads as a width only while the band is a row — at phone widths it
-       becomes a column, where flex-basis is the BLOCK axis, so the rule
-       silently meant "100% of the band's height" there. `width` means the same
-       thing in both, and still wraps the widget onto its own line on desktop
-       (flex-basis: auto takes its base size from the width). */
+    /* `width`, not `flex-basis: 100%`: at phone widths the band is a column,
+       where flex-basis is the HEIGHT. */
     width: 100%;
 
-    /* Turnstile's `flexible` size has a 300px floor and this band's content box
-       is under that on a small phone — 256px at a 320px viewport, which put
-       33px of widget past the band's edge and 13px of horizontal scroll on the
-       PAGE. Same rule this codebase applies everywhere else something is too
-       wide for a phone (see .post-diagram, and the nav strip in global.css):
-       the box scrolls, the page body never does.
-       Only reachable when a challenge is actually drawn — the band runs
-       interaction-only — which is exactly why it went unnoticed. */
+    /* Turnstile's `flexible` size has a 300px floor; the band is 256px at a
+       320px viewport, which scrolled the PAGE. The box scrolls instead, as
+       everywhere else here. Only seen when a challenge is drawn. */
     overflow-x: auto;
   }
 
-  /* .newsletter-success is created at runtime by public/scripts/newsletter.js
-     (via document.createElement) and replaces the form on success — it has no
-     Astro scoping attribute, so :global is required for the rule to match. */
+  /* Created at runtime by newsletter.js, so it has no scope attribute. */
   :global(.newsletter-success) {
     font-family: var(--font);
     font-style: italic;

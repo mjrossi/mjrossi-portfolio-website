@@ -1,44 +1,26 @@
-// Submit handler for the newsletter form. Served as a static asset via
-// Cloudflare's ASSETS binding so it loads as an external module under a
-// strict `script-src 'self' https://challenges.cloudflare.com` CSP — no
-// 'unsafe-inline' needed.
+// Submit handler for the newsletter form. A static asset, not bundled, so it
+// loads as an external script under `script-src 'self'` exactly as written.
+// Only Subscribe.astro may load it (/blog and published posts); smoke asserts
+// it stays off `/`.
 //
-// Plain JS (not TS): Astro's bundler routes .ts <script> contents through
-// Vite, which can inline the result rather than emit an external chunk for
-// on-demand routes. Shipping the file as a static asset under public/ avoids
-// that uncertainty — what we write is what gets served.
-//
-// Do not import it outside src/components/Subscribe.astro, which renders on
-// /blog (variant="line") and at the foot of every published post
-// (variant="card"). Smoke asserts the form is present on /blog and absent on /
-// as a regression guard against accidental lifts into shared chrome.
-//
-// THE STATUS LINE AND THE WIDGET ARE SIBLINGS OF THE FORM, NOT CHILDREN. Both
-// sit beside <form> inside the component's <aside> so the form stays a single
-// flex row and so `form.replaceWith(...)` on success doesn't take the status
-// line with it. Everything below therefore resolves them from that <aside>,
-// not from the form — `form.querySelector('.newsletter-msg')` returns null and
-// the first `msg.` access throws after preventDefault has already fired, which
-// is a form that silently does nothing at all. There is no browser in the test
-// suite to catch that, so scripts/smoke/static.mjs guards the selector.
+// THE STATUS LINE AND THE WIDGET ARE SIBLINGS OF THE FORM, not children, so
+// `form.replaceWith` on success keeps the status line. Resolve them from the
+// <aside>: from the form they are null, and the throw after preventDefault
+// leaves a form that silently does nothing. Smoke guards the selector.
 
 (() => {
   const form = document.getElementById('newsletter-form');
   if (!form) return;
 
   const root = form.closest('aside') ?? document;
-  // A detached fallback rather than a bail-out. Returning early would leave the
-  // form doing a NATIVE submit — a GET to the current URL that puts the
-  // subscriber's address in their history and in our access logs — and throwing
-  // is the bug this file just had. A detached <p> renders nowhere, so a missing
-  // status line costs the message and nothing else.
+  // A detached fallback, not a bail-out: bailing leaves a NATIVE submit, a GET
+  // that puts the address in history and access logs.
   const msg = root.querySelector('.newsletter-msg') ?? document.createElement('p');
   const btn = form.querySelector('button[type=submit]');
   const emailInput = form.querySelector('input[name=email]');
   const hpInput = form.querySelector('input[name=company]');
 
-  // Text and nodes, so the fallback can carry a link. Strings still land as
-  // text — replaceChildren never parses HTML.
+  // Text and nodes, so the fallback can carry a link; never parsed as HTML.
   function showError(...parts) {
     msg.replaceChildren(...parts);
     msg.classList.add('is-error');
@@ -77,10 +59,7 @@
         const success = document.createElement('p');
         success.className = 'newsletter-success';
         success.textContent = 'Check your inbox to confirm your subscription.';
-        // Clear the siblings before swapping the form out. The widget and the
-        // status line used to live inside <form>, so replaceWith took them with
-        // it; now it doesn't, and a rendered Turnstile checkbox sitting under
-        // "check your inbox" reads as a subscription that didn't finish.
+        // Clear the siblings, or a leftover checkbox reads as an unfinished signup.
         root.querySelector('.cf-turnstile')?.replaceChildren();
         msg.classList.remove('is-error');
         msg.textContent = '';
@@ -88,17 +67,9 @@
         return;
       }
       const data = await res.json().catch(() => ({}));
-      // Three buckets: (A) things the user can fix, (B) transient infra
-      // where naming the flake aids the retry decision, (C) "should never
-      // happen" — operator misconfig (turnstile_secret_missing,
-      // buttondown_key_missing) or bot/curl probes (payload_too_large,
-      // unsupported_media_type, invalid_json, body_read_failed). Bucket C
-      // collapses to one fallback with a recovery action; the server still
-      // emits each code distinctly so worker logs retain the diagnostic
-      // detail.
-      //
-      // The recovery action is a link to /api/contact, not the address: this
-      // file is a static asset, and the address is in no static file.
+      // (A) user-fixable, (B) transient, and everything else — misconfig or
+      // probes — as one fallback linking /api/contact (the address is in no
+      // static file). The server still logs each code distinctly.
       const contact = document.createElement('a');
       contact.href = '/api/contact';
       contact.textContent = 'contact me';

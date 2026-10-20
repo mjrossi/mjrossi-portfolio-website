@@ -1,53 +1,25 @@
-// Move the expiry of a preview link that already exists.
+// Move the expiry of a preview link that already exists. THE URL DOES NOT
+// CHANGE, so nothing is re-sent.
 //
 //   npm run preview-extend -- a1b2c3d4e5f60718 --remote
 //   npm run preview-extend -- a1b2c3d4e5f60718 --remote --hours 96
 //   npm run preview-extend -- my-draft a1b2c3d4e5f60718 --remote   # post asserted
 //   npm run preview-extend -- my-draft --all --remote --hours 96
 //
-// --remote or --local is REQUIRED; see scripts/database-target.mjs.
+// --remote or --local is REQUIRED (database-target.mjs).
 //
-// THE POST IS DERIVED FROM THE LINK, not supplied. A link id is 64 bits of
-// getRandomValues and `preview_links` is keyed on it, so naming the draft as well
-// was always redundant. A slug in front of the id is still accepted and is then
-// an ASSERTION: if it disagrees with the row, this refuses and names both posts.
-// See scripts/resolve-id.mjs for where that check sits and why.
+// The post comes off the link's row. A slug before the id is an ASSERTION,
+// refused if it disagrees (resolve-id.mjs).
 //
-// THE URL DOES NOT CHANGE. That is the entire point of this command: there is
-// nothing to re-send, and the reviewer never learns their link was about to
-// lapse. Before it existed, "give them another two days" meant minting a second
-// link, sending a second URL, and leaving the first one live until it expired.
+// What moves is the row's `exp`, which isLinkActive checks; the signed `exp` is
+// the cap it can never pass (migrations/0002). --hours is a new window FROM
+// NOW, so this shortens as readily as it extends (`--hours 1` is the gentle
+// revoke). The window is clamped to pubDate; a published post is refused.
 //
-// It works because the expiry a request is judged against is not the one inside
-// the signature (migrations/0002):
+// --all re-clamps every LIVE link for a post, for "I pushed the date out".
 //
-//   preview_links.exp -- THE CLOCK, checked by isLinkActive on every request.
-//                        This is what moves.
-//   the token's exp   -- THE CAP. Signed, immutable, and therefore unreachable
-//                        from here: the furthest that clock can ever be wound,
-//                        whatever the row says.
-//
-// --hours is a NEW WINDOW MEASURED FROM NOW, not time added to what is left.
-// Same reading as `just preview-link --hours`, and it means this command
-// shortens as readily as it extends -- `--hours 1` on a link with three days
-// left is the gentler alternative to revoking outright.
-//
-// PUBLICATION IS THE OTHER LIMIT, and usually the one that bites. A link's
-// expiry is capped at the post's pubDate -- once the post is public the link has
-// nothing left to grant -- so `--hours 96` on a draft going live in a day gets
-// a day, and says so. Extending a link on an ALREADY-published post is refused
-// outright: there is nothing left to extend it to.
-//
-// --all re-clamps every live link for the post at once, and is the command for
-// "I pushed the date out". It works because minting caps the ROW's expiry at
-// publication but leaves the SIGNATURE ceiling 30 days out, so a slipped launch
-// still has headroom to extend into -- see migrations/0002 and src/lib/schedule.js.
-//
-// Refusals are specific on purpose. An UPDATE that changes nothing looks
-// identical for a link that never existed, one that belongs to another post,
-// one already revoked, and one asking for more time than its signature will
-// ever honour. Extending is what you do when somebody is waiting, so "nothing
-// happened" is not a usable answer.
+// Refusals are specific: an UPDATE that changed nothing looks the same for
+// every cause, and someone is waiting on this.
 
 import { isoDay } from '../src/lib/galley-render.js';
 import { LINK_ID_RE, SLUG_RE } from '../src/lib/preview.js';
@@ -55,6 +27,7 @@ import { clampToPublication, isPublished } from '../src/lib/schedule.js';
 import { readPubDate } from './content.mjs';
 import { cli } from './cli.mjs';
 import { databaseLabel } from './database-target.mjs';
+import { linkState } from '../src/lib/link-state.js';
 import { extendLink, extendLinks, listLinks } from './links-db.mjs';
 import { resolveLink } from './resolve-id.mjs';
 
@@ -86,10 +59,7 @@ for (let i = 0; i < argv.length; i++) {
     all = true;
   } else if (arg === '--hours') {
     hours = Number(argv[++i]);
-    // Same rule as minting: > 0, not >= 0. `--hours 0` would set an expiry that
-    // has already passed, which is a revoke wearing the wrong name -- and one
-    // that leaves the row reading `live` in nobody's mental model but SQLite's.
-    // Use `just preview-revoke` to take a link back.
+    // > 0: `--hours 0` is a revoke wearing the wrong name; use preview-revoke.
     if (!Number.isFinite(hours) || hours <= 0) {
       die('--hours must be a positive number (to take a link back, use just preview-revoke)');
     }
@@ -100,16 +70,14 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 
-// WHAT THE POSITIONALS MEAN. Two shapes, and --all is what tells them apart:
-// it is the only mode whose subject is a post rather than a link.
+// Two shapes; --all is the only mode whose subject is a post:
 //
 //   --all      <slug>            re-clamp every live link for that post
 //   (default)  <id>              one link; the post comes off the row
 //   (default)  <slug> <id>       the same, with the post asserted
 //
-// A lone positional that is not a link id is REFUSED rather than read as a slug.
-// Guessing would turn `just preview-extend my-draft` -- a plausible typo for the
-// --all form -- into "no link my-draft", which blames the id for a missing flag.
+// A lone non-id is refused rather than read as a slug: `preview-extend
+// my-draft` is a missing --all, not a missing link.
 let slug = null;
 let id = null;
 
@@ -137,16 +105,10 @@ if (all) {
 
 if (slug !== null && !SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 
-// Which database, decided explicitly. See scripts/database-target.mjs for why
-// there is no default: extending the wrong one reports success while the link
-// the reviewer holds goes on expiring.
 const useLocal = resolveDatabase({ local, remote });
 
 const where = databaseLabel(useLocal);
 
-// The post comes off the row when it was not named. Everything below -- the
-// pubDate read, the clamp, the slug-scoped UPDATE -- is unchanged; it is simply
-// no longer the operator's job to supply what the table already knows.
 let resolvedRow = null;
 if (!all) {
   ({ slug, row: resolvedRow } = await resolveLink(die, id, { slug, local: useLocal }));
@@ -154,8 +116,8 @@ if (!all) {
 
 // ── how far the clock can go ─────────────────────────
 //
-// Two limits, and this one is read from the post rather than the row. The
-// signature ceiling is the other, and it is enforced inside the UPDATE below.
+//
+// Publication, read from the post; the signature ceiling is enforced in the UPDATE.
 
 let pubDate;
 try {
@@ -167,9 +129,6 @@ if (pubDate === null) {
   die(`no post found for slug ${JSON.stringify(slug)} (looked for ${slug}.mdx and ${slug}/index.mdx)`);
 }
 
-// A published post is the end of the road for its preview links, and saying so
-// is the whole point of checking. There is no expiry left to move them to: the
-// post is public, so the link grants nothing a plain URL doesn't.
 if (isPublished(pubDate)) {
   die(
     `${slug} published on ${pubDate.toISOString()} — its preview links have nothing left to grant.\n` +
@@ -182,14 +141,12 @@ if (isPublished(pubDate)) {
 
 const nowSec = Math.floor(Date.now() / 1000);
 const requested = nowSec + Math.round(hours * 3600);
-// Clamped, not refused. Asking for four more days on a draft that goes live
-// tomorrow is a reasonable thing to do; the answer is "you have until it does".
+// Clamped, not refused: "you have until it goes live".
 const exp = clampToPublication(requested, pubDate);
 const cappedByPublication = exp < requested;
 
 let changed;
 try {
-  // The ceiling is enforced inside this statement, not here -- see extendLink.
   changed = all
     ? await extendLinks(slug, exp, { local: useLocal })
     : await extendLink(slug, id, exp, { local: useLocal });
@@ -208,9 +165,10 @@ if (all) {
   }
 
   const moved = new Set(changed.map((row) => row.id));
-  const live = rows.filter((row) => !row.revoked_at);
-  // A live row the UPDATE did not match can only have failed the ceiling — every
-  // other predicate in the statement is satisfied by construction here.
+  // link-state.js's "live", the same set the UPDATE matched; a live row it
+  // didn't move can only have failed the ceiling.
+  const live = rows.filter((row) => linkState(row, { pubDate }).live);
+  const lapsed = rows.filter((row) => linkState(row, { pubDate }).state === 'expired');
   const stuck = live.filter((row) => !moved.has(row.id));
 
   if (live.length === 0) {
@@ -236,14 +194,16 @@ if (all) {
   for (const row of stuck) {
     console.error(`    STUCK:   ${row.id} — signed only to ${iso(row.max_exp)}; mint a fresh link`);
   }
+  for (const row of lapsed) {
+    console.error(`    skipped: ${row.id} — already expired; extend it by id to revive it`);
+  }
   console.error('  link:     unchanged — the URLs the reviewers already have keep working\n');
   process.exit(stuck.length === 0 ? 0 : 1);
 }
 
 if (changed.length === 0) {
-  // No second read: resolveLink already fetched this row, and a "no such link"
-  // branch is unreachable here -- resolution would have died before the UPDATE
-  // ran. What is left are the reasons a row that EXISTS refused to move.
+  // resolveLink already fetched the row, so only the reasons an EXISTING row
+  // refused to move are left.
   const row = resolvedRow;
 
   if (row.revoked_at) {
@@ -261,8 +221,7 @@ if (changed.length === 0) {
         `  extend to at most ${iso(row.max_exp)}.`,
     );
   }
-  // Nothing above explains it. Say so rather than blaming the ceiling, which is
-  // the one reason we have just ruled out.
+  // Not the ceiling, which was just ruled out.
   die(
     `the update matched no row for ${id} (${where}), and the row itself looks extendable.\n` +
       '  Re-run just preview-roster ' +
@@ -273,15 +232,12 @@ if (changed.length === 0) {
 
 // ── report ───────────────────────────────────────────
 //
-// Everything goes to stderr and stdout stays empty, which is the opposite of
-// `just preview-link` and deliberate. Minting produces an artifact — the URL —
-// and puts it on stdout so it pipes. Extending produces nothing to hand over;
-// printing the URL anyway would invite re-sending a link that never changed.
+//
+// All to stderr, unlike preview-link: there is no new URL to pipe, and printing
+// the old one would invite re-sending it.
 
 const row = changed[0];
-// The furthest this link could still be moved: the signature ceiling, or
-// publication, whichever comes first. Reporting the raw ceiling would promise
-// headroom the clamp above then takes back.
+// The ceiling or publication, whichever is first.
 const limit = clampToPublication(row.max_exp, pubDate);
 const headroom = limit > row.exp ? iso(limit) : null;
 

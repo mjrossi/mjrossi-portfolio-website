@@ -1,34 +1,18 @@
-// End a review round: mark the notes you pulled and applied as closed.
+// End a review round: close the notes you pulled and applied.
 //
 //   just galley-close <slug> --remote                 # the round in docs/galley/<slug>.md
 //   just galley-close <note-id> --remote              # one note; the post comes off the row
 //   just galley-close <slug> <note-id> --remote       # the same, post asserted
 //   just galley-close <slug> --remote --from path.md  # a pull written elsewhere
 //
-// A note id is a UUID and a slug is [a-z0-9-]+, so the first positional's shape
-// says which was meant. `--note <id>` stays as an alias. See scripts/resolve-id.mjs.
+// --remote or --local is REQUIRED (database-target.mjs).
 //
-// --remote or --local is REQUIRED; see scripts/database-target.mjs. Closing the
-// wrong database reports success while the reviewer's margin goes on showing
-// every note you just applied.
+// READS THE FILE, NOT DRIFT. "Close everything against an old revision" is wrong
+// once a second reviewer exists: merging r1's round drifts r2's unread notes
+// too. docs/galley/<slug>.md is exactly what the author had in front of them,
+// and notes filed after that pull are out of reach. A missed id stays open.
 //
-// WHY THIS READS A FILE INSTEAD OF SELECTING ON DRIFT.
-//
-// The obvious rule -- "close every note written against a revision I have since
-// replaced" -- is wrong the moment a second reviewer exists. Drift is a property
-// of the FILE, not of whether anyone has read the note: if r1 finishes, you apply
-// their round and merge, every note r2 has filed in the meantime drifts too, and
-// a drift-based close would retire feedback nobody has looked at. Silently, and
-// with the reviewer's margin then showing it as addressed.
-//
-// docs/galley/<slug>.md is the honest answer to "which notes did I deal with?".
-// It is exactly what the author had in front of them, it is committed alongside
-// the revision that answers it, and notes filed after that pull are structurally
-// out of reach. An id the scan misses stays open, which is the direction that
-// loses nothing.
-//
-// RUN IT AFTER THE REVISION MERGES, not before. Closing first would retire notes
-// whose fixes are not in the file yet.
+// RUN IT AFTER THE REVISION MERGES, or it retires notes whose fixes aren't in yet.
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -70,9 +54,7 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 
-// WHAT THE FIRST POSITIONAL IS. A note id is a UUID and a slug is [a-z0-9-]+, so
-// the shape answers it -- no flag needed, and `--note` stays as an alias for the
-// operators and docs that use it.
+// The first positional's shape says which (UUID vs slug); `--note` is an alias.
 //
 //   <note-id>            close that one note; the post comes off the row
 //   <slug> <note-id>     the same, with the post asserted
@@ -96,16 +78,11 @@ if (slug !== null && !SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slu
 if (noteId !== null && !NOTE_ID_RE.test(noteId)) {
   die(`invalid note id ${JSON.stringify(noteId)} — ids are printed in the pulled review file`);
 }
-// --from names a round file, which is a per-post artifact. There is no round to
-// read for a single note, and no file to read one out of.
+// --from names a round file; a single note has none.
 if (noteId !== null && from !== null) die('--note and --from are alternatives; pass one');
 const useLocal = resolveDatabase({ local, remote });
 
-// Closing ONE note derives its post; closing a round was given one. Either way
-// requirePost then validates against real content for the same reason
-// preview-link.mjs does it: a typo would otherwise report "no notes to close"
-// for a post that has plenty, which reads exactly like the round already being
-// closed.
+// requirePost catches a typo, which would otherwise read as "already closed".
 let resolvedNote = null;
 if (noteId !== null) {
   resolvedNote = await resolveNote(die, noteId, { slug, local: useLocal });
@@ -118,9 +95,7 @@ const flag = databaseFlag(useLocal);
 
 // ── which notes ──────────────────────────────────────
 
-// `manifest` is BOTH the file read and the mode: null means --note, i.e. one
-// named note and no round. Everything below discriminates on it alone, so the
-// two can never be asked separately and answer differently.
+// `manifest` is both the file and the mode: null means one named note.
 let ids;
 let manifest = null;
 let shown = null;
@@ -128,8 +103,6 @@ if (noteId !== null) {
   ids = [noteId];
 } else {
   manifest = resolve(from ?? galleyFile(slug));
-  // What the operator would type, rather than the absolute path resolve() gave
-  // us — every message below names the file.
   shown = relativeToCwd(manifest);
   if (!existsSync(manifest)) {
     die(
@@ -153,8 +126,7 @@ let closed;
 let stillOpen;
 try {
   closed = await closeNotes(slug, ids, { local: useLocal });
-  // Read back AFTER the write, so "left open" reflects the state the operator is
-  // walking away from rather than a snapshot taken before it changed.
+  // Read AFTER the write, so "left open" is the state being walked away from.
   stillOpen = await listNotes(slug, { includeClosed: false }, { local: useLocal });
 } catch (err) {
   die(err.message);
@@ -163,22 +135,15 @@ try {
 if (manifest) {
   console.error(`galley-close: ${shown} lists ${ids.length} note(s)`);
 } else {
-  // The post was DERIVED from the note, so say which one -- it is the only
-  // signal that a pasted id went where the operator meant it to.
+  // Derived from the note, so say which post: the only sign the id went where meant.
   console.error(`galley-close: note ${noteId} on ${slug}`);
 }
 console.error(`              ${closed.length} closed  (${where})`);
 
-// Every no-op is silent in SQL, so say when nothing happened rather than
-// reporting a successful close. On the --note path the row is already in hand,
-// so read the date off it rather than asserting the cause -- the same move
-// preview-roster makes for a revoke that changed nothing, and for the same
-// reason: which causes are reachable is a property of closeNotes' WHERE clause,
-// not something this line should have to know.
+// No-ops are silent in SQL, so say so; on the one-note path, read the date
+// off the row rather than assume the cause.
 if (closed.length === 0) {
-  // The row was read before the UPDATE, so a no-op here means it was already
-  // closed then. The fallback is for the one case that leaves: a close landing
-  // between the read and the write, where naming a date would invent one.
+  // Already closed when read. The fallback covers a close landing in between.
   const closedAt = resolvedNote?.row?.closed_at;
   console.error(
     manifest
@@ -187,9 +152,8 @@ if (closed.length === 0) {
   );
 }
 
-// THE LINE THIS COMMAND EXISTS FOR. Notes filed after the pull are deliberately
-// untouched, and the operator has to know they are there: they are a reviewer's
-// unread feedback, and nothing else will mention them until the next pull.
+// THE LINE THIS COMMAND EXISTS FOR: notes filed after the pull are a reviewer's
+// unread feedback, and nothing else will mention them.
 if (stillOpen.length > 0) {
   const byReviewer = new Map();
   for (const note of stillOpen) {
@@ -198,12 +162,8 @@ if (stillOpen.length > 0) {
   const who = [...byReviewer]
     .map(([reviewer, count]) => `${reviewer} (${count})`)
     .join(', ');
-  // "Filed after that pull" is only true when there WAS a pull. Everything the
-  // manifest listed has just been closed, so whatever is left arrived after it —
-  // that is the concurrent-reviewer signal this command exists to give. Under
-  // --note there is no manifest and no round: these are simply the post's other
-  // open notes, and calling them late-arriving would point the operator at a
-  // reviewer who did nothing.
+  // "Filed after that pull" only when there was a pull; for one note these are
+  // just the post's other open notes.
   console.error(
     manifest
       ? `\n              ${stillOpen.length} note(s) still open, filed after that pull — ${who}`
@@ -217,20 +177,9 @@ if (stillOpen.length > 0) {
   console.error('');
 }
 
-// Nothing on stdout. There is no artifact to pipe, and the pulled file is now a
-// record of a finished round rather than a worklist -- same reasoning as
-// preview-extend.mjs keeping stdout empty so an unchanged URL is not re-sent.
-
-// NON-ZERO WHEN NOTHING CLOSED, on the same rule as preview-extend --all: an
-// outcome the operator has to act on is not a success, and the message saying so
-// went to stderr where a wrapper will not see it. "This round was already
-// closed" is usually harmless and occasionally means the wrong slug, the wrong
-// database, or a file that lists ids the table does not have -- and those look
-// identical from here. Exiting non-zero is what stops a chained `just
-// galley-close … && git commit` from recording a round that never ended.
+// Nothing on stdout: no artifact to pipe.
 //
-// `exitCode` rather than `exit()`: everything this command says goes to stderr,
-// which Node writes ASYNCHRONOUSLY when it is a pipe, and process.exit() would
-// truncate exactly the explanation the operator needs. Nothing follows, so
-// setting the code and falling off the end is both safe and sufficient.
+// NON-ZERO WHEN NOTHING CLOSED, so `just galley-close … && git commit` can't
+// record a round that never ended (the wrong slug or database looks the same).
+// `exitCode`, not exit(): stderr to a pipe is async, and exit() truncates it.
 if (closed.length === 0) process.exitCode = 1;

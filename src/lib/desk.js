@@ -1,32 +1,15 @@
-// What the Desk index shows, and in what order.
+// What the Desk index shows, and in what order. Pure, so `node --test` reaches
+// every decision; the page does the queries and the markup.
 //
-// Pure: posts, link rows and note counts in, a view model out. The Astro page
-// does the two queries and the markup; every decision about what deserves to be
-// on the page lives here, where `node --test` can reach it. Same split as
-// galley-render.js, which owns what a pulled review file SAYS while
-// galley-pull.mjs owns the I/O.
-//
-// `plural` sits here too, for the smaller version of the same reason: both Desk
-// pages count things aloud, and one copy each is one copy too many.
-//
-// The question this page answers is "what is outstanding?", and the hard part is
-// that the answer is not "the scheduled posts". A round can outlive its draft:
-// move a pubDate earlier, or publish while notes are still open, and the post is
-// live with feedback nobody has closed. A link can outlive its post entirely —
-// an unscoped roster exists because a link whose slug you have forgotten is
-// otherwise unrevocable (`just preview-roster` with no slug). Both belong on this page, so the row set is a union
-// rather than a filter over the collection.
+// "Outstanding" is not just "scheduled": a post can publish with notes still
+// open, and a link can outlive its post. So the rows are a UNION, not a filter
+// over the collection.
 
 import { linkState } from './link-state.js';
 import { isPublished } from './schedule.js';
 
 /**
- * `1 open note` / `3 open notes`.
- *
- * Both Desk pages count the same four things — drafts, open notes, live links,
- * reviewers — and both wrote this line for themselves. Identical copies of a
- * rule that a plural like "1 note closed in earlier rounds" is one edit away
- * from splitting; one owner instead.
+ * `1 open note` / `3 open notes`. Shared by both Desk pages.
  *
  * @param {number} n
  * @param {string} one singular noun
@@ -39,25 +22,12 @@ export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many
 const utcDay = (date) => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 
 /**
- * How long until a draft publishes, as the deadline rather than a date.
+ * How long until a draft publishes.
  *
- * COUNTED IN CALENDAR DAYS, NOT IN ELAPSED TIME, and the difference is the last
- * day of every schedule — the one day this page exists to show. Ceiling the raw
- * millisecond gap (which this did) reads that day wrong in BOTH directions: a
- * draft going live in thirty minutes rounds up to "publishes tomorrow", and one
- * going live in twenty-five hours — tomorrow — becomes "publishes in 2 days".
- * This is the deadline deskIndex sorts every row by, so it has to name the same
- * day as the date printed beside it.
- *
- * UTC because that is what `pubDate` means: a bare `YYYY-MM-DD` in frontmatter
- * is midnight UTC, and dateFormatter renders it in UTC too. Counting in local
- * time would put the countdown and the date next to it a day apart for part of
- * every day, which is worse than either being wrong alone.
- *
- * Lives here rather than inline in the page for the reason the rest of this
- * module does: it is a decision about what the Desk says, its failure is a
- * plausible-looking wrong number rather than an error, and `node --test` cannot
- * reach an .astro file.
+ * In CALENDAR DAYS (UTC), not elapsed time. Rounding the raw gap got the last
+ * day wrong both ways: thirty minutes out read "tomorrow", twenty-five hours
+ * out read "in 2 days". UTC because that is what `pubDate` and the date printed
+ * beside it mean.
  *
  * @param {Date} pubDate
  * @param {number} [now] epoch MS
@@ -76,8 +46,7 @@ export function countdown(pubDate, now = Date.now()) {
  * @property {string} title
  * @property {Date} pubDate
  * @property {boolean} published
- * @property {number} liveLinks outstanding links — `live` only, so a spent or
- *   revoked one does not read as something to deal with.
+ * @property {number} liveLinks `live` only
  * @property {number} totalLinks every link ever minted for the post.
  * @property {number} openNotes
  */
@@ -85,16 +54,9 @@ export function countdown(pubDate, now = Date.now()) {
 /**
  * Assemble the index.
  *
- * A post earns a row by being scheduled, by having a live link, or by having an
- * open note. A published post with neither is deliberately absent: it is the
- * steady state of every post this blog has ever run, and listing them all would
- * bury the three that need something.
- *
- * ORDER IS BY URGENCY, NOT BY DATE. Scheduled posts come first, soonest
- * publication first, because publication is the deadline everything else hangs
- * off — a draft going live tomorrow with eleven open notes is the only row that
- * matters on that page. Everything else follows by open notes, then by slug so
- * the order is stable between loads.
+ * A post gets a row if it is scheduled, has a live link, or has an open note.
+ * Ordered by urgency: scheduled first, soonest publication first; then by open
+ * notes; then by slug for a stable order.
  *
  * @param {{ posts: {slug: string, title: string, pubDate: Date}[],
  *           links?: Record<string, any>[],
@@ -124,7 +86,6 @@ export function deskIndex({ posts, links = [], openNotes = new Map(), now = Date
     ).length;
     const notes = openNotes.get(post.slug) ?? 0;
 
-    // The union. A published post with nothing outstanding is not news.
     if (published && liveLinks === 0 && notes === 0) continue;
 
     rows.push({
@@ -139,18 +100,14 @@ export function deskIndex({ posts, links = [], openNotes = new Map(), now = Date
   }
 
   rows.sort((a, b) => {
-    // Scheduled first, and among them the soonest deadline.
     if (a.published !== b.published) return a.published ? 1 : -1;
     if (!a.published) return a.pubDate.valueOf() - b.pubDate.valueOf();
     if (a.openNotes !== b.openNotes) return b.openNotes - a.openNotes;
     return a.slug.localeCompare(b.slug);
   });
 
-  // Links pointing at a slug the collection does not have — a post renamed,
-  // deleted, or never merged. These are exactly the links most in need of
-  // revoking and the hardest to find, which is why preview-roster grew --all;
-  // without a section here they would be invisible on the Desk for the same
-  // reason.
+  // Links for a slug the collection doesn't have (renamed, deleted, never
+  // merged): the ones most in need of revoking, and otherwise invisible.
   const orphans = [...linksBySlug.entries()]
     .filter(([slug]) => !bySlug.has(slug))
     .map(([slug, own]) => ({ slug, links: own }))
@@ -161,10 +118,7 @@ export function deskIndex({ posts, links = [], openNotes = new Map(), now = Date
     orphans,
     totals: {
       scheduled: rows.filter((row) => !row.published).length,
-      // Counted over the ROWS, so this agrees with the numbers on screen. An
-      // orphan link has no pubDate to classify against and is reported by its
-      // own section rather than folded in here, where it would be a number
-      // nothing on the page adds up to.
+      // Over the rows, so it matches what is on screen; orphans have their own section.
       liveLinks: rows.reduce((sum, row) => sum + row.liveLinks, 0),
       openNotes: rows.reduce((sum, row) => sum + row.openNotes, 0),
     },

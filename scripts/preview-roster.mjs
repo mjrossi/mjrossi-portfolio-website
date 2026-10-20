@@ -1,4 +1,4 @@
-// List and revoke the preview links minted for one post.
+// List and revoke preview links.
 //
 //   npm run preview-roster -- --remote                          # every post
 //   npm run preview-roster -- my-draft --remote                 # one post
@@ -7,45 +7,20 @@
 //   npm run preview-roster -- my-draft --revoke-all --remote    # withdraw all for a post
 //   npm run preview-roster -- my-draft --local                  # the dev database
 //
-// --remote or --local is REQUIRED; see scripts/database-target.mjs.
+// --remote or --local is REQUIRED (database-target.mjs).
 //
-// NO SLUG LISTS EVERY LINK, across all posts. That is a read, and the per-post
-// scoping that matters elsewhere does not reach a CLI already authenticated as
-// you -- an inventory you can only query by knowing the answer is not much of an
-// inventory. `--all` is kept as an alias for what the absent slug now says, and
-// is refused next to anything that names a post: it is a synonym, not a modifier.
+// THIS IS THE ONLY INVENTORY: a token is recorded nowhere else, so a link
+// missing from here can't be revoked, only waited out. No slug lists every post
+// — per-post scoping matters in the public worker, not in a CLI authenticated
+// as you. `--all` is an alias for that, refused beside anything naming a post.
 //
-// Revoking still resolves to exactly one post: --revoke takes an id and derives
-// the post from its row, --revoke-all takes a slug. Neither can reach the table
-// at large. A slug in front of --revoke's id is an ASSERTION -- if it disagrees
-// with the row, this refuses and names both posts. See scripts/resolve-id.mjs.
+// Revoking always resolves to one post (--revoke derives it from the id's row;
+// --revoke-all takes a slug). It sets revoked_at, never deletes, and takes away
+// READING too: the post 404s for that link. There is no admin write endpoint;
+// the Desk only reads, with the same link-state.js classification.
 //
-// Reads and writes D1 through `wrangler d1 execute`, which is already
-// authenticated as you. That is why there is no admin WRITE endpoint: the
-// deployed worker never needs a way to mutate a link, and handing someone one
-// draft must not hand them the rest.
-//
-// The Desk at /admin does now READ this same table — see CLAUDE.md, "The Desk"
-// — behind Cloudflare Access and a JWT the worker verifies itself. It shows the
-// same four states this command prints, from the same src/lib/link-state.js, so
-// the two cannot disagree about what is outstanding. It cannot revoke anything.
-//
-// This list is the ONLY inventory. A token is recorded nowhere else, so a link
-// missing from here cannot be revoked, only waited out.
-//
-// Revoking sets revoked_at; rows are never deleted, so a withdrawn link stays
-// listed rather than vanishing. It removes READING as well as writing — the
-// post 404s for that link.
-//
-// A live link that is merely running short does not need revoking and reminting:
-// `just preview-extend <id> --hours N` moves its expiry in place, and the
-// URL the reviewer holds keeps working. The `extend to <date>` suffix on a row
-// below is how far that can go — see scripts/preview-extend.mjs.
-//
-// A link whose POST HAS PUBLISHED reads `spent`, not `live`. Its row may not have
-// expired, but the draft it was minted to show is public and it grants nothing a
-// plain URL doesn't. Nothing needs doing about a spent link; the label exists so
-// the roster's answer to "what is outstanding?" stays true.
+// A link running short wants `just preview-extend`, not a re-mint. `spent`
+// means the row is fine but the post is public: nothing to do.
 
 import { isoDay } from '../src/lib/galley-render.js';
 import { linkState } from '../src/lib/link-state.js';
@@ -76,21 +51,13 @@ for (let i = 0; i < argv.length; i++) {
   } else if (arg === '--remote') {
     remote = true;
   } else if (arg === '--all') {
-    // Retained as an alias: listing every post is what no slug means now. Kept
-    // so `npm run preview-roster -- --all` out of shell history still works.
-    //
-    // It is an ASSERTION that no post was named, not a mode, which is why
-    // nothing below reads it except the two guards -- and why it must not be
-    // wired back into `listAll`. Doing that is what made `--all` win over a
-    // slug beside it and silently widen the answer. It cannot be refused in
-    // this loop instead: the positionals are not all in yet, so `--all my-draft`
-    // and `my-draft --all` would behave differently.
+    // An ASSERTION that no post was named, not a mode: only the guards read it.
+    // Wiring it back into `listAll` let it beat a slug and silently widen the
+    // answer. Checked after the loop so `--all x` and `x --all` agree.
     all = true;
   } else if (arg === '--revoke') {
-    // A BOOLEAN, with the id as a positional. It used to take its value inline,
-    // and that is what forced the justfile to rewrite arguments: `just` fills
-    // positional parameters greedily, so no conditional there could tell
-    // `preview-revoke <id> --remote` from `preview-revoke <slug> <id>`.
+    // A boolean with the id as a positional, so the justfile can pass
+    // arguments through (just fills positionals greedily).
     revoke = true;
   } else if (arg === '--revoke-all') {
     revokeAll = true;
@@ -101,7 +68,7 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 
-// WHAT THE POSITIONALS MEAN, on the same rule as preview-extend.mjs:
+// The positionals, on preview-extend.mjs's rule:
 //
 //   --revoke      <id>            withdraw one link; the post comes off the row
 //   --revoke      <slug> <id>     the same, with the post asserted
@@ -127,20 +94,14 @@ if (revoke) {
 
 if (slug !== null && !SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 if (revoke && revokeAll) die('pass either --revoke or --revoke-all, not both');
-// `--all` now says exactly what an absent slug says, so pairing it with
-// something that names a post is a contradiction rather than a refinement. The
-// slug-scoped form used to be refused outright and still is: an inventory that
-// silently answers a wider question than it was asked is the most reassuring
-// possible wrong answer, and this list is the only inventory there is.
+// `--all` beside a post is a contradiction. A list that silently answers a
+// wider question than asked is the most reassuring wrong answer there is.
 if (all && (revoke || revokeAll)) {
   die('--all lists; it does not revoke — use --revoke <link-id> or --revoke-all <slug>');
 }
 if (all && slug !== null) {
   die(`--all lists every post — drop the slug to mean that, or drop --all to list ${slug}`);
 }
-// Revoking one link resolves to a post; revoking in bulk has to be told one.
-// Neither can reach the whole table, which is the scoping that matters -- see
-// the header, and scripts/resolve-id.mjs on where the per-id check lives now.
 if (revokeAll && slug === null) {
   die(
     '--revoke-all needs the post to revoke for.\n' +
@@ -149,62 +110,37 @@ if (revokeAll && slug === null) {
   );
 }
 
-// No slug and no revoke is the whole table. `--all` said this before and is kept
-// as an alias; the absence of a slug says it now. The guards above have already
-// refused every way the two could disagree, so this reads either one.
 const listAll = !revoke && !revokeAll && slug === null;
 
-// Which database, decided explicitly. See scripts/database-target.mjs.
 const useLocal = resolveDatabase({ local, remote });
 
 // ── revoke, then list ────────────────────────────────
 //
-// In that order, so the command always ends by showing the resulting state
-// rather than the state you asked it to change.
+// In that order, so the command ends by showing the resulting state.
 
 const where = databaseLabel(useLocal);
 
 /**
- * A link's state as a clause, for the one sentence that has to explain a no-op.
- *
- * Only `revoked` is reachable today -- resolveLink settles "no such link" and
- * "belongs to another post" before the UPDATE, and revokeLinks' clause leaves
- * nothing else -- but this reads the classification rather than asserting it, so
- * narrowing that clause later changes the sentence instead of falsifying it.
+ * A link's state as a clause, to explain a no-op. Reads the classification
+ * rather than assuming "revoked", so narrowing revokeLinks later can't make it lie.
  */
 const describe = (info) =>
   info.state === 'revoked' ? `already revoked on ${isoDay(info.revokedAt)}` : info.state;
 
 try {
-  // Branch on the FLAG, not on the id it collected: `--revoke ''` is an empty
-  // string, which is falsy, and would otherwise skip the revoke entirely and
-  // fall through to a listing that dies on a null slug. Resolution refuses the
-  // shape and says so.
+  // The FLAG, not the id: `--revoke ''` is falsy and would fall through to listing.
   if (revoke || revokeAll) {
-    // The post comes off the row. revokeLinks still scopes its UPDATE by slug --
-    // see scripts/resolve-id.mjs on why that clause is no longer what protects a
-    // mistyped id, and why it stays anyway.
     let resolved = null;
     if (revoke) {
       resolved = await resolveLink(die, revokeId, { slug, local: useLocal });
       ({ slug } = resolved);
     }
     const revoked = await revokeLinks(slug, { id: revokeId }, { local: useLocal });
-    // Said out loud, because a no-op is otherwise indistinguishable from success,
-    // and someone withdrawing a link that has gone astray needs to know it is
-    // dead rather than infer it from a table they have to re-read.
-    //
-    // On the id path there is now exactly ONE cause left: the link was already
-    // revoked. No such link and wrong post are both settled by resolveLink
-    // before the UPDATE runs, so this can name the date instead of listing the
-    // possibilities -- and the row saying so is already in hand.
+    // Said out loud: a no-op otherwise looks like success. On the id path the
+    // only cause left is "already revoked"; resolveLink settled the rest.
     if (revoked.length === 0) {
-      // READ THE ROW, don't reason about it. Which causes are reachable is a
-      // property of revokeLinks' WHERE clause, and narrowing that clause later
-      // -- refusing to revoke a spent link, say, as preview-extend already
-      // refuses a published post -- would leave an asserted "already revoked"
-      // printing a confident falsehood. linkState is the same classifier the
-      // rows below and the Desk use, so this cannot disagree with either.
+      // Read the row rather than assume the cause, via the same classifier as
+      // the rows below and the Desk.
       const why = revoke
         ? `link ${revokeId} for ${slug} is ${describe(linkState(resolved.row))}`
         : `no live links for ${slug}`;
@@ -220,9 +156,7 @@ try {
     : await listLinks(slug, { local: useLocal });
 
   if (rows.length === 0) {
-    // Names the database. An operator who minted with --local and listed without
-    // it (or the reverse) would otherwise get the most reassuring possible answer
-    // from the wrong place -- and this list is the only inventory there is.
+    // Names the database: the wrong one gives the most reassuring answer.
     console.error(
       listAll
         ? `preview-roster: no links minted for any post (${where})`
@@ -231,20 +165,12 @@ try {
     process.exit(0);
   }
 
-  // One instant for the whole listing, so a row cannot be classified against a
-  // later clock than the row above it.
+  // One instant for the whole listing.
   const now = Date.now();
 
-  // When each post goes live, read once per slug from its own frontmatter. A
-  // published post ends its links: the draft they were minted to show is public,
-  // so they grant nothing a plain URL doesn't. Reporting those as `live` is what
-  // made the roster answer "what is outstanding?" with "everything, forever".
-  //
-  // Tolerant of a missing or unreadable post, and deliberately so. This list is
-  // the only inventory of issued links there is, and a link minted against a
-  // post since renamed or deleted is exactly the one you most need to see in
-  // order to revoke it — failing the whole listing over it would be the wrong
-  // trade. Such a row simply shows its own expiry, as before.
+  // pubDate per slug, so links on a public post read `spent`. A missing post
+  // is tolerated: a link for a renamed or deleted post is the one you most need
+  // to see to revoke it.
   const pubDates = new Map();
   function publicationOf(slug) {
     if (!pubDates.has(slug)) {
@@ -258,18 +184,8 @@ try {
   }
 
   /**
-   * One link, as a line. Shared so both modes render identically.
-   *
-   * The CLASSIFICATION is src/lib/link-state.js, which the Desk at /admin reads
-   * too — two derivations of "live" is how a roster and a dashboard start
-   * disagreeing about what is outstanding. What stays here is the presentation:
-   * the column widths, the dash for a view-only link, and the `· extend to`
-   * suffix.
-   *
-   * `expired` is not just a label: since migrations/0002 this is the expiry
-   * isLinkActive enforces, so a row reading expired here is a link already
-   * 404ing in the reviewer's browser. `spent` is the same idea one step on —
-   * the row may not have expired, but the post it guarded is public.
+   * One link, as a line. The classification is link-state.js; this is only the
+   * presentation. `expired` here means already 404ing for the reviewer.
    */
   function format(row) {
     const info = linkState(row, { pubDate: publicationOf(row.slug), now });
@@ -279,20 +195,16 @@ try {
         : info.state === 'spent'
           ? `spent (published ${isoDay(info.publishedAt)})`
           : info.state;
-    // A view-only link has no reviewer. Shown as a dash rather than blank so
-    // the column stays readable and "who holds this?" has a visible answer.
+    // A dash for view-only, so "who holds this?" has a visible answer.
     const who = row.reviewer ?? '—';
     const expires = info.expires.toISOString().slice(0, 16).replace('T', ' ');
-    // Headroom, shown only where it is actionable — linkState returns null for
-    // every case where extending would do nothing, and the absence of this
-    // suffix is the answer.
+    // Only where extending would do something.
     const ceiling = info.extendTo ? `  · extend to ${isoDay(info.extendTo)}` : '';
     return `  ${row.id}  ${who.padEnd(14)}  expires ${expires}  ${state}${ceiling}`;
   }
 
   if (listAll) {
-    // Grouped by post, because the question an unscoped listing answers is
-    // "which draft was this link for?" -- a flat list by date would bury it.
+    // Grouped by post: an unscoped listing answers "which draft was this for?"
     console.log(`Preview links — all posts (${where})\n`);
     let current = null;
     let live = 0;
@@ -302,10 +214,7 @@ try {
         console.log(`  ${row.slug}`);
         current = row.slug;
       }
-      // "Still live" excludes spent rows for the same reason format() labels
-      // them differently: a link to a post that is already public is not
-      // outstanding in any sense that matters. Read from the same classifier
-      // format() uses, so the tally and the lines below it cannot disagree.
+      // Spent rows excluded, by the same classifier as the lines below.
       if (linkState(row, { pubDate: publicationOf(row.slug), now }).live) live++;
       console.log(format(row));
     }

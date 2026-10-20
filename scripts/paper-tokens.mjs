@@ -1,20 +1,8 @@
-// Paper's colour tokens, read from the stylesheet the site actually ships.
-//
-// For the image generators that run under bare Node, where there are no CSS
-// custom properties to resolve. scripts/make-og.mjs predates this and spells
-// its palette as hand-approximated sRGB literals, which drift silently when a
-// token moves — the same failure src/lib/identity.js exists to prevent for the
-// sentences. Reading `:root` in src/styles/global.css instead means a palette
-// change reaches the image on its next regeneration with nothing to re-sync.
-//
-// PAPER ONLY. This reads the bare `:root` block, never the two Night blocks: a
-// generated image is one image in every theme, and Paper is what print gets.
-//
-// sharp's SVG renderer (librsvg) does not understand oklch(), so values are
-// converted to sRGB hex here, by the published OKLab matrices (Björn Ottosson),
-// gamut-clipped per channel. Only the two colour forms global.css uses at
-// `:root` are handled — `#rrggbb` and `oklch(L% C h)` — and anything else
-// throws rather than guessing.
+// Paper's colour tokens, read from the bare `:root` in src/styles/global.css
+// for image generators under bare Node, so a palette change needs no re-sync.
+// Paper only: one image serves every theme. librsvg can't read oklch(), so
+// values become sRGB hex (Ottosson's OKLab matrices, clipped per channel).
+// Only `#rrggbb` and `oklch(L% C h)` are handled; anything else throws.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 

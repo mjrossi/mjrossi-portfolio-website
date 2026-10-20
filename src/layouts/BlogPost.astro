@@ -25,46 +25,23 @@ const { previous, next } = await getAdjacentPosts(post.id, {
 // See BlogPostEntry.astro — keyed off the pubDate, not the preview flag.
 const scheduled = !isPublished(pubDate);
 
-// Whether /og/<slug>.png exists, which is NOT the same question as `scheduled`.
-// scripts/make-post-og.mjs writes a card only for a post that was published when
-// it ran (a card carries the title, and the URL is guessable, so generating one
-// for a draft would publish that draft's title). `scheduled` is evaluated per
-// request, so a post that goes live by its date passing — with no deploy behind
-// it, which is the documented scheduled-publishing mechanism — would start
-// pointing og:image at a card that was never generated and 404s until the next
-// build. __BUILD_TIME__ is inlined by Vite (see astro.config.mjs) and asks the
-// question the generator actually answered.
+// Whether /og/<slug>.png exists — not the same as `scheduled`. The generator
+// skips drafts, and a post can go live with no rebuild, so ask with the BUILD's
+// clock or og:image would point at a card never generated.
 const hasCard = isPublished(pubDate, __BUILD_TIME__);
 
-// The galley renders only for a signed preview link that named a reviewer, only
-// on the post that link authorises, and only while that post is still a draft.
-// All three matter: previewReviewer alone would put the review chrome on every
-// post the reader can reach, and middleware only guarantees no-store + noindex
-// on responses where a preview signal is live. This gate is the reason the
-// second client-JS carve-out can never appear on a publicly cacheable page —
-// smoke asserts it.
-//
-// `scheduled` is the belt to a brace applied at mint time. `just preview-link`
-// caps a link's expiry at pubDate, so a link normally expires as its post goes
-// live and never reaches this gate; that cap is a snapshot, though, and moving
-// pubDate EARLIER afterwards is exactly what the authoring workflow does at step
-// 5. This is what stops a link outstanding from that move holding the review
-// margin open over a published post. /api/galley enforces the same rule, because
-// this one is a UI condition and authorisation cannot live in the UI.
+// The galley renders only for a link that named a reviewer, only on the post
+// it authorises, and only while that post is a draft. This gate is why the
+// galley JS can never reach a publicly cacheable page; smoke asserts it.
+// `scheduled` covers a pubDate moved EARLIER after minting. /api/galley
+// enforces the same rule, since authorisation can't live in the UI.
 const reviewer =
   Astro.locals.previewReviewer && Astro.locals.previewSlug === post.id && scheduled
     ? Astro.locals.previewReviewer
     : null;
 
-// The revision this page is rendering, handed to the margin so a note can be
-// tied to the source it was actually written against. /api/galley refuses a note
-// whose page has since moved, and the client uses it to know when every anchor
-// on screen has gone stale at once.
-//
-// Computed only for a review render — hashing every post's raw MDX on an
-// ordinary request would be work no reader benefits from — and through the same
-// src/lib/post-source.ts the endpoint uses, because a hash that disagreed with
-// the endpoint's would refuse every write.
+// The revision being rendered, for the margin. Only computed for a review
+// render, through the same post-source.ts as the endpoint.
 const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
 ---
 
@@ -80,13 +57,7 @@ const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
 
     <header class="post-header">
       <h1 class="post-title">{title}</h1>
-      {/*
-        Up to two topics in the meta line, not the full chip row (finding 1.4).
-        Six chips used to stack between the title and the first word of prose —
-        the loudest coloured thing on the page, doing discovery work at the
-        moment the reader wants to start reading. The full set is in the
-        footer under "Filed under", where discovery belongs.
-      */}
+      {/* Two topics here; the full set is in the footer, under "Filed under". */}
       <p class="post-meta">
         {scheduled && (
           <span class="post-scheduled">Scheduled</span>
@@ -120,30 +91,17 @@ const revision = reviewer ? ((await revisionOf(post.id)) ?? null) : null;
       <PostTags tags={tags} label="Filed under" />
 
       {/*
-        Placement D, then the chronological neighbours (§5, finding 1.5). Order
-        matters: the subscribe card is tonal precisely so it does not outshout
-        the next post below it.
-
-        Both are skipped while a post is still a draft. A galley reader is here
-        to review prose, not to be sold a subscription, and a draft's neighbours
-        are whatever the archive happens to hold — the post itself is not in it
-        yet, so "previous/next" would be answering about a different sequence
-        than the one the published post will land in.
+        Subscribe, then previous/next; the card is tonal so it doesn't outshout
+        the next post. Both skipped on a draft: a reviewer isn't to be sold a
+        subscription, and a draft isn't in the sequence yet.
       */}
       {!scheduled && (
         <>
           <Subscribe variant="card" />
           {/*
-            The card's blocker fallback, and it must stay OUT here rather than
-            inside Subscribe.astro for two reasons: the component renders the
-            <aside> an ad-block filter list hides, and it renders nothing at all
-            when PUBLIC_TURNSTILE_SITE_KEY is missing — which is precisely when
-            a way to subscribe matters most.
-
-            This one DOES keep RSS, unlike the index's. There is no RSS pill in
-            a post's header, and the card's own RSS link is inside the aside a
-            blocker would hide — so drop it here and a blocked card leaves the
-            page with no feed route at all.
+            The blocker fallback stays OUT of Subscribe.astro, whose <aside> is
+            what ad-blockers hide and which renders nothing without the site key.
+            It keeps RSS: a post's header has no RSS pill.
           */}
           <p class="blog-follow-note">
             Or follow by <a href="/blog/rss.xml">RSS</a> · <a href="/api/contact">email me</a> to be added by hand

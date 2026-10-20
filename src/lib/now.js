@@ -1,13 +1,5 @@
-// The "Now" section's dateline.
-//
-// Finding 3.3: a Now block the reader can date is worse than no Now block, and
-// the copy had gone three months stale in the future tense. The date is a
-// single config value rather than a string inside the markup so that updating
-// the section means updating one obvious line — and so a malformed value fails
-// the build instead of rendering "Updated undefined".
-//
-// Plain JS with a test, for the usual reason: the failure here is a plausible
-// wrong month, which reads as perfectly ordinary.
+// The home page's "Now" dateline. One config value, so updating the section is
+// one obvious line and a malformed value fails the build.
 
 /** Month the Now section was last rewritten. `YYYY-MM`. */
 export const NOW_UPDATED = '2026-10';
@@ -18,12 +10,8 @@ const MONTHS = [
 ];
 
 /**
- * `'2026-08'` → `'Updated August 2026'`.
- *
- * Formatted from the parts rather than through `new Date('2026-08')`, which
- * parses as midnight UTC and then renders as the *previous* month for anyone
- * west of Greenwich — the one bug this line cannot afford, since its whole job
- * is to state a date accurately.
+ * `'2026-08'` → `'Updated August 2026'`. Formatted from the parts: `new
+ * Date('2026-08')` is midnight UTC, which renders as July west of Greenwich.
  *
  * @param {string} [value]
  * @returns {string}

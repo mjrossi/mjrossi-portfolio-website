@@ -1,19 +1,11 @@
 // The galley: inline editorial review on scheduled posts. See docs/GALLEY.md.
 //
-// Loads ONLY when the page was opened with a signed preview link that names a
-// reviewer, which means only on responses middleware has already forced to
-// `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`. It is
-// therefore structurally incapable of appearing on a publicly cacheable page —
-// a tighter carve-out than the newsletter form, which ships on every /blog hit.
+// Loads only for a signed link that names a reviewer, so only on responses
+// middleware has forced to no-store + noindex. Served unbundled under
+// `script-src 'self'`.
 //
-// Served as a static asset (not bundled) for the same reasons as
-// newsletter.js: it loads as an external module under `script-src 'self'`, and
-// what we write is what gets served.
-//
-// NOTE ON DOM CONSTRUCTION: the CSP sets `require-trusted-types-for 'script'`,
-// so assigning innerHTML throws. Everything here is createElement +
-// textContent. That is also what makes reviewer-supplied note text safe to
-// display without escaping it by hand.
+// The CSP requires Trusted Types, so innerHTML throws: everything is
+// createElement + textContent, which is also what makes reviewer text safe.
 
 import { anchorSelection, findQuote } from './galley-quote.js';
 
@@ -24,15 +16,9 @@ import { anchorSelection, findQuote } from './galley-quote.js';
 
   const slug = mount.dataset.slug;
   const reviewer = mount.dataset.reviewer;
-  // The revision of the .mdx this page was rendered from. Echoed when saving so
-  // the endpoint can refuse a note written against a page that has since moved,
-  // and compared against the server's current revision on every read so the
-  // client knows when its own anchors have gone stale wholesale. See
-  // src/lib/post-source.ts.
+  // The revision this page was rendered from: echoed on save, compared on read.
   const pageRevision = mount.dataset.revision;
-  // Read from the URL rather than a data attribute: the token is already in
-  // the address bar, and copying it into the DOM would only widen where it
-  // can leak from (an extension reading attributes, a screenshot of devtools).
+  // From the URL, not a data attribute: the DOM would only widen where it leaks.
   const token = new URLSearchParams(location.search).get('preview');
   if (!slug || !token) return;
 
@@ -41,9 +27,7 @@ import { anchorSelection, findQuote } from './galley-quote.js';
 
   let notes = [];
   let closedNotes = [];
-  // Set when the server's revision no longer matches the page in front of the
-  // reviewer. Every anchor on screen is then suspect, not just the ones the
-  // server flagged — see renderNotes.
+  // The server has a newer revision than this page: every anchor is suspect.
   let pageStale = false;
 
   // ── element helpers ────────────────────────────────
@@ -55,7 +39,7 @@ import { anchorSelection, findQuote } from './galley-quote.js';
     return node;
   }
 
-  /** The block's text nodes in document order — their concatenation is textContent. */
+  /** The block's text nodes in order; joined, they are its textContent. */
   function textNodesIn(block) {
     const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
     const nodes = [];
@@ -65,18 +49,9 @@ import { anchorSelection, findQuote } from './galley-quote.js';
 
   // ── selection → anchor ─────────────────────────────
 
-  // Turns the current selection into the three things a note records: the MDX
-  // line range of the block it started in, the exact quoted text, and a little
-  // context either side. See src/lib/remark-source-anchors.js for why all
-  // three are needed rather than just the line range.
-  //
-  // EVERYTHING THAT DECIDES WHAT GETS STORED LIVES IN anchorSelection, which is
-  // pure and unit-tested. What stays here is only what needs a document: which
-  // block the selection is in, what text it covers, and where in that block it
-  // begins. That split is not tidiness — a wrong anchor is written to D1
-  // permanently and galley-pull.mjs relocates notes by it months later, so it
-  // is the code in this file most worth having under test, and it could not be
-  // while it lived inside a closure over `window.getSelection()`.
+  // The selection → line range, quote and context. What gets STORED is decided
+  // by anchorSelection, which is pure and unit-tested; a wrong anchor lives in
+  // D1 for good. Only the DOM measuring stays here.
   function resolveSelection() {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
@@ -87,18 +62,11 @@ import { anchorSelection, findQuote } from './galley-quote.js';
     let node = range.startContainer;
     if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
     const block = node?.closest?.('[data-src]');
-    // Diagrams and <Figure> carry no anchor — mdxJsxFlowElement has no
-    // hProperties channel — so a selection inside one resolves to nothing and
-    // the button simply doesn't appear.
+    // Diagrams and <Figure> carry no anchor, so no button appears.
     if (!block || !body.contains(block)) return null;
 
-    // Where the selection starts, as an offset into the block's raw text. A
-    // Range is the only thing that can answer that, and its `toString()` is the
-    // same concatenation `textNodesIn` produces — which is what lets the pure
-    // side work in offsets over an array of strings.
-    //
-    // -1 means unmeasurable, and anchorSelection is careful to treat that as
-    // "unknown" rather than as position zero.
+    // The start as an offset into the block's text (a Range's toString() is
+    // the same concatenation as textNodesIn). -1 means unmeasurable, not zero.
     let rawStart = -1;
     const head = document.createRange();
     head.setStart(block, 0);
@@ -134,10 +102,7 @@ import { anchorSelection, findQuote } from './galley-quote.js';
   const barCount = el('button', 'galley-bar-toggle');
   barCount.type = 'button';
   barCount.setAttribute('aria-expanded', 'false');
-  // Shown when the draft has been revised under this page. Deliberately in the
-  // bar rather than the panel: it is the one thing a reviewer needs to see
-  // without opening anything, because every marker on the page is wrong until
-  // they reload.
+  // In the bar, not the panel: every marker is wrong until they reload.
   const barStale = el('span', 'galley-bar-stale', 'Draft revised — reload to review the current version');
   barStale.hidden = true;
   bar.append(barLabel, barStale, barCount);
@@ -148,10 +113,7 @@ import { anchorSelection, findQuote } from './galley-quote.js';
   const panelList = el('ol', 'galley-list');
   const panelEmpty = el('p', 'galley-empty', 'No notes yet. Select any passage to leave one.');
 
-  // Notes from rounds the author has closed. Kept visible, collapsed, because a
-  // second reviewer needs to see that a point was already raised — and whether it
-  // was acted on or declined — rather than re-filing it. A real <details> so the
-  // disclosure works without any of our own state.
+  // Closed rounds, collapsed, so a point already raised isn't re-filed.
   const addressed = el('details', 'galley-addressed');
   addressed.hidden = true;
   const addressedSummary = el('summary', 'galley-addressed-summary');
@@ -171,11 +133,7 @@ import { anchorSelection, findQuote } from './galley-quote.js';
   composerInput.rows = 4;
   composerInput.placeholder = 'What should change here?';
   composerInput.setAttribute('aria-label', 'Your note');
-  // Optional replacement text. Filling this in makes the note a `suggestion`
-  // rather than a `comment` — the second kind the schema, the validator and the
-  // pull script have always handled, and which nothing could previously create.
-  // An editor proposing better wording has often said everything they mean by
-  // writing it, so the prose above stays optional once this is filled.
+  // Filling this makes the note a `suggestion`; the prose is then optional.
   const composerReplaceLabel = el('p', 'galley-composer-sublabel', 'Suggested replacement (optional)');
   const composerReplace = el('textarea', 'galley-composer-input');
   composerReplace.rows = 3;
@@ -199,13 +157,7 @@ import { anchorSelection, findQuote } from './galley-quote.js';
     barCount.textContent = closedNotes.length > 0 ? `${open} · ${closedNotes.length} addressed` : open;
   }
 
-  /**
-   * One note in the panel.
-   *
-   * `stale` notes get no line number. The stored `src_start` is an absolute line
-   * in a revision this page is not showing, so printing it would name a line the
-   * reviewer can go and look at and find something else entirely.
-   */
+  /** One note in the panel. A stale note's line number would name the wrong line, so it gets none. */
   function renderNote(note, { closed = false } = {}) {
     const item = el('li', closed ? 'galley-note galley-note-closed' : 'galley-note');
     const meta = el('p', 'galley-note-meta');
@@ -213,12 +165,7 @@ import { anchorSelection, findQuote } from './galley-quote.js';
     if (note.src_start && !note.stale && !closed) {
       meta.append(el('span', 'galley-sep', ' · '), el('span', 'galley-note-line', `line ${note.src_start}`));
     } else if (note.src_start && note.stale) {
-      // `note.stale`, not `closed`, decides this. A closed note is usually also
-      // stale — the revision that answered it is the one that changed the file —
-      // but not always: closing a round the author declined leaves notes written
-      // against the current source. Badging those "earlier revision" states
-      // something false about a file nobody has touched. They simply get no line
-      // number, which is the same treatment and claims nothing.
+      // `stale`, not `closed`: a declined round's notes are closed but current.
       meta.append(
         el('span', 'galley-sep', ' · '),
         el('span', 'galley-note-stale', 'earlier revision'),
@@ -227,9 +174,6 @@ import { anchorSelection, findQuote } from './galley-quote.js';
     item.append(meta);
     if (note.quote) item.append(el('blockquote', 'galley-note-quote', note.quote));
     if (note.body) item.append(el('p', 'galley-note-body', note.body));
-    // Without this a suggestion — a note whose whole content is its
-    // replacement text and whose prose is optional — rendered as an empty
-    // list item, since only `body` was ever displayed.
     if (note.suggestion) {
       item.append(el('p', 'galley-note-sublabel', 'Suggested replacement'));
       item.append(el('pre', 'galley-note-suggestion', note.suggestion));
@@ -252,16 +196,10 @@ import { anchorSelection, findQuote } from './galley-quote.js';
     markAnchors();
   }
 
-  // Custom highlights paint a Range without touching the DOM, which is the only
-  // reason word-level marking is safe here. Wrapping the quoted words in a
-  // <mark> would mutate the very tree resolveSelection measures offsets against
-  // and markAnchors re-reads on every refresh — so each render cycle would have
-  // to unpick its own previous one, and any slip would corrupt an anchor rather
-  // than just a colour.
-  //
-  // Null on browsers without the API (Firefox below 140). Every note then takes
-  // the block marker instead, which is exactly the behaviour this file had
-  // before word-level marking existed — a narrower marker, never a wrong one.
+  // Custom highlights paint a Range without touching the DOM. A <mark> would
+  // mutate the tree resolveSelection measures, so a slip would corrupt an
+  // anchor, not just a colour. Without the API (Firefox < 140) every note gets
+  // the block marker.
   const HIGHLIGHT = 'galley-note';
   const highlights =
     typeof Highlight === 'function' && typeof CSS !== 'undefined' && CSS.highlights
@@ -269,52 +207,22 @@ import { anchorSelection, findQuote } from './galley-quote.js';
       : null;
   if (highlights) CSS.highlights.set(HIGHLIGHT, highlights);
 
-  // Mark every passage that carries a note, so an editor can see at a glance
-  // what has already been discussed and doesn't re-file a colleague's feedback.
-  // This is the whole reason notes are shared.
+  // Mark every passage carrying a note, so colleagues don't re-file feedback.
+  // Each current note gets ONE marker: its quoted words when findQuote places
+  // them unambiguously, otherwise the whole block. `data-galley-count` counts
+  // only the block-marked ones.
   //
-  // EVERY CURRENT NOTE GETS EXACTLY ONE MARKER, and which one depends on how
-  // precisely it can be placed:
-  //
-  //   the quoted words — when findQuote can locate the note's quote in the
-  //                      block, unambiguously. The common case, and the one an
-  //                      editor reads as "this is the bit under discussion".
-  //   the whole block  — when it cannot: no quote stored, quote not found, the
-  //                      quote appears twice in that block, or no Highlight API.
-  //                      `data-galley-count` counts these and only these, so the
-  //                      number describes what the block marker actually stands
-  //                      for rather than notes already marked precisely.
-  //
-  // The block marker is a flat wash across the whole element on purpose (see
-  // GalleyMargin.astro). It has to be unmistakably block-scoped: the rule this
-  // replaced was the inline highlighter-pen gradient, which on a block resolves
-  // against the paragraph box instead of a line box and banded the last two
-  // lines — pointing, with total confidence, at prose no note was about.
-  //
-  // A MARKER IS ONLY EVER PLACED FOR A NOTE WRITTEN AGAINST THIS EXACT REVISION.
-  // The block lookup is a literal `[data-src="42-47"]` match, with no fallback to
-  // the quote — so once the source has changed, those line numbers either match
-  // nothing or, worse, match whichever block has since moved into that range.
-  // The second case is the one that matters: it badges a paragraph with a note
-  // about prose it never contained, and nothing on screen says so. Skipping
-  // stale notes gives up a marker; keeping them gives a wrong one.
-  //
-  // Two independent gates, because they fail at different granularities:
-  //   pageStale   — the server has a newer revision than this document, so EVERY
-  //                 anchor here is suspect, including notes the server considers
-  //                 current (they were written against the source we don't have).
-  //   note.stale  — this page is current, but that note predates it.
-  // Closed notes are never passed here at all: they belong to a finished round
-  // and describe a revision this page is not showing.
+  // MARKERS ONLY FOR NOTES ON THIS EXACT REVISION. The lookup is a literal
+  // `[data-src]` match, so after an edit those lines may belong to a different
+  // block — a confidently wrong marker. Two gates: `pageStale` (this whole page
+  // is behind) and `note.stale` (that note predates it). Closed notes never get
+  // markers. Never add a quote fallback here; see docs/GALLEY.md.
   function markAnchors() {
     for (const marked of body.querySelectorAll('.galley-marked')) {
       marked.classList.remove('galley-marked');
       marked.removeAttribute('data-galley-count');
     }
-    // Cleared before the pageStale gate, not after it: a document that has gone
-    // stale since the last render must lose its highlights along with its block
-    // markers, or the words stay lit under a bar telling the reviewer not to
-    // trust anything on the page.
+    // Before the gate, so a page that just went stale loses its highlights too.
     highlights?.clear();
     if (pageStale) return;
 
@@ -328,12 +236,8 @@ import { anchorSelection, findQuote } from './galley-quote.js';
     }
 
     for (const [src, group] of groups) {
-      // Nested blocks can carry the SAME range — a list item whose only child
-      // paragraph spans the same lines — and querySelector returns the outer
-      // one, which marks the whole list item instead of the sentence. Take the
-      // innermost match: the one containing no further match. That is also what
-      // resolveSelection anchored to, since closest() walks up from the
-      // selection and stops at the nearest ancestor.
+      // Nested blocks can share a range (a list item and its one paragraph).
+      // Take the innermost, which is what closest() anchored to.
       const candidates = [...body.querySelectorAll(`[data-src="${src}"]`)];
       const block =
         candidates.find((node) => !node.querySelector(`[data-src="${src}"]`)) ?? candidates[0];
@@ -355,9 +259,7 @@ import { anchorSelection, findQuote } from './galley-quote.js';
           range.setEnd(nodes[hit.endIndex], hit.endOffset);
           highlights.add(range);
         } catch {
-          // Coordinates the DOM refused. findQuote derives them from these very
-          // nodes so this should not happen, but a marker on the whole block is
-          // the right way to be wrong about it.
+          // Shouldn't happen; the block marker is the right way to be wrong.
           unplaced += 1;
         }
       }
@@ -370,67 +272,37 @@ import { anchorSelection, findQuote } from './galley-quote.js';
 
   // ── the on-screen keyboard ─────────────────────────
 
-  // How much of the layout viewport is currently off the bottom of the screen,
-  // published as --galley-keyboard for GalleyMargin.astro to lift the composer
-  // by. The reasoning for why that is needed at all lives on the
-  // .galley-composer rule there; what matters here is the measurement.
+  // How much of the layout viewport is off the bottom of the screen, published
+  // as --galley-keyboard to lift the fixed composer (see GalleyMargin.astro).
+  // Layout minus visual viewport; zero where the keyboard still resizes the
+  // layout viewport, so no platform sniffing.
   //
-  // visualViewport is the part of the page still on screen. The layout viewport
-  // is what `position: fixed` resolves against, and it does not shrink for the
-  // keyboard any more, so the difference between the two is the strip a fixed
-  // box has to be lifted clear of. On a browser that still resizes the layout
-  // viewport that difference is zero, which is why this can run unconditionally
-  // rather than sniffing for a platform.
-  //
-  // THE KEYBOARD IS THE DOMINANT TERM, NOT THE ONLY ONE. `clientHeight` is the
-  // initial containing block, which on Chrome and Firefox for Android and on
-  // Safari is sized to the *large* viewport — so a retractable bottom toolbar
-  // is in this number too, and with the toolbar out and nothing focused the
-  // lift is a few dozen pixels rather than 0. That is the behaviour we want
-  // (4rem above what the reader can see, not above an edge behind the toolbar)
-  // and it is why the composer slides a little as the toolbar retracts. Worth
-  // knowing before reading that motion as a bug.
-  //
-  // `offsetTop` is subtracted because a visual viewport scrolled down inside the
-  // layout viewport has already accounted for part of that difference; counting
-  // it twice would lift the composer off the top of the screen.
+  // The retractable toolbar is in this number too (clientHeight is the LARGE
+  // viewport), so the composer slides slightly as it retracts. Intended, not a
+  // bug. `offsetTop` is subtracted or a scrolled visual viewport counts twice.
   const viewport = window.visualViewport;
 
-  // Tolerance around `scale === 1`: a pinch that settles back to unzoomed can
-  // report 1.0000001, and a strict comparison would trip on that noise.
+  // A pinch that settles back can report 1.0000001.
   const ZOOM_EPSILON = 1.01;
 
   let lift = 0;
 
   function trackKeyboard() {
-    // HELD, NOT RECOMPUTED, WHILE PINCH-ZOOMED. The same subtraction then
-    // measures the zoom rather than a keyboard, and reading a galley zoomed in
-    // is an ordinary thing to do on a phone. Holding rather than resetting is
-    // the load-bearing half: a reviewer who pinches to re-read the quote *with
-    // the composer already open* still has the keyboard up, and publishing 0px
-    // there would drop the composer straight back underneath it — re-creating
-    // the exact bug this exists to fix, mid-composition.
+    // HELD, not reset, while zoomed: the subtraction would measure the zoom,
+    // and resetting to 0 would drop an open composer under the keyboard.
     if (!viewport || viewport.scale > ZOOM_EPSILON) return;
 
     const covered =
       document.documentElement.clientHeight - viewport.height - viewport.offsetTop;
-    // Finite-checked because an unparseable value here is not a smaller lift,
-    // it is no `bottom` at all: `calc(4rem + NaNpx)` is invalid at computed-value
-    // time, the declaration is dropped, and a composer with `bottom: auto` lands
-    // at the TOP of the screen. Nothing observed should produce one — this is
-    // the fallback being made explicit rather than left to arithmetic.
+    // `calc(4rem + NaNpx)` is dropped, and `bottom: auto` puts the composer at the TOP.
     const next = Number.isFinite(covered) ? Math.max(0, Math.round(covered)) : 0;
-    // `scroll` fires throughout ordinary scrolling as offsetTop tracks the
-    // toolbar, and every write invalidates style on the whole galley subtree —
-    // including the notes panel, which can be dozens of entries.
+    // Skip no-op writes: `scroll` fires constantly and each write restyles the galley.
     if (next === lift) return;
     lift = next;
     mount.style.setProperty('--galley-keyboard', `${lift}px`);
   }
 
-  // Both events, because they fire for different halves of the same thing: the
-  // keyboard opening is a resize, and the browser scrolling the focused field
-  // into view afterwards is a scroll.
+  // The keyboard opening is a resize; scrolling the field into view is a scroll.
   viewport?.addEventListener('resize', trackKeyboard);
   viewport?.addEventListener('scroll', trackKeyboard);
   trackKeyboard();
@@ -461,25 +333,14 @@ import { anchorSelection, findQuote } from './galley-quote.js';
     }
     pending = found;
     addBtn.hidden = false;
-    // Position above the selection, clamped into the viewport so a selection
-    // at the very top of the page doesn't put the button off-screen.
+    // Above the selection, clamped on-screen.
     const top = found.rect.top + window.scrollY - 44;
     addBtn.style.top = `${Math.max(window.scrollY + 8, top)}px`;
     addBtn.style.left = `${Math.max(8, found.rect.left + window.scrollX)}px`;
   });
 
-  // Keep the button from destroying the selection it acts on.
-  //
-  // mousedown on a button collapses the document selection, which queues a
-  // selectionchange whose handler resolves to nothing and calls hideAdd(). That
-  // task runs before mouseup at any human click speed, so the button is
-  // display:none by the time the click would land, the event is dispatched on
-  // the ancestor instead, and the listener below never fires: the editor selects
-  // a passage, sees the button, clicks it, and nothing happens. Suppressing the
-  // default mousedown action preserves the selection and the button both.
-  //
-  // This is the standard toolbar idiom for exactly this reason, and it is
-  // harmless where a UA would have kept the selection anyway.
+  // mousedown would collapse the selection, the selectionchange handler would
+  // hide the button before mouseup, and the click would never land.
   addBtn.addEventListener('mousedown', (event) => event.preventDefault());
 
   addBtn.addEventListener('click', () => {
@@ -522,13 +383,8 @@ import { anchorSelection, findQuote } from './galley-quote.js';
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slug,
-          // A replacement makes it a suggestion; prose alone is a comment.
-          // src/lib/galley.js requires `body` for a comment and `suggestion`
-          // for a suggestion, which is exactly the pair the guard above allows.
           kind: replacement ? 'suggestion' : 'comment',
-          // The revision `src` was read from. The endpoint refuses the note if
-          // this is not the source it currently holds, because the line range
-          // above would then point into a file nobody is looking at.
+          // Refused by the endpoint if the source has since moved.
           revision: pageRevision,
           src: pending.src,
           quote: pending.quote,
@@ -540,33 +396,20 @@ import { anchorSelection, findQuote } from './galley-quote.js';
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        // The link is the credential, so the two failures worth naming
-        // separately are both about the link itself — an editor who has had a
-        // token expire needs to know to ask for a new one, not to retry.
         const messages = {
           not_authorised: 'This link can no longer leave notes. Ask for a fresh one.',
           slug_mismatch: 'This link belongs to a different draft.',
-          // The draft moved while this page was open, so the passage this note
-          // is anchored to may no longer be there. Says "copy" because the text
-          // survives in the composer only until the reload, and there is no way
-          // to restore the selection afterwards.
+          // "Copy": the text survives only until the reload.
           stale_page:
             'This draft was revised while you were reading. Copy your note, reload, and re-select the passage.',
           too_many_notes: "That's a lot of notes in one go — take a short break and continue.",
           body_too_long: 'That note is too long. Try splitting it in two.',
           suggestion_too_long: 'That replacement is too long. Try splitting it in two.',
-          // Refused by the transport cap before the field checks ran, so
-          // neither *_too_long message applies. Says the same thing they do,
-          // because from the editor's side it is the same problem.
+          // The transport cap; to the editor, the same problem.
           payload_too_large: 'That note is too long. Try splitting it in two.',
-          // The draft is fine; the database behind the galley is not. Tells the
-          // editor not to retype the note, which is what "Try again" invites.
           galley_db_error: 'The galley is having trouble saving. Let the author know.',
         };
-        // hasOwn, not a bare lookup: `data.error` reaches this from a response
-        // body, and an object literal inherits Object.prototype — so an error
-        // named "constructor" or "toString" would resolve to a function and get
-        // stringified into the panel.
+        // hasOwn: an error named "constructor" would find Object.prototype's.
         composerMsg.textContent = Object.hasOwn(messages, data.error)
           ? messages[data.error]
           : 'Could not save that note. Try again.';
@@ -586,15 +429,11 @@ import { anchorSelection, findQuote } from './galley-quote.js';
 
   // ── load ───────────────────────────────────────────
 
-  // Declared above load() because load() records against it. See refresh().
   const REFRESH_THROTTLE_MS = 5000;
   let lastLoad = 0;
 
   async function load() {
-    // EVERY load counts against the throttle, including the one after a save and
-    // the one at startup. Booking it in refresh() alone meant saving a note and
-    // alt-tabbing straight back fired a second GET inside the window the
-    // throttle exists to bound.
+    // Every load counts against the throttle, including after a save.
     lastLoad = Date.now();
     try {
       const res = await fetch(api, { headers: { Accept: 'application/json' } });
@@ -602,32 +441,17 @@ import { anchorSelection, findQuote } from './galley-quote.js';
       const data = await res.json();
       notes = Array.isArray(data.notes) ? data.notes : [];
       closedNotes = Array.isArray(data.closed) ? data.closed : [];
-      // The server is serving a revision this page was not rendered from, so the
-      // document on screen is behind the one every note is being measured
-      // against. Withholds all markers (see markAnchors) and raises the reload
-      // prompt — without which the first the reviewer would hear of it is a
-      // refused save after typing a note.
-      //
-      // Compared only when both sides are known: a page with no data-revision
-      // cannot write anyway, and guessing "stale" there would show a reload
-      // prompt that reloading does not clear.
+      // Raise the reload prompt now, not on a refused save. Only when both
+      // sides are known, or the prompt would survive the reload.
       pageStale = Boolean(pageRevision && data.revision && data.revision !== pageRevision);
       renderNotes();
     } catch {
-      // A failed read leaves the bar showing the last known count. The editor
-      // can still write; losing the list is not worth an error banner.
+      // Keep the last known list; not worth an error banner.
     }
   }
 
-  // Reviewers work concurrently, and `load()` otherwise runs exactly twice — at
-  // startup and after this reviewer saves something — so a colleague's note
-  // filed in the meantime never appears. Refreshing when the tab comes back
-  // covers the way the page is actually used (read here, write elsewhere,
-  // return) without polling: an idle tab costs nothing, and the endpoint's
-  // traffic stays proportional to activity rather than to session length.
-  //
-  // Throttled because `visibilitychange` and `focus` both fire on a single
-  // alt-tab back, and the two would otherwise be two requests every time.
+  // Refetch when the tab comes back, so a colleague's notes appear without
+  // polling. Throttled: one alt-tab fires both visibilitychange and focus.
   function refresh() {
     if (document.hidden) return;
     if (Date.now() - lastLoad < REFRESH_THROTTLE_MS) return;

@@ -55,6 +55,7 @@ import { clampToPublication, isPublished } from '../src/lib/schedule.js';
 import { readPubDate } from './content.mjs';
 import { cli } from './cli.mjs';
 import { databaseLabel } from './database-target.mjs';
+import { linkState } from '../src/lib/link-state.js';
 import { extendLink, extendLinks, listLinks } from './links-db.mjs';
 import { resolveLink } from './resolve-id.mjs';
 
@@ -208,9 +209,11 @@ if (all) {
   }
 
   const moved = new Set(changed.map((row) => row.id));
-  const live = rows.filter((row) => !row.revoked_at);
-  // A live row the UPDATE did not match can only have failed the ceiling — every
-  // other predicate in the statement is satisfied by construction here.
+  // "Live" is link-state.js's answer, the same one the roster and the Desk give,
+  // and the same set the UPDATE matched. A live row it did not move can only
+  // have failed the ceiling.
+  const live = rows.filter((row) => linkState(row, { pubDate }).live);
+  const lapsed = rows.filter((row) => linkState(row, { pubDate }).state === 'expired');
   const stuck = live.filter((row) => !moved.has(row.id));
 
   if (live.length === 0) {
@@ -235,6 +238,9 @@ if (all) {
   for (const row of changed) console.error(`    moved:   ${row.id}`);
   for (const row of stuck) {
     console.error(`    STUCK:   ${row.id} — signed only to ${iso(row.max_exp)}; mint a fresh link`);
+  }
+  for (const row of lapsed) {
+    console.error(`    skipped: ${row.id} — already expired; extend it by id to revive it`);
   }
   console.error('  link:     unchanged — the URLs the reviewers already have keep working\n');
   process.exit(stuck.length === 0 ? 0 : 1);

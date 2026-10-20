@@ -174,24 +174,31 @@ export async function extendLink(store, slug, id, exp) {
  * four links out of five reports four. That is why this RETURNS THE ROWS IT
  * CHANGED rather than a count — the caller names the ones it could not move.
  *
+ * LIVE ONLY, as link-state.js defines it: an expired row is not matched. Letting
+ * a link lapse is a way to end it (`--hours 1` is the gentle revoke), so a bulk
+ * re-clamp must not bring it back. Reviving one is still possible by id, through
+ * extendLink, where the operator names the link they mean.
+ *
  * Scoped to the slug, like every other write here.
  *
  * @param {{ prepare: (sql: string) => any }} store
  * @param {string} slug
  * @param {number} exp new effective expiry, epoch SECONDS
+ * @param {number} [now] epoch MS; injectable so the boundary is testable
  * @returns {Promise<{ id: string, exp: number, max_exp: number }[]>} the rows it moved
  */
-export async function extendLinks(store, slug, exp) {
+export async function extendLinks(store, slug, exp, now = Date.now()) {
   checkSlug(slug);
   checkInteger(exp, 'exp');
   const { results } = await store
     .prepare(
       'UPDATE preview_links SET exp = ? ' +
         'WHERE slug = ? AND revoked_at IS NULL ' +
+        'AND exp > ? ' +
         'AND ? <= max_exp ' +
         'RETURNING id, exp, max_exp',
     )
-    .bind(exp, slug, exp)
+    .bind(exp, slug, Math.floor(now / 1000), exp)
     .all();
   return results;
 }

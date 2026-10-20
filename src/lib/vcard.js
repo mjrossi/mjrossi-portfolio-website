@@ -21,6 +21,7 @@
 import { CARD_TAGLINE } from './identity.js';
 import { CONTACT_EMAIL } from './contact.js';
 import { PHOTO_JPEG_BASE64 } from './card-photo.js';
+import { CONTACT_PROFILES } from './profiles.js';
 
 const MAX_OCTETS = 75;
 const encoder = new TextEncoder();
@@ -79,12 +80,30 @@ export function serializeVCard(props) {
 // The structured name is spelled here rather than lifted into identity.js, for
 // that file's own reason: like the two-tone wordmark, `N` is a shape
 // (family;given;additional;prefix;suffix), not a sentence another engine says.
+//
+// The URLs are Apple's grouped form — `itemN.URL` with an `itemN.X-ABLabel` —
+// because vCard 3.0's URL takes no TYPE, and without a label every app shows
+// four bare "URL"s. `_$!<HomePage>!$_` is the label iOS itself writes for
+// "homepage"; the profiles are labelled by name. The `itemN.` group prefix is
+// plain RFC 2426 syntax, so an app that ignores X-ABLabel still reads the URL.
+// Not X-SOCIALPROFILE: it is Apple-only, and iOS lists a profile given both
+// ways twice.
+const urls = [
+  { label: '_$!<HomePage>!$_', url: 'https://mjrossi.com' },
+  ...CONTACT_PROFILES,
+].flatMap(({ label, url }, i) => [
+  // A URI, not TEXT — escaping would corrupt a comma or semicolon in a path.
+  [`item${i + 1}.URL`, url],
+  [`item${i + 1}.X-ABLabel`, escapeText(label)],
+]);
+
 export const CARD_VCF = serializeVCard([
   ['N', ['Rossi', 'Matthew', '', '', ''].map(escapeText).join(';')],
   ['FN', escapeText('Matthew Rossi')],
   ['TITLE', escapeText(CARD_TAGLINE)],
+  // So a search of the recipient's contacts for "Matt" finds this one.
+  ['NICKNAME', escapeText('Matt')],
   ['EMAIL;TYPE=INTERNET', escapeText(CONTACT_EMAIL)],
-  // A URI, not TEXT — escaping would corrupt a comma or semicolon in a path.
-  ['URL', 'https://mjrossi.com'],
+  ...urls,
   ['PHOTO;ENCODING=b;TYPE=JPEG', PHOTO_JPEG_BASE64],
 ]);

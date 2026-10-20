@@ -41,8 +41,8 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     <section class="card-face card-back" aria-label="Card, back">
       <ul class="card-contact">
         <li><a class="card-add" href="/api/vcard">Add to contacts</a></li>
-        <li><a href="/api/contact">Email</a></li>
-        <li><a href="/">mjrossi.com</a></li>
+        <li><a class="card-row" href="/api/contact"><span>Email</span><span class="card-go" aria-hidden="true">→</span></a></li>
+        <li><a class="card-row" href="/"><span>mjrossi.com</span><span class="card-go" aria-hidden="true">→</span></a></li>
       </ul>
     </section>
 
@@ -235,10 +235,6 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     padding: 0;
   }
 
-  .card-contact li {
-    padding: 3cqi 0;
-  }
-
   .card-contact li + li {
     border-top: 1px solid var(--border);
   }
@@ -246,12 +242,7 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
   /* The button row is not a ruled row: no rule hugging it from above, and
      room below before the first hairline. */
   .card-contact li:first-child {
-    padding-top: 0;
-    padding-bottom: 4.5cqi;
-  }
-
-  .card-contact li:last-child {
-    padding-bottom: 0;
+    padding-bottom: 3cqi;
   }
 
   .card-contact a {
@@ -262,9 +253,35 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     text-decoration: none;
   }
 
-  .card-contact a:hover {
+  /* The whole row is the link, not just its word: at phone widths the word
+     alone was a ~16px-tall target. 44px is the floor; the → says the row,
+     not the word, is what to tap, and is aria-hidden so "Email" is read as
+     "Email". At 320 the three rows take 141px of a ~145px content box. */
+  .card-contact .card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+    min-height: 44px;
+    padding: 3cqi 0;
+  }
+
+  .card-go {
+    font-family: var(--font-ui);
+    color: var(--accent-rule);
+    transition: color 0.15s ease;
+  }
+
+  .card-contact .card-row:hover {
     color: var(--accent-hover);
+  }
+
+  .card-contact .card-row:hover > :first-child {
     text-decoration: underline;
+  }
+
+  .card-contact .card-row:hover .card-go {
+    color: var(--accent-hover);
   }
 
   /* The one action that matters, so the one button on the card — but in the

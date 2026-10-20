@@ -357,7 +357,7 @@ Everything fails closed — no token, malformed, unknown key, wrong audience, wr
 Setup, once:
 
 1. Zero Trust → Access → Applications → self-hosted, path `mjrossi.com/admin`, with whatever policy you want on it.
-2. Copy the **Application Audience (AUD) Tag** and the **team domain** into `vars` in `wrangler.jsonc`. Both ship as `REPLACE-ME` placeholders, so **until you do this the Desk 404s for everyone**, which is the correct direction to be wrong in. Neither is a credential — they confer nothing without a JWT Cloudflare signed — which is why they live in committed config like the KV `id` and `database_id`.
+2. Copy the **Application Audience (AUD) Tag** and the **team domain** into `vars` in `wrangler.jsonc`. Both are set there now. If either is missing or wrong, **the Desk 404s for everyone**, which is the correct direction to be wrong in. Neither is a credential — they confer nothing without a JWT Cloudflare signed — which is why they live in committed config like the KV `id` and `database_id`.
 3. The Access app produces no binding, so nothing in CI can see it drift. Record it in `docs/ARCHITECTURE.md`'s account inventory, which is its only inventory.
 
 The path predicate is `src/lib/admin-path.js`, shared by middleware and the sitemap filter, because **three** things have to agree on it — those two and the Access app's own path pattern. A bare `startsWith('/admin')` also matches `/administrator`, the same trap `isPreviewHost` has with its leading dot. The sitemap filter is not cosmetic: an entry would publish the slug of every scheduled draft in a file crawlers are invited to read.

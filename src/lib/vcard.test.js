@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { escapeText, foldLine, serializeVCard, CARD_VCF } from './vcard.js';
+import { CONTACT_PROFILES } from './profiles.js';
 import { TAGLINE, CARD_TAGLINE } from './identity.js';
 import { CONTACT_EMAIL } from './contact.js';
 
@@ -60,12 +61,30 @@ test('the card: CRLF throughout, folded within 75 octets', () => {
   for (const line of physicalLines(CARD_VCF)) assert.ok(octets(line) <= 75, `${octets(line)}: ${line}`);
 });
 
-test('the card: name, email and URL', () => {
+test('the card: name, nickname and email', () => {
   const vcf = unfold(CARD_VCF);
   assert.match(vcf, /\r\nN:Rossi;Matthew;;;\r\n/);
   assert.match(vcf, /\r\nFN:Matthew Rossi\r\n/);
+  assert.match(vcf, /\r\nNICKNAME:Matt\r\n/);
   assert.ok(vcf.includes(`\r\nEMAIL;TYPE=INTERNET:${CONTACT_EMAIL}\r\n`));
-  assert.match(vcf, /\r\nURL:https:\/\/mjrossi\.com\r\n/);
+});
+
+// Each URL is paired with its label by group, so a URL whose label went
+// missing, or two that swapped labels, would show the wrong name beside it.
+test('the card: the site as homepage, then each profile, each with its own label', () => {
+  const vcf = unfold(CARD_VCF);
+  const expected = [
+    ['https://mjrossi.com', '_$!<HomePage>!$_'],
+    ...CONTACT_PROFILES.map(({ url, label }) => [url, label]),
+  ];
+  const urls = [...vcf.matchAll(/\r\n(item\d+)\.URL:([^\r]+)/g)];
+  assert.equal(urls.length, expected.length);
+  urls.forEach(([, group, url], i) => {
+    assert.equal(url, expected[i][0]);
+    assert.ok(vcf.includes(`\r\n${group}.X-ABLabel:${expected[i][1]}\r\n`), `${group} label`);
+  });
+  assert.ok(!/\r\nURL[:;]/.test(vcf), 'no ungrouped URL');
+  assert.deepEqual(CONTACT_PROFILES.map((p) => p.label), ['LinkedIn', 'Bluesky', 'GitHub']);
 });
 
 // A saved contact is held indefinitely, like a cached social card, so it may

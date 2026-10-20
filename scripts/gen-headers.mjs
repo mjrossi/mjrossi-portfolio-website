@@ -1,24 +1,14 @@
-// Post-build: write dist/client/_headers from the canonical CSP in
-// src/lib/csp.js plus the rest of the static security-header set. Replaces
-// the static public/_headers file so the CSP can't drift between middleware
-// (HTML responses) and static-asset responses.
-//
-// Runs as part of `npm run build` (see package.json). If this script fails
-// or dist/client/_headers ends up missing/empty, the smoke test asserts on
-// its presence and CSP content — that catches the regression immediately.
+// Post-build: write dist/client/_headers from csp.js and security-headers.js,
+// so static assets get the same policy as middleware gives HTML. Smoke asserts
+// the file exists and carries the CSP.
 
 import { writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CSP } from '../src/lib/csp.js';
 import { SECURITY_HEADERS } from '../src/lib/security-headers.js';
 
-// The non-CSP headers come from src/lib/security-headers.js so this file and
-// src/middleware.ts can't drift — same reason the CSP lives in csp.js.
-// /scripts/theme.js is the one render-blocking asset: Base.astro loads it
-// synchronously in <head> on every page. Cloudflare's static-asset default is
-// to revalidate on every request, which put a 304 round-trip in front of every
-// first paint. An hour matches the HTML's own max-age, so a change to the
-// script reaches readers on the same schedule as the pages that load it.
+// /scripts/theme.js is render-blocking on every page, and the asset default
+// revalidates each request: a 304 before every first paint. An hour, like the HTML.
 const HEADERS = `/*
   Content-Security-Policy: ${CSP}
 ${Object.entries(SECURITY_HEADERS)

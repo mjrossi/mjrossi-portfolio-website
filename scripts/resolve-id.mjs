@@ -1,39 +1,15 @@
-// Turn an id into the row it names, and the post that row belongs to.
+// Turn an id into its row and the post that row belongs to, so commands can
+// take an id alone (`just preview-revoke <id>`). Both tables are keyed on id;
+// the slug is just a column.
 //
-// THE SLUG WAS NEVER IDENTIFYING. Both tables are keyed on `id TEXT PRIMARY KEY`
-// with `slug` as an ordinary column, so every command that already has an id has
-// the post too -- it just had to be told. This is the lookup that stops it having
-// to be told: `just preview-revoke <id>` instead of `just preview-revoke <slug>
-// <id>`, and the same for extend, reopen and close.
+// WHERE THE CROSS-POST CHECK LIVES. Once the slug is derived from the row, the
+// stores' `WHERE slug = ? AND id = ?` can only match. What protects a mistyped
+// id is the mismatch check below: name a post the row disagrees with, and this
+// refuses and names both. (The clause stays; it is the stores' contract.)
 //
-// WHERE THE CROSS-POST INVARIANT LIVES NOW. The store statements still say
-// `WHERE slug = ? AND id = ?`, but once the slug is DERIVED from the row it is
-// then used to filter, that clause is tautological -- it can only match. What
-// actually protects a mistyped id is the mismatch check below: if the operator
-// names a post and the row disagrees, this refuses and names both. When no post
-// is named there is nothing to disagree with, and acting on the id is what was
-// asked for.
-//
-// The clause stays in the statements regardless. It costs nothing and it remains
-// the store modules' own contract for callers that legitimately hold a slug --
-// extendLinks, closeNotes, and the Desk. But it is no longer the thing to point
-// at when explaining why a wrong id is safe.
-//
-// ROWS RESOLVE IN ANY STATE -- revoked, expired, spent, closed. The best refusals
-// in this feature ("was revoked on …", "past the ceiling it was signed with …",
-// "is already open") exist only because the row is found and THEN rejected.
-// Filtering to live rows here would flatten every one of them into "no such link".
-//
-// NOT IN cli.mjs, which is deliberately DB-free: giving it a store import would
-// pull the wrangler transport into every script that only wants `die`.
-//
-// `fetch` IS A TEST SEAM, and nothing else -- the same arrangement, and the same
-// reasoning, as `exec` in scripts/d1-store.mjs and the duck-typed store
-// src/lib/preview-links.js takes. Every refusal below is decided from { id, slug,
-// row } and needs no database to reach; without a seam the only way to exercise
-// the one that matters would be a migrated D1 and a wrangler subprocess per case,
-// which puts the cross-post invariant behind `npm run build && npm run smoke`
-// rather than behind `npm test`. See src/lib/resolve-id.test.js.
+// Rows resolve in ANY state, so callers can refuse with "was revoked on …"
+// rather than "no such link". Not in cli.mjs, which stays DB-free. `fetch` is a
+// test seam, so the cross-post check is under `npm test`.
 
 import { LINK_ID_RE } from '../src/lib/preview.js';
 import { NOTE_ID_RE } from '../src/lib/galley-manifest.js';
@@ -77,10 +53,7 @@ async function resolve({ die, id, slug, local, shape, shapeHint, noun, missingHi
     );
   }
 
-  // The operator named a post AND an id, and they disagree. Refuse rather than
-  // silently preferring either: preferring the row would act on a draft they did
-  // not name, and preferring the slug would find nothing and report the id as
-  // missing when it plainly exists.
+  // Named a post AND an id that disagree: refuse rather than prefer either.
   if (slug !== null && slug !== row.slug) {
     return die(
       `${noun} ${id} belongs to ${row.slug}, not ${slug} (${where}).\n` +

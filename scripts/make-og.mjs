@@ -1,13 +1,6 @@
-// One-off regenerator for public/og.png (the social link preview card).
-// Mirrors the Broadsheet masthead: warm amber band with noise overlay,
-// Fraunces-style serif name with accent surname, edition meta, italic
-// tagline framed by rules, and a Broadsheet-style footer.
+// One-off regenerator for public/og.png, the site's social card: the
+// Broadsheet masthead at card scale. Fonts fall back to Georgia and system-ui.
 //
-// Fonts: the OG renderer runs in Node, where site fonts aren't installed.
-// We fall back to the same generic families the CSS does — Georgia for
-// serif, system-ui for sans. Close enough at OG preview sizes.
-//
-// Run from the project root:
 //   node scripts/make-og.mjs public/og.png
 import sharp from 'sharp';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -34,19 +27,10 @@ const BORDER = '#dbd0c2';
 const PAD = 72;
 const BAND_H = 340;
 
-// THE CARD STATES IDENTITY ONLY — NEVER A FACT ABOUT THE PRESENT.
-//
-// Social scrapers cache by image URL and effectively never re-fetch, so a
-// card asserting where I live, or what issue it is, is wrong the moment that
-// fact moves — and the correction cannot reach the caches already holding it.
-// That is why there is no edition line here, and it is also why there is no
-// location: the masthead said "Brooklyn, New York" on this card for months
-// after the site itself said Lisbon, because make-og.mjs is a manual `just og`
-// step and nothing compares the two.
-//
-// The per-post cards get away with a date and a read time (make-post-og.mjs)
-// because those are facts about the POST, pinned to a pubDate that never
-// moves. Anything here is a fact about today. Don't add one back.
+// THE CARD STATES IDENTITY ONLY — NEVER A FACT ABOUT THE PRESENT. Scrapers
+// cache by URL and never re-fetch, so an edition or a location is wrong the
+// moment it moves (this card said Brooklyn for months after the site said
+// Lisbon). Post cards may carry a date: it is the post's, and never moves.
 
 // Avatar as a circle at the top-left of the band.
 const AVATAR_SIZE = 112;
@@ -64,11 +48,7 @@ const avatarBuf = await sharp(resolve('src/assets/profile.jpg'))
   .png()
   .toBuffer();
 
-// Escaping is the RENDERER's job, not the identity module's — src/lib/identity.js
-// stores plain text because Astro escapes its own `{}` expressions and this file
-// has to emit `&amp;` for SVG. Same helper as scripts/make-post-og.mjs: a
-// four-line formatter duplicated across the two card generators is a far smaller
-// risk than a sentence duplicated, because it cannot silently go out of date.
+// Escaping is the renderer's job; identity.js stores plain text.
 const escapeXml = (s) =>
   String(s).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]

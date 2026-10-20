@@ -1,36 +1,17 @@
-// One-off regenerator for the LinkedIn profile banner: /card's front face at
-// banner scale — folio, two-tone wordmark, tagline between hairlines, on the
-// masthead band with its grain and double rule. Nothing else: no handles, no
-// QR code, no nav.
+// One-off regenerator for the LinkedIn banner: /card's front face at banner
+// scale. Writes to git-ignored `out/`, never `public/`; regenerate when
+// CARD_TAGLINE changes and re-upload by hand.
 //
-// NOT SERVED BY THE SITE. The output goes to `out/` (git-ignored), never
-// `public/`: it is an image Matt uploads by hand, and a committed binary would
-// drift from this script the first time the identity line moved. Regenerate it
-// whenever CARD_TAGLINE changes, then re-upload.
-//
-// IDENTITY ONLY, for the same reason as the OG card (scripts/make-og.mjs):
-// LinkedIn holds the image indefinitely and nothing here can recall it. So the
-// tagline is CARD_TAGLINE, never TAGLINE, and the folio carries no edition and
-// no date. The script refuses to write a banner that breaks either rule.
-//
-// PAPER ONLY. LinkedIn shows one image in both of its themes, and Paper is what
-// print gets. Colours are read from `:root` in src/styles/global.css by
-// scripts/paper-tokens.mjs, so there is no literal colour in this file.
-//
-// THE PROFILE PHOTO covers the lower left of the banner on LinkedIn, and the
-// phone app crops the sides. The text sits centre-right, and the script
-// checks the RENDERED text layer — pixels, not estimates — against both zones
-// before it writes anything. Still upload a test and look at it on desktop and
-// on the phone: LinkedIn has no preview tool, and its overlay moves.
-//
-// Fonts: the SVG names Fraunces and Inter, and librsvg takes whatever
-// fontconfig resolves. Unlike make-og.mjs, this script REFUSES to run without
-// Fraunces installed: it probes the upright wordmark face and stops if it was
-// substituted. (Only that face — the italic tagline and the Inter folio are not
-// probed.) Widths are measured from the render, so the hairlines fit the face.
-//
-// Run from the project root:
 //   node scripts/make-linkedin-banner.mjs [out-dir]     (default: out/)
+//
+// IDENTITY ONLY, like the OG card: LinkedIn keeps the image indefinitely, so
+// CARD_TAGLINE and no dated folio. PAPER ONLY: one image serves both LinkedIn
+// themes; colours come from global.css via paper-tokens.mjs.
+//
+// It refuses to write a banner that breaks those rules, that puts text under
+// the profile photo or in the phone app's cropped sides (checked on rendered
+// pixels), or that substituted the Fraunces wordmark face. Still check an
+// upload on desktop and phone: LinkedIn has no preview.
 import sharp from 'sharp';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -65,8 +46,7 @@ const escapeXml = (s) =>
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]
   ));
 
-// 'Fraunces 144pt' is the family name of the static opsz-144 instance Google
-// Fonts serves, which is the optical size the masthead asks for.
+// The family name of Google Fonts' static opsz-144 instance, the masthead's size.
 const FRAUNCES = `'Fraunces', 'Fraunces 144pt'`;
 const STYLE = `
   .folio   { font: 600 18px/1 'Inter', system-ui, sans-serif; letter-spacing: 0.18em; }
@@ -95,10 +75,8 @@ const RULE_GAP = 22;
 
 const fail = (msg) => { console.error(`make-linkedin-banner: ${msg}`); process.exit(1); };
 
-// A wordmark in the wrong face is the one failure nobody would catch before
-// LinkedIn had it: fontconfig substitutes silently (on a machine without
-// Fraunces it picked Inter, not even Georgia). If Fraunces renders exactly as
-// wide as a family that cannot exist, it was substituted too.
+// fontconfig substitutes silently (without Fraunces it picked Inter). A face
+// as wide as a family that can't exist was substituted too.
 if (await inkWidth('probe', 'Matthew Rossi') === await inkWidth('absent', 'Matthew Rossi')) {
   fail('Fraunces is not installed, so the wordmark would render in a substitute face. ' +
     'Install Fraunces (fonts.google.com/specimen/Fraunces) and run again.');
@@ -156,9 +134,8 @@ async function checkZones(scale) {
 
 // --- Render. -----------------------------------------------------------------
 
-// Grain as on .masthead::before: noise.webp at 220px, multiplied in at
-// --grain-opacity. Multiply at opacity a is multiply by 1 − a + a·n, so the
-// tile is lifted toward white by that much and then multiplied at full strength.
+// Grain as on .masthead::before. Multiply at opacity a = multiply by
+// 1 − a + a·n, so lift the tile toward white, then multiply fully.
 async function grain(scale) {
   const tile = await sharp(readFileSync(resolve('public/noise.webp')))
     .resize(220 * scale, 220 * scale)

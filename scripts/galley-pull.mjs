@@ -1,41 +1,18 @@
-// Pull galley notes for one post into a markdown file you can hand to Claude
-// alongside the .mdx.
+// Pull a post's galley notes into docs/galley/<slug>.md, to hand to Claude
+// alongside the .mdx and commit with the revision that answers it.
 //
 //   npm run galley -- my-draft --remote            # production notes
 //   npm run galley -- my-draft --local             # the local dev database
 //   npm run galley -- my-draft --remote --all      # closed rounds too
 //   npm run galley -- my-draft --remote --out -    # stdout instead of docs/galley/
 //
-// OPEN NOTES ONLY, unless --all. A note stays in the table once the round it
-// belonged to is closed (`just galley-close`), so without that filter this file
-// would accumulate every note ever left on the post and re-present work already
-// merged as though it still needed doing.
+// Open notes only unless --all, or merged work would come back as to-do.
 //
-// THIS FILE IS ALSO A MANIFEST. Every note is printed with its id, and
-// `just galley-close` closes exactly the ids it finds here — which is what keeps
-// a close scoped to the notes the author actually read, rather than to "whatever
-// looks old", a set that silently includes a second reviewer's unread feedback.
-// Commit it alongside the revision that answers it.
+// THE FILE IS ALSO THE MANIFEST: `just galley-close` closes exactly the ids in
+// it. The Desk renders the same reviewModel, but the pull is the artifact.
 //
-// --remote or --local is REQUIRED; see scripts/database-target.mjs. Pulling
-// from the wrong database reports "no notes" for a post that has them.
-//
-// Reads D1 through `wrangler d1 execute`, which is already authenticated as
-// you. The deployed worker still has no way to WRITE anything here, and
-// /api/galley still has no "list every post with notes" mode — a signed review
-// link grants one post and must not grant the rest.
-//
-// The Desk at /admin reads notes across posts, which is a real widening and is
-// why it is gated on a Cloudflare Access JWT the worker verifies itself rather
-// than on a preview token. It renders from the same reviewModel this file's
-// output is built from, so the page and the pull say the same thing. THE PULL
-// IS STILL THE ARTIFACT: it writes the file, the file is the manifest, and
-// `just galley-close` closes exactly the ids in it.
-//
-// Output goes to docs/galley/<slug>.md and is meant to be committed. Reviewer
-// labels are whatever was chosen when the link was minted (see
-// preview-link.mjs --reviewer), so minting with initials is what keeps this
-// file anonymous — nothing here strips names.
+// --remote or --local is REQUIRED (database-target.mjs). Reviewer labels are
+// whatever was minted (use initials); nothing strips names.
 
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -79,11 +56,9 @@ for (let i = 0; i < argv.length; i++) {
 }
 
 if (!slug) die('usage: npm run galley -- <slug> (--remote | --local) [--all] [--out PATH]');
-// Shape-checked before it reaches the SQL below. SLUG_RE admits no quotes or
-// spaces, which is what makes the interpolation safe.
+// Shape-checked: it also names the output path.
 if (!SLUG_RE.test(slug)) die(`invalid slug ${JSON.stringify(slug)}`);
 
-// Which database, decided explicitly. See scripts/database-target.mjs.
 const useLocal = resolveDatabase({ local, remote });
 
 // ── the post on disk ─────────────────────────────────
@@ -91,16 +66,12 @@ const useLocal = resolveDatabase({ local, remote });
 const sourcePath = requirePost(slug);
 
 const source = readFileSync(sourcePath, 'utf8');
-// Must match src/lib/galley.js sha256Hex exactly: same bytes, same encoding,
-// lowercase hex. The whole file, frontmatter included — see that module for why.
+// The whole file, frontmatter included, as src/lib/galley.js requires.
 const currentHash = createHash('sha256').update(source, 'utf8').digest('hex');
 const sourceLines = source.split('\n');
 
 // ── read the notes ───────────────────────────────────
 
-// src/lib/notes-store.js owns the SQL; scripts/d1.mjs owns the shell-out, the
-// banner-anchored JSON parse, and the two distinct failure messages (unreachable
-// database vs unparseable output).
 let allRows;
 try {
   allRows = await listNotes(slug, { includeClosed }, { local: useLocal });
@@ -108,29 +79,19 @@ try {
   die(err.message);
 }
 
-// Open notes are the document; closed ones are an appendix under --all. Splitting
-// here rather than in two queries keeps the "N open, M closed" header honest
-// about the same set the body renders.
+// One query, split here, so the header counts the same set the body renders.
 const rows = allRows.filter((r) => r.closed_at === null);
 const closedRows = allRows.filter((r) => r.closed_at !== null);
 
 if (allRows.length === 0) {
-  // Names the database, because "no notes" and "notes, but in the other one"
-  // are indistinguishable otherwise -- and the second is the likelier mistake.
-  // Says "open" when it is only the filter hiding them, so a post whose whole
-  // round has been closed does not read as a post nobody reviewed.
+  // Names the database, and says "open" when only the filter hides notes.
   const what = includeClosed ? 'no notes' : 'no open notes';
   console.error(`galley-pull: ${what} for ${slug} (${databaseLabel(useLocal)})`);
 }
 
 // ── render ───────────────────────────────────────────
 //
-// Every decision about what the document SAYS lives in src/lib/galley-render.js,
-// so `node --test` can reach it — the grouping, the relocation-agreement rule
-// that stops a heading claiming one note's line for all of them, and the rule
-// that an unchanged file's stored anchor beats a relocation. Both of those fail
-// silently rather than loudly, which is why they are no longer in a file nothing
-// can import. This script keeps the I/O: argv, the .mdx, D1, and the write.
+// What the document SAYS is src/lib/galley-render.js; this keeps the I/O.
 
 const { markdown, drifted } = renderReviewFile({
   slug,
@@ -154,9 +115,7 @@ if (out === '-') {
       `${closedRows.length ? `, ${closedRows.length} closed` : ''}`,
   );
   console.error('  Review, then apply with Claude alongside the .mdx.');
-  // Named here because this is where the author is standing when they finish a
-  // round, and because the close has to happen AFTER the revision merges -- a
-  // close run now would retire notes whose fixes are not in the file yet.
+  // The close comes AFTER the revision merges.
   console.error(
     `\n  Applied them? Merge the revision first, then:\n` +
       `    just galley-close ${slug} ${databaseFlag(useLocal)}\n`,

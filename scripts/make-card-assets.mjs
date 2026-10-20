@@ -1,15 +1,8 @@
-// One-off regenerator for the two committed assets behind /card:
+// One-off regenerator for /card's two committed assets, src/lib/card-qr.js
+// (the QR on /card/qr, as path data) and src/lib/card-photo.js (the vCard
+// PHOTO). Not a build step: the QR's URL must never change — printed cards
+// carry it — and the photo changes only by hand.
 //
-//   src/lib/card-qr.js     — the QR code shown on /card/qr, as path data
-//   src/lib/card-photo.js  — the vCard PHOTO, a small base64 JPEG
-//
-// One-off rather than a build step, on the make-og.mjs model: neither input
-// moves. The QR code encodes a URL that must never change — printed cards will
-// carry it — and the photo changes only when src/assets/contact-photo.jpg is
-// replaced by hand. Generating either on every build would buy
-// nothing and put `qrcode` in the build path.
-//
-// Run from the project root:
 //   just card-assets
 import QRCode from 'qrcode';
 import sharp from 'sharp';
@@ -18,23 +11,20 @@ import { resolve } from 'node:path';
 
 // ── QR ────────────────────────────────────────────────
 //
-// `/card`, not the home page: a scan should land on the page with the
-// "Add to contacts" link, which is the whole point of holding a phone up.
+//
+// Encodes `/card`, the page with "Add to contacts".
 const QR_URL = 'https://mjrossi.com/card';
 
-// The spec's minimum quiet zone. Smaller and some scanners never find the
-// finder patterns; the page draws the tile across all of it.
+// The spec's minimum quiet zone; smaller and some scanners never find it.
 const QUIET = 4;
 
-// M: version 2 (25 × 25) for this URL. H would buy damage tolerance a screen
-// never needs, at the cost of a denser code — and density is what makes a
-// phone-to-phone scan fail.
+// M (version 2, 25 × 25). H's damage tolerance is useless on a screen and
+// the extra density is what makes phone-to-phone scans fail.
 const qr = QRCode.create(QR_URL, { errorCorrectionLevel: 'M' });
 const n = qr.modules.size;
 const size = n + QUIET * 2;
 
-// One subpath per horizontal run of dark modules. No colour here: the page
-// fills the path from a token, so the generated file carries geometry only.
+// One subpath per run of dark modules. Geometry only; the page colours it.
 let path = '';
 for (let row = 0; row < n; row++) {
   let col = 0;
@@ -66,18 +56,12 @@ console.log(`wrote src/lib/card-qr.js (version ${qr.version}, ${size} × ${size}
 
 // ── Photo ─────────────────────────────────────────────
 //
-// 256 px is what Contacts displays at; anything larger is weight every
-// recipient downloads for nothing. Inlined as base64 because vCard 3.0's
-// `PHOTO;ENCODING=b` is the form iOS, Android and Outlook all read — a
-// `PHOTO;VALUE=uri` pointing back here is ignored by several of them.
 //
-// Not profile.jpg: that one is pre-masked to a circle with black corners, made
-// for the OG card, and a contact photo is shown square, rounded or full-screen
-// as often as round. contact-photo.jpg is a plain square crop with no
-// metadata (the camera original's EXIF carried GPS). Baseline, not
-// progressive, which older importers handle worst — so no `mozjpeg`: sharp
-// makes its output progressive whatever `progressive` says, and at 256 px it
-// saved ~3 KB, about a fifth of the photo.
+// 256 px, what Contacts displays. Base64 because `PHOTO;ENCODING=b` is what
+// iOS, Android and Outlook all read. contact-photo.jpg, not profile.jpg (which
+// is pre-masked to a circle): a square crop with the camera's GPS EXIF
+// stripped. Baseline, not progressive, for older importers — so no mozjpeg,
+// which sharp makes progressive regardless.
 const jpeg = await sharp(resolve('src/assets/contact-photo.jpg'))
   .resize(256, 256, { fit: 'cover' })
   .jpeg({ quality: 80 })

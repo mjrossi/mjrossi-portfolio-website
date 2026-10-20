@@ -1,34 +1,16 @@
-// The galley margin, rendered against fixtures, with no worker and no database.
+// The galley margin against fixtures, with no worker and no database.
 //
 //   just galley-preview            → serves it, prints the URL
 //   just galley-preview --stale    → the same page, one revision behind the server
 //   just galley-preview --shot out.png
 //
-// WHY THIS EXISTS. The galley's markers are the one part of this repo whose
-// correctness is a rendering question, and nothing else here can see a pixel.
-// The bug that prompted it: `.galley-marked` carried the inline highlighter-pen
-// gradient — `linear-gradient(transparent 60%, …)` — which resolves against a
-// LINE box on an inline element but against the whole PARAGRAPH box on the
-// blocks the client actually marks. Every marked paragraph got a solid band
-// across its last two lines, pointing with total confidence at prose no note
-// was about. Unit tests cannot catch that. `npm run smoke` cannot catch that.
-// A reviewer opening a real link catches it immediately, which is a slow and
-// expensive way to find out.
+// The markers are a rendering question nothing else here can see: a CSS
+// gradient once banded every marked paragraph's last two lines, and only a
+// reviewer with a real link noticed. This puts the margin at a URL in a second.
 //
-// So: the whole margin, at a URL, in about a second. Getting there previously
-// meant a build, a local D1 migration, `wrangler dev`, minting a link, and
-// filing a note through the API before a single marker appeared on screen.
-//
-// NOTHING HERE IS A FIXTURE COPY OF PRODUCTION CODE, and that is the rule that
-// keeps it honest. The stylesheet is read out of GalleyMargin.astro, the design
-// tokens and post typography out of global.css, and the client is the real
-// /scripts/galley.js loading the real /scripts/galley-quote.js. Only two things
-// are fake: the prose, and a `fetch` stub standing in for /api/galley. If a
-// marker looks wrong here it is wrong on mjrossi.com.
-//
-// Not a test — it asserts nothing and CI never runs it. It is the thing you
-// look at before believing a change to the margin, in the same spirit as
-// scripts/make-og.mjs: a local tool that renders something a human then judges.
+// NOTHING HERE COPIES PRODUCTION CODE: the CSS is read from GalleyMargin.astro,
+// tokens from global.css, and the client is the real /scripts/galley.js. Only
+// the prose and a `fetch` stub are fake. Not a test; a thing to look at.
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -42,8 +24,7 @@ const { die } = cli('galley-preview');
 const ROOT = resolve(import.meta.dirname, '..');
 const PUBLIC = join(ROOT, 'public');
 
-// Not 8788: that is `just preview` and `just smoke`, and a stale wrangler on it
-// is a documented failure mode. Nothing should have to be killed to run this.
+// Not 8788, which `just preview` and smoke use.
 const DEFAULT_PORT = 8790;
 
 const TYPES = {
@@ -81,18 +62,11 @@ for (let i = 0; i < argv.length; i += 1) {
 
 // ── the page ───────────────────────────────────────────
 
-/**
- * The galley stylesheet, read out of the component that owns it.
- *
- * Copying these rules into this file would defeat the entire point: the bug
- * this tool exists to catch WAS a CSS rule, and a preview showing a different
- * rule than production ships is worse than no preview at all.
- */
+/** The galley stylesheet, read from its component: a copy could differ. */
 async function galleyStyles() {
   const source = await readFile(join(ROOT, 'src/components/GalleyMargin.astro'), 'utf8');
   const match = /<style is:inline>([\s\S]*?)<\/style>/.exec(source);
-  // Loud rather than silent: without the rules the page renders unstyled, which
-  // reads as "the margin is broken" rather than "this tool is".
+  // Loud: an unstyled page reads as "the margin is broken".
   if (!match) die('no `<style is:inline>` block in GalleyMargin.astro — has it been restructured?');
   return match[1];
 }
@@ -103,11 +77,8 @@ async function siteStyles() {
 }
 
 /**
- * The fixtures, chosen to be the cases that have actually gone wrong or could.
- *
- * `data-src` values are arbitrary here — there is no .mdx behind them — but
- * they have to be unique per block and match the notes below, exactly as
- * remark-source-anchors would emit them.
+ * Fixtures for the cases that have gone wrong, or could. `data-src` values are
+ * arbitrary but unique, and match the notes.
  */
 const BLOCKS = `
   <p data-src="10-14">A reviewer selected the single word <b>congestion</b> in this paragraph and
@@ -156,21 +127,15 @@ function note(src, quote, body) {
     body,
     suggestion: null,
     created_at: Date.now() - seq * 60000,
-    // No `revision_hash`: the endpoint selects it and then strips it, folding it
-    // into `stale` (see the `shape()` helper in api/galley.ts). Carrying it here
-    // would put a field in the fixture that no real response has.
+    // No `revision_hash`: the endpoint never returns it.
     stale: false,
   };
 }
 
-// The revision the SERVER is serving. Under `--stale` it differs from the
-// `data-revision` on the page below, which is the whole point: that is the state
-// a reviewer lands in when the draft is revised while their tab is open. Every
-// marker must disappear — INCLUDING those for notes the server still considers
-// current, since they were written against a source this document does not have
-// — and the bar must raise the reload prompt. Without the flag the two agree,
-// `pageStale` is permanently false, and deleting the gate from `markAnchors`
-// changes nothing on screen.
+// The revision the SERVER serves. Under --stale it differs from the page, so
+// every marker must vanish — even for notes the server calls current — and the
+// reload prompt must show. Without the flag, deleting markAnchors' gate would
+// change nothing on screen.
 const PAGE_REVISION = 'preview';
 const SERVER_REVISION = stale ? 'preview-next' : PAGE_REVISION;
 
@@ -187,11 +152,9 @@ const PAYLOAD = {
     note('28-28', 'a quote that is nowhere in the block', 'Unplaceable: block marker.'),
     note('30-31', "does not fight the blockquote's own rule", 'Reads fine.'),
     note('34-34', 'these words', 'Marker inside a list item.'),
-    // Two notes on one block: one placeable, one not. The count must read 1 —
-    // it stands for what the BLOCK marker covers, not for notes on the block.
+    // One placeable note, one not: the block count must read 1.
     note('21-24', 'occurs more than once', 'This one places precisely.'),
-    // Stale: written against an earlier revision, so no marker anywhere and an
-    // `earlier revision` chip in place of the line number.
+    // Stale: no marker, and an `earlier revision` chip.
     { ...note('35-35', 'no marker at all', 'Filed before the last revision.'), stale: true },
   ],
   closed: [note('10-14', 'ordinary for prose', 'Raised last round; already addressed.')],
@@ -301,9 +264,7 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  // Everything else comes out of public/, which is what puts the real client at
-  // the real path — /scripts/galley.js importing ./galley-quote.js resolves
-  // exactly as it does on the deployed site.
+  // The rest from public/, so the real client is at its real path.
   const asked = normalize(url.pathname).replace(/^(\.\.[/\\])+/, '');
   const file = join(PUBLIC, asked);
   if (!file.startsWith(PUBLIC)) {
@@ -320,9 +281,7 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, '127.0.0.1', async () => {
-  // The token is never verified — nothing here checks a signature — but it has
-  // to be PRESENT, because galley.js reads it from the query string and returns
-  // early without one. Same for data-slug on the mount.
+  // Never verified, but galley.js returns early without one.
   const url = `http://127.0.0.1:${port}/?preview=preview`;
   process.stderr.write(`galley-preview: ${url}${stale ? '  (--stale: page one revision behind)' : ''}\n`);
 
@@ -342,11 +301,8 @@ server.on('error', (err) => {
 });
 
 /**
- * Best-effort headless screenshot.
- *
- * Chrome is not a dependency of this repo and must not become one — the same
- * argument that keeps Puppeteer out for the diagrams. If it happens to be
- * installed the shot is free; if not, the server is still the answer.
+ * Best-effort headless screenshot. Chrome is not a dependency and must not
+ * become one; if it's installed, the shot is free.
  */
 async function screenshot(url, out) {
   const candidates = [
@@ -360,8 +316,7 @@ async function screenshot(url, out) {
       '--headless',
       '--disable-gpu',
       '--hide-scrollbars',
-      // The client renders on load and again on fetch; without a budget the
-      // shot lands on an empty margin.
+      // A budget, or the shot lands on an empty margin.
       '--virtual-time-budget=4000',
       '--window-size=900,1400',
       `--screenshot=${resolve(out)}`,

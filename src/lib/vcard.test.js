@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { escapeText, foldLine, serializeVCard, CARD_VCF } from './vcard.js';
+import { CONTACT_PROFILES } from './profiles.js';
 import { TAGLINE, CARD_TAGLINE } from './identity.js';
 import { CONTACT_EMAIL } from './contact.js';
 
@@ -60,12 +62,30 @@ test('the card: CRLF throughout, folded within 75 octets', () => {
   for (const line of physicalLines(CARD_VCF)) assert.ok(octets(line) <= 75, `${octets(line)}: ${line}`);
 });
 
-test('the card: name, email and URL', () => {
+test('the card: name, nickname and email', () => {
   const vcf = unfold(CARD_VCF);
   assert.match(vcf, /\r\nN:Rossi;Matthew;;;\r\n/);
   assert.match(vcf, /\r\nFN:Matthew Rossi\r\n/);
+  assert.match(vcf, /\r\nNICKNAME:Matt\r\n/);
   assert.ok(vcf.includes(`\r\nEMAIL;TYPE=INTERNET:${CONTACT_EMAIL}\r\n`));
-  assert.match(vcf, /\r\nURL:https:\/\/mjrossi\.com\r\n/);
+});
+
+// Each URL is paired with its label by group, so a URL whose label went
+// missing, or two that swapped labels, would show the wrong name beside it.
+test('the card: the site as homepage, then each profile, each with its own label', () => {
+  const vcf = unfold(CARD_VCF);
+  const expected = [
+    ['https://mjrossi.com', '_$!<HomePage>!$_'],
+    ...CONTACT_PROFILES.map(({ url, label }) => [url, label]),
+  ];
+  const urls = [...vcf.matchAll(/\r\n(item\d+)\.URL:([^\r]+)/g)];
+  assert.equal(urls.length, expected.length);
+  urls.forEach(([, group, url], i) => {
+    assert.equal(url, expected[i][0]);
+    assert.ok(vcf.includes(`\r\n${group}.X-ABLabel:${expected[i][1]}\r\n`), `${group} label`);
+  });
+  assert.ok(!/\r\nURL[:;]/.test(vcf), 'no ungrouped URL');
+  assert.deepEqual(CONTACT_PROFILES.map((p) => p.label), ['LinkedIn', 'Bluesky', 'GitHub']);
 });
 
 // A saved contact is held indefinitely, like a cached social card, so it may
@@ -95,4 +115,40 @@ test('the card carries a base64 JPEG photo', () => {
   const bytes = Buffer.from(photo, 'base64');
   assert.equal(bytes[0], 0xff);
   assert.equal(bytes[1], 0xd8);
+});
+
+// The markers ahead of the first scan: the header, where metadata lives.
+function headerMarkers(bytes) {
+  const markers = [];
+  let i = 2;
+  while (i + 4 <= bytes.length) {
+    assert.equal(bytes[i], 0xff, `no marker at offset ${i}`);
+    const marker = bytes[i + 1];
+    markers.push(marker);
+    if (marker === 0xda) break; // SOS: entropy-coded data follows
+    i += 2 + bytes.readUInt16BE(i + 2);
+  }
+  return markers;
+}
+
+// The photo is a saved contact: held by someone else, indefinitely. The
+// camera original carried GPS EXIF, and the source file is committed, so a
+// hand-replaced contact-photo.jpg straight off a phone would put a location in
+// git even though sharp strips the output. Baseline because older importers
+// mishandle progressive — and sharp makes mozjpeg output progressive whatever
+// `progressive` says, so re-adding mozjpeg would flip this silently.
+test('the photo is baseline and carries no Exif, XMP or IPTC, in the vCard and at the source', () => {
+  const photo = unfold(CARD_VCF).match(/\r\nPHOTO;ENCODING=b;TYPE=JPEG:([^\r]+)\r\n/)[1];
+  const sources = {
+    vcard: Buffer.from(photo, 'base64'),
+    'contact-photo.jpg': readFileSync(new URL('../assets/contact-photo.jpg', import.meta.url)),
+  };
+  for (const [name, bytes] of Object.entries(sources)) {
+    const markers = headerMarkers(bytes);
+    assert.ok(!markers.includes(0xe1), `${name}: APP1 (Exif/XMP) present`);
+    assert.ok(!markers.includes(0xed), `${name}: APP13 (IPTC) present`);
+  }
+  const markers = headerMarkers(sources.vcard);
+  assert.ok(markers.includes(0xc0), 'vCard photo is not baseline (no SOF0)');
+  assert.ok(!markers.includes(0xc2), 'vCard photo is progressive (SOF2)');
 });

@@ -218,29 +218,45 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
   /* ── Back: ruled, broadsheet-style ────────────────── */
 
   /* A card at every width again: without the QR code the three rows fit the
-     85:55 face from 320px up — measured, 147px of a ~149px content box at 320,
-     158 of ~195 at 390. Tight at the floor, but aspect-ratio lets a face grow
-     rather than clip, so a wider fallback font costs height, not content. */
+     85:55 face from 320px up — measured, 134px of a ~145px content box at 320,
+     142 of 182 at 390. Aspect-ratio lets a face grow rather than clip, so a
+     wider fallback font costs height, not content.
+
+     One card, one edge: the frame is the front's --accent-band-border. It
+     was --rule-strong, which in Paper gave the back a visibly harder edge
+     than the front it is the other side of. */
   .card-back {
     background: var(--bg);
-    border: 1px solid var(--rule-strong);
+    border: 1px solid var(--accent-band-border);
   }
 
+  /* Ruled BETWEEN rows only. The list used to carry its own top and bottom
+     rules as well, inside the face's frame — two lines doing the frame's job,
+     and the top one sat a few px over the button with nothing to separate. */
   .card-contact {
     min-width: 0;
     list-style: none;
     margin: 0;
     padding: 0;
-    border-top: 1px solid var(--rule-strong);
   }
 
   .card-contact li {
     padding: 3cqi 0;
-    border-bottom: 1px solid var(--border);
+  }
+
+  .card-contact li + li {
+    border-top: 1px solid var(--border);
+  }
+
+  /* The button row is not a ruled row: no rule hugging it from above, and
+     room below before the first hairline. */
+  .card-contact li:first-child {
+    padding-top: 0;
+    padding-bottom: 4.5cqi;
   }
 
   .card-contact li:last-child {
-    border-bottom-color: var(--rule-strong);
+    padding-bottom: 0;
   }
 
   .card-contact a {
@@ -256,30 +272,32 @@ import { TAGLINE, CARD_DESCRIPTION } from '../lib/identity.js';
     text-decoration: underline;
   }
 
-  /* The one action that matters, so the one button on the card: the site's
-     existing primary button (Subscribe.astro's — --text fill, --bg type, 2px
-     corners, --accent-hover on hover) at full width and a 44px tap height.
-     Both pairs clear 4.5:1 in both themes; the focus ring is the global one. */
+  /* The one action that matters, so the one button on the card — but in the
+     card's own material rather than the site's primary button. A --text slab
+     (Subscribe's) was the heaviest thing on the screen, outweighing the name,
+     and in Night the brightest. This is the front's band: --accent-band fill,
+     --accent-band-border edge, the list's own serif at the list's own size, in
+     --text so it still out-ranks the accent links beside it. Full width at a
+     44px tap height. --text on --accent-band is the wordmark's own pair, so it
+     clears 4.5:1 in both themes; the focus ring is the global one. */
   .card-contact .card-add {
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 0.5em;
     min-height: 44px;
-    padding: 0.55em 1em;
+    padding: 0.5em 1em;
+    border: 1px solid var(--accent-band-border);
     border-radius: 2px;
-    background: var(--text);
-    color: var(--bg);
-    font-family: var(--font-ui);
-    font-size: clamp(0.875rem, 4.2cqi, 1.05rem);
+    background: var(--accent-band);
+    color: var(--text);
     font-weight: 600;
-    letter-spacing: 0.01em;
-    transition: background 0.15s ease;
+    transition: border-color 0.15s ease;
   }
 
   .card-contact .card-add:hover {
-    background: var(--accent-hover);
-    color: var(--bg);
-    text-decoration: none;
+    border-color: var(--accent);
+    color: var(--text);
   }
 
   /* No motion. The back used to turn over into place on load, starting

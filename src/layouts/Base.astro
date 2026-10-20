@@ -64,14 +64,14 @@ const previewTitle = ogTitle ?? fullTitle;
 // ONE call per render. Nothing may derive an issue of its own (see edition.js).
 const edition = issue();
 
-// `pinned` is a phone-width hint: the nav scrolls in one row and this link
-// stays put. Last in the DOM, so reading and tab order are unchanged.
+// `lexicon` marks the periodical: the footer lists it under The Lexicon rather
+// than Pages. The phone grid (global.css) splits these 3 + 2 by position.
 const navLinks = [
   { href: '/work', label: 'Work', roman: 'i.' },
   { href: '/projects', label: 'Projects', roman: 'ii.' },
   { href: '/education', label: 'Education', roman: 'iii.' },
   { href: '/urban-mobility', label: 'Urban Mobility', roman: 'iv.' },
-  { href: '/blog', label: 'Blog', roman: 'v.', pinned: true },
+  { href: '/blog', label: 'Blog', roman: 'v.', lexicon: true },
 ];
 
 const isHome = pathname === '/';
@@ -156,7 +156,7 @@ const frontHref = isLexicon ? '/blog' : '/';
           return (
             <a
               href={link.href}
-              class:list={[{ active: current, 'nav-pinned': link.pinned }]}
+              class:list={[{ active: current }]}
               aria-current={current ? 'page' : undefined}
             >
               <span class="roman" aria-hidden="true">{link.roman}</span>{link.label}
@@ -205,7 +205,7 @@ const frontHref = isLexicon ? '/blog' : '/';
           <h2 class="site-foot-heading">Pages</h2>
           <ul>
             <li><a href="/">Front</a></li>
-            {navLinks.filter((l) => !l.pinned).map((l) => <li><a href={l.href}>{l.label}</a></li>)}
+            {navLinks.filter((l) => !l.lexicon).map((l) => <li><a href={l.href}>{l.label}</a></li>)}
           </ul>
         </div>
         <div>

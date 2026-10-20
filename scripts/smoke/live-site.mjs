@@ -69,12 +69,12 @@ function assertSharedChrome(label, res, html, activeHref) {
   const contactCount = occurrences(html, 'aria-label="Contact"');
   check(`${label}: ContactLinks rendered twice`, contactCount === 2, `found ${contactCount}`);
   if (activeHref) {
-    // `active` as a class TOKEN, not as the whole attribute. The nav link for
-    // /blog also carries `nav-pinned` (it is the link held against the right
-    // edge of the phone-width scrolling row), so `class="active"` matched the
-    // other four routes and silently failed on the one this file checks most.
-    // Written as a token match rather than a substring so `nav-active` or
-    // `inactive` could never satisfy it either.
+    // `active` as a class TOKEN, not as the whole attribute. The /blog link
+    // once carried a second class, and `class="active"` then matched the other
+    // four routes and silently failed on the one this file checks most — any
+    // future second token would do the same. Written as a token match rather
+    // than a substring so `nav-active` or `inactive` could never satisfy it
+    // either.
     const cls = 'class="(?:[^"]*\\s)?active(?:\\s[^"]*)?"';
     const activeRx = new RegExp(
       `<a[^>]*href="${activeHref}"[^>]*${cls}|<a[^>]*${cls}[^>]*href="${activeHref}"`,

@@ -159,7 +159,7 @@ CSS custom properties at `:root` in `src/styles/global.css` (warm-amber Broadshe
 - `--text-2`, `--rule-strong` — ported from Atlas (`--ink-2`, `--rule-strong`): secondary ink, and the nav/tag frame.
 - `--max: 1100px`, `--pad: clamp(1.25rem, 4vw, 2.5rem)`, `--rail: 320px` — page width, gutter, and the home spread's rail.
 
-Chrome vocabulary ported from Atlas: ruled nav cells with lower-case Roman numerals (dropped on phones, where Blog stays pinned), a `.kicker` breadcrumb on interior pages, the home `.spread` with `.rail-block`s, classified `.entry` rows numbered by a CSS counter, square `§` tag chips, and the four-column `.site-foot` with its `.colophon-strip`. **No figure call-outs** — no stats strips, no counts in the kicker.
+Chrome vocabulary ported from Atlas: ruled nav cells with lower-case Roman numerals (dropped on phones, where the five cells form a ruled 3 + 2 grid), a `.kicker` breadcrumb on interior pages, the home `.spread` with `.rail-block`s, classified `.entry` rows numbered by a CSS counter, square `§` tag chips, and the four-column `.site-foot` with its `.colophon-strip`. **No figure call-outs** — no stats strips, no counts in the kicker.
 
 ### Local variations
 

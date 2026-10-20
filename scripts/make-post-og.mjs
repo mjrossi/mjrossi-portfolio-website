@@ -12,7 +12,7 @@
 // scrapers rather than readers. sharp already ships with astro (it is astro's
 // own image service), so this costs one build step and nothing at runtime. It is
 // declared in package.json rather than leaned on transitively — same rule as
-// js-yaml and @astrojs/markdown-remark, and pinned to what astro resolves.
+// @astrojs/internal-helpers and @astrojs/markdown-remark, and pinned to what astro resolves.
 //
 // PUBLISHED POSTS ONLY. A card carries the post's title, and /og/<slug>.png is
 // a guessable URL — so generating one for a scheduled draft would publish that

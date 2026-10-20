@@ -11,7 +11,7 @@ import { coercePubDate } from './lib/pubdate.js';
  * same literal unquoted is read by YAML as UTC. Nothing about the file says
  * which you got. coercePubDate refuses it and says how to fix it; see
  * src/lib/pubdate.js for the full table, and src/lib/pubdate.test.js for the
- * js-yaml behaviour it all rests on.
+ * parser behaviour it all rests on.
  *
  * Fails the build, which is the right place for it — the alternative is a post
  * going live up to a day off with nothing red anywhere.

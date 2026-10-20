@@ -11,7 +11,7 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import yaml from 'js-yaml';
+import { parseFrontmatter } from '@astrojs/internal-helpers/frontmatter';
 import { coercePubDate } from '../src/lib/pubdate.js';
 
 export const CONTENT_DIR = resolve('src/content/blog');
@@ -77,9 +77,6 @@ export function resolvePostSource(slug) {
   ].find(existsSync) ?? null;
 }
 
-/** The `---` fenced block at the top of an .mdx. */
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
-
 /**
  * When a post goes live, read from its own frontmatter.
  *
@@ -88,16 +85,9 @@ const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
  * out — all three need this, and all three run on a machine with the content
  * checked out, so there is no reason to store the date on the row.
  *
- * PARSED WITH js-yaml AND HANDED TO coercePubDate — the same two steps Astro's
- * loader and src/content.config.ts take, in the same order. That is the point:
- * a script and a build that disagreed about when a post publishes would mint
- * links expiring on the wrong day, and (for the quoted-timestamp case) the
- * disagreement would be a whole time zone wide with nothing to indicate it. Same
- * anti-drift argument as scripts/dev-vars.mjs, one layer up.
- *
- * js-yaml is a DIRECT dependency for this import. It resolves today only because
- * astro depends on it, which is the hoisting accident documented for
- * @astrojs/markdown-remark in CLAUDE.md; declaring it makes the resolution ours.
+ * Parsed with Astro's own `parseFrontmatter` and then `coercePubDate`, the same
+ * two steps the build takes. A script and a build that disagreed about when a
+ * post publishes would mint links expiring on the wrong day.
  *
  * Throws rather than returning null on a malformed date, because every caller
  * uses this to decide an expiry and none of them has a safe fallback.
@@ -112,9 +102,7 @@ export function readPubDate(slug) {
 /**
  * Frontmatter + body for a post, or null when there is no source file.
  *
- * The `pubDate` on the way out has already been through js-yaml *and*
- * `coercePubDate` — see readPubDate's argument above, which is the whole reason
- * this parsing lives in one function rather than in each caller.
+ * The `pubDate` on the way out has already been through `coercePubDate`.
  *
  * @param {string} slug
  * @returns {{ path: string, data: Record<string, unknown>, pubDate: Date, body: string } | null}
@@ -124,18 +112,17 @@ export function readPost(slug) {
   if (!path) return null;
 
   const source = readFileSync(path, 'utf8');
-  const block = FRONTMATTER_RE.exec(source);
-  if (!block) throw new Error(`content: ${slug} has no frontmatter block`);
-
-  let data;
+  let parsed;
   try {
-    data = yaml.load(block[1]);
+    parsed = parseFrontmatter(source);
   } catch (err) {
     throw new Error(`content: could not parse the frontmatter of ${slug}: ${err.message}`);
   }
+  if (!parsed.rawFrontmatter) throw new Error(`content: ${slug} has no frontmatter block`);
+  const data = parsed.frontmatter;
 
   const result = coercePubDate(data?.pubDate);
   if (!result.ok) throw new Error(`content: ${slug}: ${result.message}`);
 
-  return { path, data: data ?? {}, pubDate: result.date, body: source.slice(block[0].length) };
+  return { path, data, pubDate: result.date, body: parsed.content };
 }

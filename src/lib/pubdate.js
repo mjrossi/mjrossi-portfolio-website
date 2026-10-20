@@ -6,14 +6,14 @@
 //
 // THE WHOLE PROBLEM IS QUOTING, and it is silent in both directions.
 //
-// Astro parses frontmatter with js-yaml, which resolves an UNQUOTED timestamp to
-// a Date itself — and YAML reads one with no offset as UTC:
+// Astro's frontmatter parser (the `yaml` package, with the YAML 1.1 timestamp
+// tag) resolves an UNQUOTED timestamp to a Date itself — and YAML reads one with no offset as UTC:
 //
 //   pubDate: 2026-05-10               → Date, 2026-05-10T00:00:00Z
 //   pubDate: 2026-05-10T14:00:00      → Date, 2026-05-10T14:00:00Z
 //   pubDate: 2026-05-10T09:00:00-04:00 → Date, 2026-05-10T13:00:00Z
 //
-// QUOTE it and js-yaml hands back a string instead, which `new Date()` then
+// QUOTE it and the parser hands back a string instead, which `new Date()` then
 // parses by the ECMAScript rules — where a date-TIME with no offset is LOCAL:
 //
 //   pubDate: "2026-05-10"             → 2026-05-10T00:00:00Z   (same)
@@ -27,7 +27,7 @@
 // Plain JS for the same reason as schedule.js and csp.js: `node --test` imports
 // it directly, and scripts/content.mjs imports it too — so the code that decides
 // when a post publishes is literally the code the minting scripts cap against.
-// See src/lib/pubdate.test.js, which also pins js-yaml's own behaviour, since
+// See src/lib/pubdate.test.js, which also pins the parser's own behaviour, since
 // every claim above rests on it.
 
 /** `2026-05-10` — a bare calendar day. UTC under both YAML and `new Date()`. */
@@ -68,7 +68,7 @@ const HAS_ZONE_RE = /(Z|[+-]\d{2}:?\d{2})$/;
  * learned from getting this wrong:
  *
  *   SECONDS, because YAML 1.1 requires them. `2026-05-10 14:00` is NOT a
- *   timestamp to js-yaml (verified in pubdate.test.js) — it comes back a string
+ *   timestamp to the parser (verified in pubdate.test.js) — it comes back a string
  *   and lands straight back here, so "remove the quotes" on a minute-precision
  *   literal sent the author round in a circle.
  *
@@ -93,7 +93,7 @@ function canonical(text) {
  * @returns {{ ok: true, date: Date } | { ok: false, message: string }}
  */
 export function coercePubDate(value, field = 'pubDate') {
-  // The normal path: unquoted in YAML, so js-yaml already resolved it.
+  // The normal path: unquoted in YAML, so the parser already resolved it.
   if (value instanceof Date) {
     return Number.isNaN(value.valueOf())
       ? { ok: false, message: `${field} is not a valid date` }

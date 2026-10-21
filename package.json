@@ -31,6 +31,6 @@
     "jsqr": "1.4.0",
     "qrcode": "1.5.4",
     "typescript": "^6.0.3",
-    "wrangler": "4.151.0"
+    "wrangler": "4.151.1"
   }
 }

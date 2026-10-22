@@ -8,7 +8,7 @@
 // so it states identity only. TITLE, not NOTE, because iOS shows it under the
 // name.
 import { CARD_TAGLINE } from './identity.js';
-import { CONTACT_EMAIL } from './contact.js';
+import { CONTACT_EMAIL, CONTACT_PHONE } from './contact.js';
 import { PHOTO_JPEG_BASE64 } from './card-photo.js';
 import { CONTACT_PROFILES } from './profiles.js';
 
@@ -82,6 +82,8 @@ export const CARD_VCF = serializeVCard([
   // So a search of the recipient's contacts for "Matt" finds this one.
   ['NICKNAME', escapeText('Matt')],
   ['EMAIL;TYPE=INTERNET', escapeText(CONTACT_EMAIL)],
+  // A phone-number value, not TEXT. International form, so it dials from abroad.
+  ['TEL;TYPE=CELL', CONTACT_PHONE],
   ...urls,
   ['PHOTO;ENCODING=b;TYPE=JPEG', PHOTO_JPEG_BASE64],
 ]);

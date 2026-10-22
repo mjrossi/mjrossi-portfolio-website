@@ -9,7 +9,7 @@ import { check, checkHeader, checkStatus, occurrences } from './check.mjs';
 import { BASE } from './config.mjs';
 import { feedGuid } from '../../src/lib/feed-guid.js';
 import { CARD_DESCRIPTION, CARD_TAGLINE, LEXICON_TAGLINE, SITE_DESCRIPTION, TAGLINE } from '../../src/lib/identity.js';
-import { CONTACT_EMAIL } from '../../src/lib/contact.js';
+import { CONTACT_EMAIL, CONTACT_PHONE } from '../../src/lib/contact.js';
 import { QR_PATH } from '../../src/lib/card-qr.js';
 
 export async function fetchRoute(path) {
@@ -653,6 +653,7 @@ export async function checkCard({ homeHtml }) {
     'card: the address is not in the HTML',
     !html.includes(CONTACT_EMAIL) && !html.includes('mailto:'),
   );
+  check('card: the phone number is not in the HTML', !html.includes(CONTACT_PHONE) && !html.includes('tel:'));
   check('home: no nav link to /card', !homeHtml.includes('href="/card"'));
 
   // /card/qr, the presenter's view: the name and the code, nothing else.
@@ -697,6 +698,7 @@ export async function checkCard({ homeHtml }) {
   // A search result that lands on a bare QR code helps nobody.
   check('card/qr: noindex', /<meta name="robots" content="noindex">/.test(qr.html));
   check('card/qr: the address is not in the HTML', !qr.html.includes(CONTACT_EMAIL) && !qr.html.includes('mailto:'));
+  check('card/qr: the phone number is not in the HTML', !qr.html.includes(CONTACT_PHONE) && !qr.html.includes('tel:'));
 
   const vcf = await fetch(`${BASE}/api/vcard`);
   const body = await vcf.text();
@@ -724,5 +726,6 @@ export async function checkCard({ homeHtml }) {
     'vcard: EMAIL matches /api/contact',
     Boolean(mailto) && unfolded.includes(`\r\nEMAIL;TYPE=INTERNET:${mailto}\r\n`),
   );
+  check('vcard: carries the phone as TEL;TYPE=CELL', unfolded.includes(`\r\nTEL;TYPE=CELL:${CONTACT_PHONE}\r\n`));
   check('vcard: carries a JPEG PHOTO', /\r\nPHOTO;ENCODING=b;TYPE=JPEG:\/9j\//.test(unfolded));
 }

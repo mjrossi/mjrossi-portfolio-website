@@ -62,7 +62,7 @@ One line per file. **The reasoning — why each rule exists and the bug it preve
 - `src/lib/tags.js` — `tagLabel` plus `RETIRED` / `retiredTarget`, the map from a consolidated tag to where it goes now.
 - `src/lib/edition.js` — `issue(now?)`. **One derivation, one launch epoch, called once per render in `Base.astro`.** Nothing in page chrome may derive an issue from content.
 - `src/lib/identity.js` — `TAGLINE`, `LEXICON_TAGLINE`, `CARD_TAGLINE`, `SET_IN`, `BUILT_WITH`, `SITE_DESCRIPTION`, `CARD_DESCRIPTION`: the sentences the site says about itself, in **four** engines (the `.vcf` is the fourth). The social card and the `.vcf` say `CARD_TAGLINE`, never `TAGLINE`.
-- `src/lib/contact.js` — `CONTACT_EMAIL`, spelled once, for the two endpoints. **Never imported by a page or component.**
+- `src/lib/contact.js` — `CONTACT_EMAIL`, spelled once, for the two endpoints, and `CONTACT_PHONE`, for the `.vcf` alone. **Never imported by a page or component.**
 - `src/lib/vcard.js` — `escapeText` / `foldLine` / `serializeVCard` and `CARD_VCF`. Folds at 75 **octets**, never mid-character; CRLF throughout.
 - `src/lib/profiles.js` — the GitHub / LinkedIn / Bluesky URLs, shared by `ContactLinks.astro` and the `.vcf`, because a saved contact cannot be corrected.
 - `src/lib/card-qr.js`, `src/lib/card-photo.js` — **generated** by `just card-assets` and committed. The QR encodes `/card` and is drawn only on `/card/qr`; it is geometry only; `card-qr.test.js` decodes it.

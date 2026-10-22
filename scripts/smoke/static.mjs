@@ -13,7 +13,7 @@ import { join, relative, resolve } from 'node:path';
 import { check, stripComments } from './check.mjs';
 import { DIST, FIXTURE_SLUG, GALLEY_WRITE_QUOTA, PUBLISHED_SLUG } from './config.mjs';
 import { BUILT_WITH, CARD_TAGLINE, LEXICON_TAGLINE, SET_IN, TAGLINE } from '../../src/lib/identity.js';
-import { CONTACT_EMAIL } from '../../src/lib/contact.js';
+import { CONTACT_EMAIL, CONTACT_PHONE } from '../../src/lib/contact.js';
 
 /** Read and comment-strip a source file, or return '' if it isn't there. */
 function source(path) {
@@ -411,6 +411,16 @@ export function checkSourceGuards() {
     `also spelled in ${spellings.map((p) => relative(resolve('.'), p)).join(', ')} — ` +
       'import CONTACT_EMAIL, or in markup link /api/contact',
   );
+  const phoneSpellings = tree.filter(
+    (path) =>
+      path !== resolve('src/lib/contact.js') && readFileSync(path, 'latin1').includes(CONTACT_PHONE),
+  );
+  check(
+    `contact: the phone number is spelled only in src/lib/contact.js (${tree.length} files scanned)`,
+    tree.length > 0 && phoneSpellings.length === 0,
+    `also spelled in ${phoneSpellings.map((p) => relative(resolve('.'), p)).join(', ')} — ` +
+      'import CONTACT_PHONE; it reaches people only through /api/vcard',
+  );
 }
 
 /** Every file under `dir`, recursively. Returns [] if it isn't there. */
@@ -720,5 +730,11 @@ export function checkBuildArtifacts() {
     `contact: no static asset carries the address (${served.length} files scanned)`,
     served.length > 0 && carriers.length === 0,
     `${carriers.map((p) => relative(DIST, p)).join(', ')} — the address is served only by /api/contact and /api/vcard`,
+  );
+  const phoneCarriers = served.filter((path) => readFileSync(path, 'latin1').includes(CONTACT_PHONE));
+  check(
+    `contact: no static asset carries the phone number (${served.length} files scanned)`,
+    served.length > 0 && phoneCarriers.length === 0,
+    `${phoneCarriers.map((p) => relative(DIST, p)).join(', ')} — the phone number is served only by /api/vcard`,
   );
 }

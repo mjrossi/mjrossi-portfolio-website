@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { escapeText, foldLine, serializeVCard, CARD_VCF } from './vcard.js';
 import { CONTACT_PROFILES } from './profiles.js';
 import { TAGLINE, CARD_TAGLINE } from './identity.js';
-import { CONTACT_EMAIL } from './contact.js';
+import { CONTACT_EMAIL, CONTACT_PHONE } from './contact.js';
 
 const octets = (s) => Buffer.byteLength(s, 'utf8');
 const physicalLines = (vcf) => vcf.split('\r\n').slice(0, -1);
@@ -62,12 +62,14 @@ test('the card: CRLF throughout, folded within 75 octets', () => {
   for (const line of physicalLines(CARD_VCF)) assert.ok(octets(line) <= 75, `${octets(line)}: ${line}`);
 });
 
-test('the card: name, nickname and email', () => {
+test('the card: name, nickname, email and phone', () => {
   const vcf = unfold(CARD_VCF);
   assert.match(vcf, /\r\nN:Rossi;Matthew;;;\r\n/);
   assert.match(vcf, /\r\nFN:Matthew Rossi\r\n/);
   assert.match(vcf, /\r\nNICKNAME:Matt\r\n/);
   assert.ok(vcf.includes(`\r\nEMAIL;TYPE=INTERNET:${CONTACT_EMAIL}\r\n`));
+  assert.ok(vcf.includes(`\r\nTEL;TYPE=CELL:${CONTACT_PHONE}\r\n`));
+  assert.match(CONTACT_PHONE, /^\+\d[\d ]+$/, 'international form, digits and spaces only');
 });
 
 // Each URL is paired with its label by group, so a URL whose label went

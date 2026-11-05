@@ -9,6 +9,11 @@
 export const GITHUB = { label: 'GitHub', url: 'https://github.com/mjrossi' };
 export const LINKEDIN = { label: 'LinkedIn', url: 'https://www.linkedin.com/in/matthew-j-rossi/' };
 export const BLUESKY = { label: 'Bluesky', url: 'https://bsky.app/profile/mjrossi.com' };
+// Hosted on Eurosky (eurosky.social) since 2026-11, which is a server, not a
+// network: bsky.app is the viewer, and reads the profile from wherever it
+// lives. There is no Eurosky profile page to link to, so a host move changes
+// nothing here — only a new handle would. The handle is the domain itself,
+// proved by the `_atproto.mjrossi.com` TXT record (docs/ARCHITECTURE.md).
 
 // The saved contact's order: who you are professionally, where you post,
 // then the code.

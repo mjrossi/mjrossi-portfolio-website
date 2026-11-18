@@ -10,6 +10,7 @@ import { BASE } from './config.mjs';
 import { feedGuid } from '../../src/lib/feed-guid.js';
 import { CARD_DESCRIPTION, CARD_TAGLINE, LEXICON_TAGLINE, SITE_DESCRIPTION, TAGLINE } from '../../src/lib/identity.js';
 import { CONTACT_EMAIL, CONTACT_PHONE } from '../../src/lib/contact.js';
+import { MASTODON } from '../../src/lib/profiles.js';
 import { QR_PATH } from '../../src/lib/card-qr.js';
 
 export async function fetchRoute(path) {
@@ -68,6 +69,10 @@ function assertSharedChrome(label, res, html, activeHref) {
   );
   const contactCount = occurrences(html, 'aria-label="Contact"');
   check(`${label}: ContactLinks rendered twice`, contactCount === 2, `found ${contactCount}`);
+  // Mastodon verifies mjrossi.com by finding this exact anchor; lose the
+  // rel="me" and the profile's tick silently lapses at its next re-check.
+  const relMe = occurrences(html, `href="${MASTODON.url}" target="_blank" rel="me noopener noreferrer"`);
+  check(`${label}: Mastodon link carries rel="me", twice`, relMe === 2, `found ${relMe}`);
   if (activeHref) {
     // `active` as a class TOKEN, not as the whole attribute. The /blog link
     // once carried a second class, and `class="active"` then matched the other

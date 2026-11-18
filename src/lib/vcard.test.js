@@ -87,7 +87,7 @@ test('the card: the site as homepage, then each profile, each with its own label
     assert.ok(vcf.includes(`\r\n${group}.X-ABLabel:${expected[i][1]}\r\n`), `${group} label`);
   });
   assert.ok(!/\r\nURL[:;]/.test(vcf), 'no ungrouped URL');
-  assert.deepEqual(CONTACT_PROFILES.map((p) => p.label), ['LinkedIn', 'Bluesky', 'GitHub']);
+  assert.deepEqual(CONTACT_PROFILES.map((p) => p.label), ['LinkedIn', 'Bluesky', 'Mastodon', 'GitHub']);
 });
 
 // A saved contact is held indefinitely, like a cached social card, so it may

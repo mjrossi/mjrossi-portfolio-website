@@ -408,8 +408,8 @@ a.masthead-name-link:hover .surname {
 
 /* The nav's right-hand cluster appears from 1024px: the Family core's
    breakpoint for both sites, with the invariant that cells plus cluster fit
-   one row from there. Measured here: the row needs 901px of content width,
-   which this sheet gives from ~980px. Re-measure if a nav item or a contact
+   one row from there. Measured here: the row needs 931px of content width,
+   which this sheet gives from ~1012px — 12px inside the breakpoint. Re-measure if a nav item or a contact
    icon is added. The contact links are in the footer at every width. */
 @media (max-width: 1023px) {
   .nav-contact {

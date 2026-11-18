@@ -14,7 +14,12 @@ export const BLUESKY = { label: 'Bluesky', url: 'https://bsky.app/profile/mjross
 // lives. There is no Eurosky profile page to link to, so a host move changes
 // nothing here — only a new handle would. The handle is the domain itself,
 // proved by the `_atproto.mjrossi.com` TXT record (docs/ARCHITECTURE.md).
+export const MASTODON = { label: 'Mastodon', url: 'https://ohai.social/@link00seven' };
+// The icon row links this one with rel="me", which is what Mastodon checks
+// when it verifies mjrossi.com on the profile: it fetches the page and looks
+// for an <a rel="me"> whose href is this URL exactly. Change the URL and the
+// green tick goes with it until the profile's field is updated to match.
 
 // The saved contact's order: who you are professionally, where you post,
 // then the code.
-export const CONTACT_PROFILES = [LINKEDIN, BLUESKY, GITHUB];
+export const CONTACT_PROFILES = [LINKEDIN, BLUESKY, MASTODON, GITHUB];

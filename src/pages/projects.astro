@@ -6,13 +6,13 @@ import PageHeader from '../components/PageHeader.astro';
 <Base
   title="Projects"
   crumbs={[{ label: 'Front', href: '/' }, { label: 'Projects' }]}
-  description="Things Matthew Rossi has built — open-source tools for transit and safe-streets advocacy."
+  description="Things Matthew Rossi has built — open-source tools for transit riders and the advocates working for better streets."
 >
 
   <div class="page">
   <PageHeader
     title="Projects"
-    description="Tools I've built for the people already doing the work: organizers, advocates and anyone trying to make their own city better."
+    description="Tools I've built for the people who make cities work: the organizers and advocates pushing for better streets, and the riders using them every day."
   />
 
   <section aria-label="Projects">
@@ -30,6 +30,21 @@ import PageHeader from '../components/PageHeader.astro';
         <a href="https://urbanistatlas.com">urbanistatlas.com</a>
         · <a href="https://github.com/mjrossi/urbanist-atlas">Source on GitHub</a>
         · <a href="/blog/introducing-the-urbanist-atlas/">Read the launch post →</a>
+      </p>
+    </div>
+
+    <div class="entry">
+      <div class="entry-header">
+        <div class="entry-meta">
+          <span class="company">Urbanist Timetable</span>
+          <span class="role">Open-source command-line tool · Go, with a Docker image for the clock</span>
+        </div>
+        <span class="date">2026–</span>
+      </div>
+      <p>Search for your agency by name or city, pick your stop, and it tells you when the next train or bus is coming — in your terminal, or on a pixel clock at home, laid out like a platform sign. It works with any agency that publishes a GTFS timetable, from the NYC subway to Lisbon's Metro, and shows which times are live predictions and which come straight from the schedule. The code is open, including the Go packages underneath, for anyone building a departure board of their own.</p>
+      <p class="entry-links">
+        <a href="https://github.com/mjrossi/urbanist-timetable">Source on GitHub</a>
+        · <a href="https://github.com/mjrossi/urbanist-timetable/releases/latest">Latest release</a>
       </p>
     </div>
 
